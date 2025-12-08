@@ -1,0 +1,90 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+import "schema/error.proto";
+
+enum TxActionType {
+  UNKNOWN_TYPE = 0;
+  GENESIS = 1;      // 创世交易
+  START_BLOCK = 2;  // 开始区块
+  END_BLOCK = 3;    // 结束区块
+
+  ENABLE_CHAIN = 10;
+  DISABLE_CHAIN = 11;
+  REGISTER_TOKEN = 12;
+  DEPOSIT_TOKEN = 13;
+  WITHDRAW_TOKEN = 14;
+  TRANSFER_TOKEN = 15;
+  CONFIRM_WITHDRAW = 16;
+  REJECT_WITHDRAW = 17;
+  reserved 18 to 20;
+  REGISTER_SYMBOL = 21;
+  reserved 22 to 23;  // CLOSE_ENGINE = 22, UPDATE_SYMBOL = 23;
+  PLACE_ORDER = 24;
+  CANCEL_ORDER = 25;
+  UPDATE_FUNDING_RATE = 26;
+  REGISTER_FEE_TIER = 27;
+  REGISTER_ACCOUNT_FEE_TIER = 28;
+  UPDATE_INDEX_PRICE = 29;
+  APPROVE_AGENT = 30;
+  SET_POSITION_MODE = 31;
+  REGISTER_RISK_LIMITS = 32;
+  CANCEL_BATCH_ORDERS = 33;
+  SET_POSITION_LEVERAGE = 34;
+  CONVERT_TO_MULTISIG = 35;
+  UPDATE_MULTISIG_CONFIG = 36;
+  CONVERT_TO_REGULAR = 37;
+  SETTLE_BATCH_FUNDING_FEES = 38;
+  INCREASE_MARGIN = 39;
+  DECREASE_MARGIN = 40;
+  TRIGGER_ORDER = 41;
+}
+
+message StartBlockMessage {
+  uint64 number = 1;
+  int64 time = 2;
+}
+
+message EndBlockMessage {
+  uint64 number = 1;
+  bytes hash = 2 [(schema.hash) = true];
+}
+
+// TxMessage 定义了区块链交易的结构
+//
+// hash = keccak256(chain_id, recent_block_hash, action, target_address, data)
+message TxMessage {
+  uint64 chain_id = 1;
+  bytes recent_block_hash = 2 [(schema.hash) = true];
+  TxActionType action = 3;
+  bytes target_address = 4 [(schema.address) = true];  // 目标地址
+  bytes data = 5;
+  // 如果签名为1个，则恢复出来的地址要么为 target_address，要么为agent地址
+  //
+  // 如果签名为多个，则表示多签
+  repeated bytes signatures = 6 [(schema.signatures) = true];
+}
+
+message BlockResult {
+  uint64 number = 1;
+}
+
+message TxResult {
+  bytes tx_hash = 1 [(schema.hash) = true];  // tx hash for matching
+  oneof result {
+    Error error = 2;
+    BlockResult block_result = 3;
+  }
+}
+
+message Block {
+  uint64 number = 1;
+  bytes proposer = 2 [(schema.address) = true];
+  bytes hash = 3 [(schema.hash) = true];
+  int64 time = 4;
+  uint64 start_sequence_id = 5;
+  uint64 end_sequence_id = 6;
+}

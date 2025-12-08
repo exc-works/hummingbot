@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package agent;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Agent {
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse) {
+    option (google.api.http).get = "/v1/agents";
+  }
+}
+
+message ListAgentsRequest {
+  string account = 1 [
+    (gogoproto.moretags) = "form:\"account\" binding:\"required\"",
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message ListAgentsResponse {
+  repeated AgentResponse agents = 1;
+}
+
+message AgentResponse {
+  bytes agent = 1 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  string name = 2;
+  int64 expired_time = 3 [(gogoproto.jsontag) = "expired_time, string"];
+}

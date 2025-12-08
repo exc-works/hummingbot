@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package balance;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Balance {
+  rpc ListBalances(ListBalancesRequest) returns (ListBalancesResponse) {
+    option (google.api.http).get = "/v1/balances";
+  }
+}
+
+message ListBalancesRequest {
+  bytes account = 1 [
+    (gogoproto.moretags) = "form:\"account\" binding:\"required\"",
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message ListBalancesResponse {
+  repeated BalanceResponse balances = 1;
+}
+
+message BalanceResponse {
+  uint32 token_id = 1;
+  string wallet = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string isolated_position_frozen = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string isolated_order_frozen = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string cross_order_frozen = 5 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string symbol = 6;
+}

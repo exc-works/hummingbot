@@ -1,0 +1,136 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+enum PositionSide {
+  LONG = 0;
+  SHORT = 1;
+}
+
+enum PositionMode {
+  CROSS = 0;
+  ISOLATED = 1;
+}
+
+enum PositionStatus {
+  NORMAL = 0;       // 正常持仓
+  LIQUIDATING = 1;  // 正在进行强平（逐档下调风险限额 + IOC）
+  CLOSED = 2;       // 已平仓
+}
+
+enum OrderType {
+  LIMIT = 0;
+  MARKET = 1;
+  TRIGGER = 2;
+  TAKE_PROFIT_STOP_LOSS = 3;
+  TRAILING = 4;
+}
+
+enum OrderTimeInForce {
+  INVALID_TIME_IN_FORCE = 0;
+  GTC = 1;
+  IOC = 2;
+  FOK = 3;
+  POST_ONLY = 4;
+}
+
+enum TriggerDirection {
+  TRIGGER_ABOVE = 0;
+  TRIGGER_BELOW = 1;
+}
+
+enum StopType {
+  INVALID_STOP_TYPE = 0;
+  STOP_LOSS = 1;
+  TAKE_PROFIT = 2;
+}
+
+enum TrailingDeltaType {
+  INVALID_TRAILING_DELTA_TYPE = 0;
+  DISTANCE = 1;
+  PERCENTAGE = 2;
+}
+
+enum SelfTradePreventionMode {
+  NOT_SET = 0;
+  EXPIRE_MAKER = 1;
+  EXPIRE_TAKER = 2;
+  EXPIRE_BOTH = 3;
+}
+
+message TriggerParamsMessage {
+  TriggerDirection trigger_direction = 1;
+  string trigger_price = 2 [(schema.decimal) = true];
+  // Order type after the order is triggered, can only be Limit or Market
+  OrderType trigger_order_type = 3;
+  // When TriggerOrderType is Limit, the price of the limit order
+  optional string price = 4 [(schema.decimal) = true];
+  // 当size为0，则强制reduce_only为true（即只能为只减仓）。
+  // 当主订单类型为Limit或Market，则止盈止损的订单数量为成交数量。
+  // 当主订单类型为Trigger，则订单数量为当前的持仓。
+  // 当主订单类型为TakeProfitStopLoss，则订单数量为当前的持仓。
+  // 当主订单类型为Trailing，则订单数量为当前的持仓。
+  optional string size = 5 [(schema.decimal) = true];
+  OrderTimeInForce time_in_force = 6;
+  bool reduce_only = 7;
+  SelfTradePreventionMode stp_mode = 8;
+}
+
+message TrailingParamsMessage {
+  StopType stop_type = 1;
+  TrailingDeltaType trailing_delta_type = 2;
+  string trailing_delta = 3 [(schema.decimal) = true];
+  optional string activation_price = 4 [(schema.decimal) = true];
+  OrderType trigger_order_type = 5;
+  // When TriggerOrderType is Limit, the price of the limit order
+  optional string price = 6 [(schema.decimal) = true];
+  // 当size为0，则强制reduce_only为true（即只能为只减仓）。
+  // 当主订单类型为Limit或Market，则止盈止损的订单数量为成交数量。
+  // 当主订单类型为Trigger，则订单数量为当前的持仓。
+  // 当主订单类型为TakeProfitStopLoss，则订单数量为当前的持仓。
+  // 当主订单类型为Trailing，则订单数量为当前的持仓。
+  optional string size = 7 [(schema.decimal) = true];
+  OrderTimeInForce time_in_force = 8;
+  bool reduce_only = 9;
+  SelfTradePreventionMode stp_mode = 10;
+}
+
+message PlaceOrderMessage {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  PositionSide side = 3;
+  OrderType type = 4;
+  OrderTimeInForce time_in_force = 5;
+  optional string price = 6 [(schema.decimal) = true];
+  // 当size为0，则强制reduce_only为true（即只能为只减仓）
+  optional string size = 7 [(schema.decimal) = true];
+  bool reduce_only = 8;
+  // 关联的只减仓仓位id，如果该值大于0，则强制reduce_only为true
+  optional uint64 position_id = 9;
+
+  optional TriggerParamsMessage trigger = 10;
+  optional TriggerParamsMessage tp = 11;
+  optional TriggerParamsMessage sl = 12;
+  optional TrailingParamsMessage trailing = 13;
+  SelfTradePreventionMode stp_mode = 14;
+  // 客户端订单id，最大16字节，需要在未成交的订单内保持唯一
+  optional bytes client_order_id = 16;
+}
+
+message CancelOrderMessage {
+  // 订单id，如果为0，则根据client_order_id取消订单
+  optional uint64 order_id = 1;
+  // 客户端订单id，如果为空，则根据order_id取消订单
+  optional bytes client_order_id = 2;
+}
+
+message CancelBatchOrdersMessage {
+  repeated CancelOrderMessage batch = 1;
+}
+
+message TriggerOrderMessage {
+  uint64 order_id = 1;
+}

@@ -1,0 +1,150 @@
+syntax = "proto3";
+
+package position;
+
+import "google/api/annotations.proto";
+import "google/protobuf/wrappers.proto";
+import "gogoproto/gogo.proto";
+import "schema/order.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Position {
+  // 根据账户查询所有持仓
+  rpc ListOpenPositions(ListOpenPositionsRequest)
+      returns (ListOpenPositionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/positions/open"
+    };
+  }
+  // 根据账户查询仓位历史
+  rpc ListPositionsLedgerHistory(ListPositionsLedgerHistoryRequest)
+      returns (ListPositionsLedgerHistoryResponse) {
+    option (google.api.http) = {
+      get: "/v1/positions/ledger/history"
+    };
+  }
+}
+
+message ListPositionsLedgerHistoryRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 游标，第一页传0，后续传返回值
+  uint64 cursor = 2 [(gogoproto.moretags) = "form:\"cursor\""];
+  uint64 limit = 3 [(gogoproto.moretags) = "form:\"limit\""];
+}
+
+message ListPositionsLedgerHistoryResponse {
+  repeated PositionLedgerHistory history = 1;
+  // 下页游标, null表示无更多数据
+  google.protobuf.UInt64Value cursor = 2
+      [(gogoproto.customtype) = "uint64", (gogoproto.nullable) = true];
+}
+
+message PositionLedgerHistory {
+  uint64 position_id = 1;
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  share.schema.PositionMode mode = 3;
+  share.schema.PositionSide side = 4;
+  uint32 base_token = 5;
+  uint32 quote_token = 6;
+
+  // Text format of the symbol, "BTC-USDT" for example.
+  string symbol = 7;
+
+  // 1-Increase 2-Decrease 3-Liquidation
+  int32 type = 8;
+  string price = 9 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string fee = 10 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string realized_pnl = 11 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string hash = 12 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  // unix millisecs
+  int64 on_chain_at = 13 [(gogoproto.jsontag) = "on_chain_at,string"];
+}
+
+message ListOpenPositionsRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+}
+
+message ListOpenPositionsResponse {
+  repeated OpenPosition open_positions = 1;
+}
+
+message OpenPosition {
+  uint64 position_id = 1;
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 0-Cross 1-Isolated
+  share.schema.PositionMode mode = 3;
+  // 0-Long 1-Short
+  share.schema.PositionSide side = 4;
+  uint32 base_token = 5;
+  uint32 quote_token = 6;
+
+  // Text format of the symbol, "BTC-USDT" for example.
+  string symbol = 7;
+  string entry_price = 8 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string size = 9 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // Valid when mode is 1(Isolated)
+  string isolated_margin = 10 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = true
+  ];
+  string realized_pnl = 11 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // null表示无效
+  string liquidation_price = 12 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = true
+  ];
+  string taker_fee_rate = 13 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string funding_fee = 14 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  uint32 risk_limits_id = 15;
+
+  // unix millisecs
+  int64 on_chain_created_at = 16 [(gogoproto.jsontag) = "time,string"];
+}

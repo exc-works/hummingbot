@@ -1,0 +1,286 @@
+syntax = "proto3";
+
+package order;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "schema/order.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Order {
+  rpc ListOpenOrders(ListOpenOrdersRequest) returns (ListOpenOrdersResponse) {
+    option (google.api.http).get = "/v1/orders/open";
+  }
+
+  rpc ListOrderHistory(ListOrderHistoryRequest)
+      returns (ListOrderHistoryResponse) {
+    option (google.api.http).get = "/v1/orders/history";
+  }
+}
+
+message ListOpenOrdersRequest {
+  bytes account = 1 [
+    (gogoproto.moretags) = "form:\"account\" binding:\"required\"",
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message ListOpenOrdersResponse {
+  repeated OrderResponse open_orders = 1;
+}
+
+message OrderResponse {
+  uint64 order_id = 1;
+  bytes account = 2 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  uint32 base_token = 3;
+  uint32 quote_token = 4;
+  // Text format of the symbol, "BTC-USDT" for example.
+  string symbol = 5;
+  // The type of the order.
+  //  - 0: limit order
+  //  - 1: market order
+  //  - 2: trigger order
+  //  - 3: take_profit_stop_loss order
+  //  - 4: trailing order
+  int32 type = 6 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderType",
+    (gogoproto.nullable) = false
+  ];
+  share.schema.PositionMode mode = 7;
+  share.schema.PositionSide side = 8;
+  string price = 9 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string filled_price = 10 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string size = 11 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string filled = 12 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string taker_fee_rate = 13 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string maker_fee_rate = 14 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // The time in force of the order.
+  //  - gtc: good till canceled
+  //  - ioc: immediate or cancel
+  //  - fok: fill or kill
+  //  - post_only: post only
+  string time_in_force = 15 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderTimeInForce",
+    (gogoproto.nullable) = false
+  ];
+  bool reduce_only = 16;
+  share.schema.SelfTradePreventionMode stp_mode = 17;
+  uint64 position_id = 18;
+  // The status of the order.
+  //  - 0: invalid order
+  //  - 1: new order
+  //  - 2: pending order
+  //  - 3: cancelled order
+  //  - 4: expired order
+  //  - 5: partially_filled order
+  //  - 6: partially_filled_and_cancelled order
+  //  - 7: filled order
+  int32 status = 19 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/engine/runtime/types.OrderStatus",
+    (gogoproto.nullable) = false
+  ];
+  // unix millisecs
+  int64 on_chain_created_at = 20 [(gogoproto.jsontag) = "time,string"];
+  // The trigger of the order, only available for trigger order
+  TriggerParamsResponse trigger = 21 [(gogoproto.jsontag) = "trigger"];
+  // The trigger of the order, only available for take profit stop
+  // loss order
+  TriggerParamsResponse tp = 22
+      [(gogoproto.jsontag) = "tp", (gogoproto.customname) = "TP"];
+  // The trigger of the order, only available for take profit stop
+  // loss order
+  TriggerParamsResponse sl = 23
+      [(gogoproto.jsontag) = "sl", (gogoproto.customname) = "SL"];
+  // True if the take profit order is triggered,
+  // False if the stop loss order is triggered.
+  bool tp_triggered = 24;
+  // The trailing of the order, only available for trailing order
+  TrailingParamsResponse trailing = 25 [(gogoproto.jsontag) = "trailing"];
+  int64 on_chain_closed_at = 26 [(gogoproto.jsontag) = "time,string"];
+  int32 trigger_error_code = 27;
+  uint64 trigger_order_id = 28;
+}
+
+message TriggerParamsResponse {
+  // The trigger direction of the order.
+  //  - triggerAbove: the trigger price is above the current price. (>= trigger
+  //  price)
+  //  - triggerBelow: the trigger price is below the current price. (<= trigger
+  //  price)
+  string trigger_direction = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.TriggerDirection",
+    (gogoproto.nullable) = false
+  ];
+  // The trigger price of the order
+  string trigger_price = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // The order type after the trigger is triggered, can be limit or market
+  string trigger_order_type = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderType",
+    (gogoproto.nullable) = false
+  ];
+  // The price of the order, only available for limit order
+  string price = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // The size of the order
+  string size = 5 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // The time in force of the order.
+  //  - gtc: good till canceled
+  //  - ioc: immediate or cancel
+  //  - fok: fill or kill
+  //  - post_only: post only
+  string time_in_force = 6 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderTimeInForce",
+    (gogoproto.nullable) = false
+  ];
+  bool reduce_only = 7;
+  share.schema.SelfTradePreventionMode stp_mode = 8;
+}
+
+message TrailingParamsResponse {
+  // The stop type of the order.
+  //  - stop_loss: stop loss order
+  //  - take_profit: take profit order
+  string stop_type = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.StopType",
+    (gogoproto.nullable) = false
+  ];
+  // The price to activate the trailing order, null means the current price
+  string activation_price = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // The trailing base price of the order.
+  string trailing_base_price = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // The trailing delta type of the order.
+  //  - distance
+  //  - percentage
+  string trailing_delta_type = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.TrailingDeltaType",
+    (gogoproto.nullable) = false
+  ];
+  string trailing_delta = 5 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // The trigger price of the order
+  string trigger_price = 6 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // The order type after the trigger is triggered, can be limit or market
+  string trigger_order_type = 7 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderType",
+    (gogoproto.nullable) = false
+  ];
+  // The price of the order, only available for limit order
+  string price = 8 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // The size of the order
+  string size = 9 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // The time in force of the order.
+  //  - gtc: good till canceled
+  //  - ioc: immediate or cancel
+  //  - fok: fill or kill
+  //  - post_only: post only
+  string time_in_force = 10 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderTimeInForce",
+    (gogoproto.nullable) = false
+  ];
+  bool reduce_only = 11;
+  share.schema.SelfTradePreventionMode stp_mode = 12;
+}
+
+message ListOrderHistoryRequest {
+  bytes account = 1 [
+    (gogoproto.moretags) = "form:\"account\" binding:\"required\"",
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  // The symbol of the order. e.g. BTC-USDT
+  string symbol = 2 [(gogoproto.moretags) = "form:\"symbol\""];
+  // The type of the order.
+  //  - 0: limit order
+  //  - 1: market order
+  //  - 2: trigger order
+  //  - 3: take_profit_stop_loss order
+  //  - 4: trailing order
+  int32 type = 3 [
+    (gogoproto.moretags) = "form:\"type\"",
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderType",
+    (gogoproto.nullable) = false
+  ];
+  // 游标，第一页传0，后续传返回值
+  uint64 cursor = 4 [(gogoproto.moretags) = "form:\"cursor\""];
+  uint64 limit = 5 [(gogoproto.moretags) = "form:\"limit\""];
+}
+
+message ListOrderHistoryResponse {
+  repeated OrderResponse history = 1;
+  // 下页游标
+  uint64 cursor = 2;
+}

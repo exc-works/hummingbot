@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package tx;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "schema/tx.proto";
+import "schema/error.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Tx {
+  // SubmitTx 提交交易
+  rpc SubmitTx(SubmitTxRequest) returns (SubmitTxResponse) {
+    option (google.api.http) = {
+      post: "/v1/tx"
+      body: "*"
+    };
+  }
+}
+
+message SubmitTxRequest {
+  bytes message = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message SubmitTxResponse {
+  oneof result {
+    TxError error = 1;
+    BlockResult block_result = 2;
+  }
+}
+
+message TxError {
+  int32 code = 1;
+  share.schema.ErrorCode code_text = 2;
+  string message = 3;
+}
+
+message BlockResult {
+  uint64 number = 1;
+}

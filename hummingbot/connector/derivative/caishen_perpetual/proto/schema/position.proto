@@ -1,0 +1,31 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+import "schema/order.proto";
+
+message SetPositionModeMessage {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  PositionMode mode = 3;
+}
+
+message SetPositionLeverageMessage {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  uint32 leverage = 3;
+}
+
+message IncreaseMarginMessage {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  string amount = 3 [(schema.decimal) = true];
+}
+
+message DecreaseMarginMessage {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  string amount = 3 [(schema.decimal) = true];
+}

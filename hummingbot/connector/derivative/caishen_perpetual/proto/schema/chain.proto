@@ -1,0 +1,13 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+message EnableChainMessage {
+  uint64 chain_id = 1;
+  string chain_name = 2;
+}
+
+message DisableChainMessage {
+  uint64 chain_id = 1;
+}

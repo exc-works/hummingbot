@@ -1,0 +1,249 @@
+syntax = "proto3";
+package websocket;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "l2book.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// see
+// https://www.okx.com/docs-v5/zh/#order-book-trading-market-data-ws-candlesticks-channel
+message CandleSubscribeRequest {
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  string resolution = 2 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message CandleSubscribeBatchNotification {
+  string symbol = 1;
+  string resolution = 2;
+  repeated CandleSubscribeNotification updates = 3
+      [(gogoproto.nullable) = false];
+}
+
+message CandleSubscribeNotification {
+  int64 ts = 1;
+  string open = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string high = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string low = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string close = 5 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string volume = 6 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// see
+// https://www.okx.com/docs-v5/zh/#order-book-trading-market-data-ws-tickers-channel
+message TickerSubscribeRequest {
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message TickerSubscribeBatchNotification {
+  string symbol = 1;
+  repeated TickerSubscribeNotification updates = 2
+      [(gogoproto.nullable) = false];
+}
+
+message TickerSubscribeNotification {
+  string high = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string close = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string open_24h = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "Open24H"
+  ];
+  string high_24h = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "High24H"
+  ];
+  string low_24h = 5 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "Low24H"
+  ];
+  string base_volume_24h = 6 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "BaseVolume24H"
+  ];
+  string quote_volume_24h = 7 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "QuoteVolume24H"
+  ];
+  string ask_price = 8 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string ask_size = 9 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string bid_price = 10 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string bid_size = 11 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  int64 ts = 12;
+}
+
+// see
+// https://www.okx.com/docs-v5/zh/#order-book-trading-market-data-ws-all-trades-channel
+message TradeFullSubscribeRequest {
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message TradeFullSubscribeBatchNotification {
+  string symbol = 1;
+  repeated TradeFullSubscribeNotification updates = 2
+      [(gogoproto.nullable) = false];
+}
+
+message TradeFullSubscribeNotification {
+  uint64 taker_order_id = 1 [(gogoproto.jsontag) = "taker_order_id,string"];
+  uint64 maker_order_id = 2 [(gogoproto.jsontag) = "maker_order_id,string"];
+  string price = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string size = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string taker_side = 5 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.PositionSide",
+    (gogoproto.nullable) = false
+  ];
+  uint64 seq = 6 [(gogoproto.jsontag) = "seq,string"];
+  // Unix milliseconds of sequence time
+  int64 ts = 7;
+}
+
+// see
+// https://www.okx.com/docs-v5/zh/#order-book-trading-market-data-ws-trades-channel
+message TradeSubscribeRequest {
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message TradeSubscribeBatchNotification {
+  string symbol = 1;
+  repeated TradeSubscribeNotification updates = 2
+      [(gogoproto.nullable) = false];
+}
+
+message TradeSubscribeNotification {
+  uint64 taker_order_id = 1 [(gogoproto.jsontag) = "taker_order_id,string"];
+  string price = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string size = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string taker_side = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.PositionSide",
+    (gogoproto.nullable) = false
+  ];
+  int32 count = 5;
+  uint64 seq = 6 [(gogoproto.jsontag) = "seq,string"];
+  // Unix milliseconds of sequence time
+  int64 ts = 7;
+}
+
+// L2 book subscription
+// Supports up to 400 levels of depth with tick-based price aggregation
+message L2bookSubscribeRequest {
+  // Trading symbol (e.g., "BTC-USDT")
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+
+  // Tick-based aggregation level - determines how prices are grouped relative
+  // to tick size Supported values: "1x", "10x", "100x", "1000x"
+  string aggregation_level = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/repo/types/order.TickBasedAggregationLevel",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message SequenceRange {
+  uint64 start = 1 [(gogoproto.jsontag) = "start,string"];
+  uint64 end = 2 [(gogoproto.jsontag) = "end,string"];
+}
+
+// Depth book notification containing bid/ask levels
+message L2bookSubscribeNotification {
+  // Sequence number for ordering updates
+  SequenceRange sequence_range = 1 [(gogoproto.nullable) = false];
+
+  // Unix milliseconds timestamp
+  int64 ts = 2;
+
+  // Ask levels (sell orders) sorted by price ascending
+  repeated l2book.DepthLevel asks = 3 [(gogoproto.nullable) = false];
+
+  // Bid levels (buy orders) sorted by price descending
+  repeated l2book.DepthLevel bids = 4 [(gogoproto.nullable) = false];
+}
+
+// Batch notification for multiple depth updates (if batching is enabled)
+message L2bookSubscribeBatchNotification {
+  // Trading symbol
+  string symbol = 1;
+
+  // Tick-based aggregation level
+  string aggregation_level = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/repo/types/order.TickBasedAggregationLevel",
+    (gogoproto.nullable) = false
+  ];
+
+  // Array of depth updates
+  repeated L2bookSubscribeNotification updates = 3
+      [(gogoproto.nullable) = false];
+}

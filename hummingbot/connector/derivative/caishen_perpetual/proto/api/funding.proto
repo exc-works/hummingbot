@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package funding;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "schema/extensions.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Funding {
+  // 根据合约标识(比如BTC-USDT)和时间范围(最多31天，左闭右开)查询某个合约的资金费率历史
+  rpc ListFundingHistories(ListFundingHistoriesRequest)
+      returns (ListFundingHistoriesResponse) {
+    option (google.api.http) = {
+      get: "/v1/funding/history"
+    };
+  }
+
+  // 根据合约标识(比如BTC-USDT)和资金费率周期(以小时计)查询某个合约的实时资金费率
+  // 可传空或者0，代表不过滤
+  rpc ListRealTimeFundingRates(ListRealTimeFundingRatesRequest)
+      returns (ListRealTimeFundingRatesResponse) {
+    option (google.api.http) = {
+      get: "/v1/funding/realtime"
+    };
+  }
+
+  // 查询所有资金费率周期(以小时计)
+  rpc ListFundingIntervals(ListFundingIntervalsRequest)
+      returns (ListFundingIntervalsResponse) {
+    option (google.api.http) = {
+      get: "/v1/funding/intervals"
+    };
+  }
+}
+
+message ListFundingHistoriesRequest {
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+  int64 start_time = 3
+      [(gogoproto.moretags) = "form:\"start_time\" binding:\"required\""];
+  int64 end_time = 4
+      [(gogoproto.moretags) = "form:\"end_time\" binding:\"required\""];
+}
+message ListFundingHistoriesResponse {
+  repeated FundingHistory funding_histories = 1;
+}
+message FundingHistory {
+  int64 time = 1 [(gogoproto.jsontag) = "time,string"];
+  string funding_rate = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  uint32 funding_interval_hours = 3;
+}
+
+message ListRealTimeFundingRatesRequest {
+  string symbol = 1 [(gogoproto.moretags) = "form:\"symbol\""];
+  uint32 funding_interval_hours = 2
+      [(gogoproto.moretags) = "form:\"funding_interval_hours\""];
+}
+
+message ListRealTimeFundingRatesResponse {
+  repeated RealTimeFundingRate real_time_funding_rates = 1;
+}
+
+message RealTimeFundingRate {
+  string symbol = 1;
+  uint32 funding_interval_hours = 2;
+  string funding_rate_lower_bound = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string funding_rate_upper_bound = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string funding_rate = 5 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message ListFundingIntervalsRequest {}
+message ListFundingIntervalsResponse {
+  repeated uint32 funding_interval_hours = 1;
+}

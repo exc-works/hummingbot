@@ -1,0 +1,20 @@
+syntax = "proto3";
+package token;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/admin/types";
+
+service Token {
+  rpc SyncTokens(SyncTokensRequest) returns (SyncTokensResponse) {
+    option (google.api.http) = {
+      post: "/v1/tokens/sync"
+      body: "*"
+    };
+  }
+}
+
+message SyncTokensRequest {}
+
+message SyncTokensResponse {}

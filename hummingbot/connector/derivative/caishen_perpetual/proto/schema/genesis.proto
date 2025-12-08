@@ -1,0 +1,22 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/chain.proto";
+import "schema/token.proto";
+import "schema/symbol.proto";
+import "schema/fee_tier.proto";
+
+message GenesisMessage {
+  uint64 chain_id = 1;
+  string chain_name = 2;
+  repeated bytes proposers = 3;
+  repeated EnableChainMessage enabled_chains = 4;
+  repeated RegisterTokenMessage registered_tokens = 5;
+  repeated DepositTokenMessage deposit_tokens =
+      6;  // only available for test purpose
+  repeated RegisterRiskLimitsMessage registered_risk_limits = 7;
+  repeated RegisterSymbolMessage registered_symbols = 8;
+  RegisterFeeTierMessage registered_fee_tier = 9;
+}

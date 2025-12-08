@@ -1,0 +1,158 @@
+syntax = "proto3";
+
+package api;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/exc-works/caishen/engine/types";
+
+service Api {
+  // GetActionResult 获取指定序列号的指令执行结果
+  rpc GetActionResult(GetActionResultRequest)
+      returns (GetActionResultResponse) {
+    option (google.api.http) = {
+      get: "/v1/actions/{sequence}"
+    };
+  }
+
+  // GetActionResultBySequences 获取多个序列号的指令执行结果
+  rpc GetActionResultBySequences(GetActionResultBySequencesRequest)
+      returns (GetActionResultBySequencesResponse) {
+    option (google.api.http) = {
+      post: "/v1/actions/by-sequences"
+      body: "*"
+    };
+  }
+
+  // GetMarketDepthBySymbol 获取指定交易对的市场深度
+  rpc GetMarketDepthBySymbol(GetMarketDepthBySymbolRequest)
+      returns (GetMarketDepthBySymbolResponse) {
+    option (google.api.http) = {
+      get: "/v1/markets/depth"
+    };
+  };
+
+  // ListTokens 列出所有代币信息
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {
+    option (google.api.http) = {
+      get: "/v1/tokens"
+    };
+  };
+
+  // ListSymbols 列出所有交易对信息
+  rpc ListSymbols(ListSymbolsRequest) returns (ListSymbolsResponse) {
+    option (google.api.http) = {
+      get: "/v1/symbols"
+    };
+  };
+}
+
+message GetActionResultRequest {
+  uint64 sequence = 1
+      [(gogoproto.moretags) = "uri:\"sequence\" binding:\"required\""];
+  // 序列化格式，默认为 raw
+  //  - json: json 序列化
+  //  - raw: base64 编码
+  string format = 2 [(gogoproto.moretags) = "form:\"format\""];
+}
+
+message GetActionResultResponse {
+  bytes result = 2
+      [(gogoproto.customtype) = "any", (gogoproto.nullable) = false];
+}
+
+message GetActionResultBySequencesRequest {
+  repeated uint64 sequences = 1 [(gogoproto.jsontag) = "sequences"];
+  // 序列化格式，默认为 raw
+  //  - json: json 序列化
+  //  - raw: base64 编码
+  string format = 2 [(gogoproto.moretags) = "form:\"format\""];
+}
+
+message GetActionResultBySequencesResponse {
+  map<uint64, GetActionResultResponse> results = 1
+      [(gogoproto.jsontag) = "results"];
+}
+
+message GetMarketDepthBySymbolRequest {
+  uint32 base_token = 1
+      [(gogoproto.moretags) = "form:\"base_token\" binding:\"required\""];
+  uint32 quote_token = 2
+      [(gogoproto.moretags) = "form:\"quote_token\" binding:\"required\""];
+  uint32 depth = 3 [(gogoproto.moretags) = "form:\"depth\""];
+}
+
+message GetMarketDepthBySymbolResponse {
+  string last_trade_price = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  repeated PriceVolume asks = 2
+      [(gogoproto.jsontag) = "asks", (gogoproto.nullable) = false];
+  repeated PriceVolume bids = 3
+      [(gogoproto.jsontag) = "bids", (gogoproto.nullable) = false];
+}
+
+message PriceVolume {
+  string price = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "price"
+  ];
+  string volume = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "volume"
+  ];
+}
+
+message ListTokensRequest {}
+
+message ListTokensResponse {
+  map<uint32, TokenResponse> tokens = 1;
+}
+
+message TokenResponse {
+  uint32 token_id = 1;
+  uint32 decimals = 2;
+}
+
+message ListSymbolsRequest {};
+
+message ListSymbolsResponse {
+  repeated SymbolResponse symbols = 1;
+}
+
+message SymbolResponse {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  google.protobuf.Timestamp open_time = 3
+      [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+  google.protobuf.Timestamp close_time = 4 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "close_time,omitzero"
+  ];
+  uint32 max_number_of_order_each_match = 5;
+  uint32 max_number_of_order_each_account = 6;
+  string tick_size = 7 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string lot_size = 8 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string min_size = 9 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}

@@ -1,0 +1,50 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+message RegisterTokenMessage {
+  uint32 id = 1;
+  string name = 2;
+  string symbol = 3;
+  uint32 decimals = 4;
+  bool deposit_enabled = 5;
+}
+
+message DepositTokenMessage {
+  uint32 token_id = 1;
+  string amount = 2 [(schema.decimal) = true];
+  uint32 chain_id = 3;
+  bytes deposit_hash = 4;
+  bytes receiver = 5 [(schema.address) = true];
+  bytes idempotency_key = 6 [(schema.hash) = true];
+}
+
+message WithdrawTokenMessage {
+  uint32 token_id = 1;
+  string amount = 2 [(schema.decimal) = true];
+  uint32 chain_id = 3;
+  bytes receiver = 4 [(schema.address) = true];
+}
+
+message ConfirmWithdrawTokenMessage {
+  // 提现任务id
+  uint64 pending_id = 1;
+  // 提现成功hash
+  bytes hash = 2 [(schema.hash) = true];
+}
+
+message RejectWithdrawTokenMessage {
+  // 提现任务id
+  uint64 pending_id = 1;
+  // 拒绝原因
+  string reason = 2;
+}
+
+message TransferTokenMessage {
+  uint32 token_id = 1;
+  string amount = 2 [(schema.decimal) = true];
+  bytes receiver = 3 [(schema.address) = true];
+}
