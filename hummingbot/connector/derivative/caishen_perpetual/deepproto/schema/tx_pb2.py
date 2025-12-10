@@ -22,11 +22,12 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from schema import extensions_pb2 as schema_dot_extensions__pb2
-from schema import error_pb2 as schema_dot_error__pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import extensions_pb2 as schema_dot_extensions__pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import error_pb2 as schema_dot_error__pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import order_pb2 as schema_dot_order__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fschema/tx.proto\x12\x0cshare.schema\x1a\x17schema/extensions.proto\x1a\x12schema/error.proto\"1\n\x11StartBlockMessage\x12\x0e\n\x06number\x18\x01 \x01(\x04\x12\x0c\n\x04time\x18\x02 \x01(\x03\"5\n\x0f\x45ndBlockMessage\x12\x0e\n\x06number\x18\x01 \x01(\x04\x12\x12\n\x04hash\x18\x02 \x01(\x0c\x42\x04\x98\xb5\x18\x01\"\xb0\x01\n\tTxMessage\x12\x10\n\x08\x63hain_id\x18\x01 \x01(\x04\x12\x1f\n\x11recent_block_hash\x18\x02 \x01(\x0c\x42\x04\x98\xb5\x18\x01\x12*\n\x06\x61\x63tion\x18\x03 \x01(\x0e\x32\x1a.share.schema.TxActionType\x12\x1c\n\x0etarget_address\x18\x04 \x01(\x0c\x42\x04\x90\xb5\x18\x01\x12\x0c\n\x04\x64\x61ta\x18\x05 \x01(\x0c\x12\x18\n\nsignatures\x18\x06 \x03(\x0c\x42\x04\xa8\xb5\x18\x01\"\x1d\n\x0b\x42lockResult\x12\x0e\n\x06number\x18\x01 \x01(\x04\"\x84\x01\n\x08TxResult\x12\x15\n\x07tx_hash\x18\x01 \x01(\x0c\x42\x04\x98\xb5\x18\x01\x12$\n\x05\x65rror\x18\x02 \x01(\x0b\x32\x13.share.schema.ErrorH\x00\x12\x31\n\x0c\x62lock_result\x18\x03 \x01(\x0b\x32\x19.share.schema.BlockResultH\x00\x42\x08\n\x06result\"\x85\x01\n\x05\x42lock\x12\x0e\n\x06number\x18\x01 \x01(\x04\x12\x16\n\x08proposer\x18\x02 \x01(\x0c\x42\x04\x90\xb5\x18\x01\x12\x12\n\x04hash\x18\x03 \x01(\x0c\x42\x04\x98\xb5\x18\x01\x12\x0c\n\x04time\x18\x04 \x01(\x03\x12\x19\n\x11start_sequence_id\x18\x05 \x01(\x04\x12\x17\n\x0f\x65nd_sequence_id\x18\x06 \x01(\x04*\xb8\x05\n\x0cTxActionType\x12\x10\n\x0cUNKNOWN_TYPE\x10\x00\x12\x0b\n\x07GENESIS\x10\x01\x12\x0f\n\x0bSTART_BLOCK\x10\x02\x12\r\n\tEND_BLOCK\x10\x03\x12\x10\n\x0c\x45NABLE_CHAIN\x10\n\x12\x11\n\rDISABLE_CHAIN\x10\x0b\x12\x12\n\x0eREGISTER_TOKEN\x10\x0c\x12\x11\n\rDEPOSIT_TOKEN\x10\r\x12\x12\n\x0eWITHDRAW_TOKEN\x10\x0e\x12\x12\n\x0eTRANSFER_TOKEN\x10\x0f\x12\x14\n\x10\x43ONFIRM_WITHDRAW\x10\x10\x12\x13\n\x0fREJECT_WITHDRAW\x10\x11\x12\x13\n\x0fREGISTER_SYMBOL\x10\x15\x12\x0f\n\x0bPLACE_ORDER\x10\x18\x12\x10\n\x0c\x43\x41NCEL_ORDER\x10\x19\x12\x17\n\x13UPDATE_FUNDING_RATE\x10\x1a\x12\x15\n\x11REGISTER_FEE_TIER\x10\x1b\x12\x1d\n\x19REGISTER_ACCOUNT_FEE_TIER\x10\x1c\x12\x16\n\x12UPDATE_INDEX_PRICE\x10\x1d\x12\x11\n\rAPPROVE_AGENT\x10\x1e\x12\x15\n\x11SET_POSITION_MODE\x10\x1f\x12\x18\n\x14REGISTER_RISK_LIMITS\x10 \x12\x17\n\x13\x43\x41NCEL_BATCH_ORDERS\x10!\x12\x19\n\x15SET_POSITION_LEVERAGE\x10\"\x12\x17\n\x13\x43ONVERT_TO_MULTISIG\x10#\x12\x1a\n\x16UPDATE_MULTISIG_CONFIG\x10$\x12\x16\n\x12\x43ONVERT_TO_REGULAR\x10%\x12\x1d\n\x19SETTLE_BATCH_FUNDING_FEES\x10&\x12\x13\n\x0fINCREASE_MARGIN\x10\'\x12\x13\n\x0f\x44\x45\x43REASE_MARGIN\x10(\x12\x11\n\rTRIGGER_ORDER\x10)\"\x04\x08\x12\x10\x14\"\x04\x08\x16\x10\x17\x42+Z)github.com/exc-works/caishen/share/schemab\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fschema/tx.proto\x12\x0cshare.schema\x1a\x17schema/extensions.proto\x1a\x12schema/error.proto\x1a\x12schema/order.proto\"1\n\x11StartBlockMessage\x12\x0e\n\x06number\x18\x01 \x01(\x04\x12\x0c\n\x04time\x18\x02 \x01(\x03\"5\n\x0f\x45ndBlockMessage\x12\x0e\n\x06number\x18\x01 \x01(\x04\x12\x12\n\x04hash\x18\x02 \x01(\x0c\x42\x04\x98\xb5\x18\x01\"\xb0\x01\n\tTxMessage\x12\x10\n\x08\x63hain_id\x18\x01 \x01(\x04\x12\x1f\n\x11recent_block_hash\x18\x02 \x01(\x0c\x42\x04\x98\xb5\x18\x01\x12*\n\x06\x61\x63tion\x18\x03 \x01(\x0e\x32\x1a.share.schema.TxActionType\x12\x1c\n\x0etarget_address\x18\x04 \x01(\x0c\x42\x04\x90\xb5\x18\x01\x12\x0c\n\x04\x64\x61ta\x18\x05 \x01(\x0c\x12\x18\n\nsignatures\x18\x06 \x03(\x0c\x42\x04\xa8\xb5\x18\x01\"\x1d\n\x0b\x42lockResult\x12\x0e\n\x06number\x18\x01 \x01(\x04\"\xa1\x05\n\x08TxResult\x12\x15\n\x07tx_hash\x18\x01 \x01(\x0c\x42\x04\x98\xb5\x18\x01\x12$\n\x05\x65rror\x18\x02 \x01(\x0b\x32\x13.share.schema.ErrorH\x00\x12\x31\n\x0c\x62lock_result\x18\x03 \x01(\x0b\x32\x19.share.schema.BlockResultH\x00\x12`\n cancel_liquidation_orders_result\x18\x06 \x01(\x0b\x32\x34.share.schema.TxResult.CancelLiquidationOrdersResultH\x01\x12\x45\n\x12place_order_result\x18\x07 \x01(\x0b\x32\'.share.schema.TxResult.PlaceOrderResultH\x01\x1aM\n\x1d\x43\x61ncelLiquidationOrdersResult\x12\x0b\n\x03ids\x18\x01 \x03(\x04\x12\x1f\n\x17\x65xited_liquidation_mode\x18\x02 \x01(\x08\x1a\x99\x02\n\x10PlaceOrderResult\x12\n\n\x02id\x18\x01 \x01(\x04\x12\x17\n\x04size\x18\x02 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x19\n\x06\x66illed\x18\x03 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x18\n\x05price\x18\x04 \x01(\tB\x04\x88\xb5\x18\x01H\x02\x88\x01\x01\x12\x1f\n\x0c\x66illed_price\x18\x05 \x01(\tB\x04\x88\xb5\x18\x01H\x03\x88\x01\x01\x12\x1c\n\x0f\x63lient_order_id\x18\x06 \x01(\x0cH\x04\x88\x01\x01\x12)\n\x06status\x18\x07 \x01(\x0e\x32\x19.share.schema.OrderStatusB\x07\n\x05_sizeB\t\n\x07_filledB\x08\n\x06_priceB\x0f\n\r_filled_priceB\x12\n\x10_client_order_idB\x08\n\x06resultB\x07\n\x05\x65xtra\"\x85\x01\n\x05\x42lock\x12\x0e\n\x06number\x18\x01 \x01(\x04\x12\x16\n\x08proposer\x18\x02 \x01(\x0c\x42\x04\x90\xb5\x18\x01\x12\x12\n\x04hash\x18\x03 \x01(\x0c\x42\x04\x98\xb5\x18\x01\x12\x0c\n\x04time\x18\x04 \x01(\x03\x12\x19\n\x11start_sequence_id\x18\x05 \x01(\x04\x12\x17\n\x0f\x65nd_sequence_id\x18\x06 \x01(\x04*\xb9\x06\n\x0cTxActionType\x12\x10\n\x0cUNKNOWN_TYPE\x10\x00\x12\x0b\n\x07GENESIS\x10\x01\x12\x0f\n\x0bSTART_BLOCK\x10\x02\x12\r\n\tEND_BLOCK\x10\x03\x12\x10\n\x0c\x45NABLE_CHAIN\x10\n\x12\x11\n\rDISABLE_CHAIN\x10\x0b\x12\x12\n\x0eREGISTER_TOKEN\x10\x0c\x12\x11\n\rDEPOSIT_TOKEN\x10\r\x12\x12\n\x0eWITHDRAW_TOKEN\x10\x0e\x12\x12\n\x0eTRANSFER_TOKEN\x10\x0f\x12\x14\n\x10\x43ONFIRM_WITHDRAW\x10\x10\x12\x13\n\x0fREJECT_WITHDRAW\x10\x11\x12\x13\n\x0fREGISTER_SYMBOL\x10\x15\x12\x11\n\rUPDATE_SYMBOL\x10\x17\x12\x0f\n\x0bPLACE_ORDER\x10\x18\x12\x10\n\x0c\x43\x41NCEL_ORDER\x10\x19\x12\x17\n\x13UPDATE_FUNDING_RATE\x10\x1a\x12\x15\n\x11REGISTER_FEE_TIER\x10\x1b\x12\x1d\n\x19REGISTER_ACCOUNT_FEE_TIER\x10\x1c\x12\x16\n\x12UPDATE_INDEX_PRICE\x10\x1d\x12\x11\n\rAPPROVE_AGENT\x10\x1e\x12\x15\n\x11SET_POSITION_MODE\x10\x1f\x12\x18\n\x14REGISTER_RISK_LIMITS\x10 \x12\x17\n\x13\x43\x41NCEL_BATCH_ORDERS\x10!\x12\x19\n\x15SET_POSITION_LEVERAGE\x10\"\x12\x17\n\x13\x43ONVERT_TO_MULTISIG\x10#\x12\x1a\n\x16UPDATE_MULTISIG_CONFIG\x10$\x12\x16\n\x12\x43ONVERT_TO_REGULAR\x10%\x12\x1d\n\x19SETTLE_BATCH_FUNDING_FEES\x10&\x12\x13\n\x0fINCREASE_MARGIN\x10\'\x12\x13\n\x0f\x44\x45\x43REASE_MARGIN\x10(\x12\x11\n\rTRIGGER_ORDER\x10)\x12\x1a\n\x16\x45NTER_LIQUIDATION_MODE\x10*\x12\x19\n\x15\x45XIT_LIQUIDATION_MODE\x10+\x12\x1d\n\x19\x43\x41NCEL_LIQUIDATION_ORDERS\x10,\x12\x16\n\x12LIQUIDATE_POSITION\x10-\"\x04\x08\x12\x10\x14\"\x04\x08\x16\x10\x16\x42+Z)github.com/exc-works/caishen/share/schemab\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -42,24 +43,37 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_TXMESSAGE'].fields_by_name['target_address']._serialized_options = b'\220\265\030\001'
   _globals['_TXMESSAGE'].fields_by_name['signatures']._loaded_options = None
   _globals['_TXMESSAGE'].fields_by_name['signatures']._serialized_options = b'\250\265\030\001'
+  _globals['_TXRESULT_PLACEORDERRESULT'].fields_by_name['size']._loaded_options = None
+  _globals['_TXRESULT_PLACEORDERRESULT'].fields_by_name['size']._serialized_options = b'\210\265\030\001'
+  _globals['_TXRESULT_PLACEORDERRESULT'].fields_by_name['filled']._loaded_options = None
+  _globals['_TXRESULT_PLACEORDERRESULT'].fields_by_name['filled']._serialized_options = b'\210\265\030\001'
+  _globals['_TXRESULT_PLACEORDERRESULT'].fields_by_name['price']._loaded_options = None
+  _globals['_TXRESULT_PLACEORDERRESULT'].fields_by_name['price']._serialized_options = b'\210\265\030\001'
+  _globals['_TXRESULT_PLACEORDERRESULT'].fields_by_name['filled_price']._loaded_options = None
+  _globals['_TXRESULT_PLACEORDERRESULT'].fields_by_name['filled_price']._serialized_options = b'\210\265\030\001'
   _globals['_TXRESULT'].fields_by_name['tx_hash']._loaded_options = None
   _globals['_TXRESULT'].fields_by_name['tx_hash']._serialized_options = b'\230\265\030\001'
   _globals['_BLOCK'].fields_by_name['proposer']._loaded_options = None
   _globals['_BLOCK'].fields_by_name['proposer']._serialized_options = b'\220\265\030\001'
   _globals['_BLOCK'].fields_by_name['hash']._loaded_options = None
   _globals['_BLOCK'].fields_by_name['hash']._serialized_options = b'\230\265\030\001'
-  _globals['_TXACTIONTYPE']._serialized_start=666
-  _globals['_TXACTIONTYPE']._serialized_end=1362
-  _globals['_STARTBLOCKMESSAGE']._serialized_start=78
-  _globals['_STARTBLOCKMESSAGE']._serialized_end=127
-  _globals['_ENDBLOCKMESSAGE']._serialized_start=129
-  _globals['_ENDBLOCKMESSAGE']._serialized_end=182
-  _globals['_TXMESSAGE']._serialized_start=185
-  _globals['_TXMESSAGE']._serialized_end=361
-  _globals['_BLOCKRESULT']._serialized_start=363
-  _globals['_BLOCKRESULT']._serialized_end=392
-  _globals['_TXRESULT']._serialized_start=395
-  _globals['_TXRESULT']._serialized_end=527
-  _globals['_BLOCK']._serialized_start=530
-  _globals['_BLOCK']._serialized_end=663
+  _globals['_TXACTIONTYPE']._serialized_start=1227
+  _globals['_TXACTIONTYPE']._serialized_end=2052
+  _globals['_STARTBLOCKMESSAGE']._serialized_start=98
+  _globals['_STARTBLOCKMESSAGE']._serialized_end=147
+  _globals['_ENDBLOCKMESSAGE']._serialized_start=149
+  _globals['_ENDBLOCKMESSAGE']._serialized_end=202
+  _globals['_TXMESSAGE']._serialized_start=205
+  _globals['_TXMESSAGE']._serialized_end=381
+  _globals['_BLOCKRESULT']._serialized_start=383
+  _globals['_BLOCKRESULT']._serialized_end=412
+  _globals['_TXRESULT']._serialized_start=415
+  _globals['_TXRESULT']._serialized_end=1088
+  _globals['_TXRESULT_CANCELLIQUIDATIONORDERSRESULT']._serialized_start=708
+  _globals['_TXRESULT_CANCELLIQUIDATIONORDERSRESULT']._serialized_end=785
+  _globals['_TXRESULT_PLACEORDERRESULT']._serialized_start=788
+  _globals['_TXRESULT_PLACEORDERRESULT']._serialized_end=1069
+  _globals['_BLOCK']._serialized_start=1091
+  _globals['_BLOCK']._serialized_end=1224
 # @@protoc_insertion_point(module_scope)
+

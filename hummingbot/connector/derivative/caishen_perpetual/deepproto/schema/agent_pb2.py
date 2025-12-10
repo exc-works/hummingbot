@@ -22,7 +22,7 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from schema import extensions_pb2 as schema_dot_extensions__pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import extensions_pb2 as schema_dot_extensions__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12schema/agent.proto\x12\x0cshare.schema\x1a\x17schema/extensions.proto\"N\n\x13\x41pproveAgentMessage\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x05\x61gent\x18\x02 \x01(\x0c\x42\x04\x90\xb5\x18\x01\x12\x14\n\x0c\x65xpired_time\x18\x03 \x01(\x03\x42+Z)github.com/exc-works/caishen/share/schemab\x06proto3')

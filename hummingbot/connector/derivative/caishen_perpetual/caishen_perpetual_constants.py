@@ -7,7 +7,7 @@ from hummingbot.core.data_type.in_flight_order import OrderState
 EXCHANGE_NAME = "caishen_perpetual"
 BROKER_ID = ""
 MAX_ORDER_ID_LEN = 16
-CHAIN_ID = 1
+CHAIN_ID = 71
 
 # === 域名配置 ===
 DOMAIN = EXCHANGE_NAME
@@ -15,10 +15,10 @@ TESTNET_DOMAIN = "caishen_perpetual_testnet"
 
 # === API URL ===
 PERPETUAL_BASE_URL = "https://api.perpdex.dev"
-TESTNET_BASE_URL = "https://api-dev.perpdex.dev"
+TESTNET_BASE_URL = "https://api-deepliquid-dev.perpdex.dev"
 
 PERPETUAL_WS_URL = "wss://api.perpdex.dev/v1/stream"
-TESTNET_WS_URL = "wss://api-dev.perpdex.dev/v1/stream"
+TESTNET_WS_URL = "wss://api-deepliquid-dev.perpdex.dev/v1/stream"
 
 # === API 端点路径 ===
 
@@ -42,6 +42,56 @@ TRADES_ENDPOINT_NAME = "trades"
 DEPTH_ENDPOINT_NAME = "orderbook"
 USER_ORDERS_ENDPOINT_NAME = "orders"
 USEREVENT_ENDPOINT_NAME = "user"
+
+ACTION_NAME_MAP = {
+    12: "REGISTER_TOKEN",
+    13: "DEPOSIT_TOKEN",
+    15: "TRANSFER_TOKEN",
+    21: "REGISTER_SYMBOL",
+    24: "PLACE_ORDER",
+    25: "CANCEL_ORDER",
+    27: "REGISTER_FEE_TIER",
+    28: "REGISTER_ACCOUNT_FEE_TIER",
+    30: "APPROVE_AGENT",
+    31: "SET_POSITION_MODE",
+    32: "REGISTER_RISK_LIMITS",
+    33: "CANCEL_BATCH_ORDERS",
+    34: "SET_POSITION_LEVERAGE",
+    35: "CONVERT_TO_MULTISIG",
+    36: "UPDATE_MULTISIG_CONFIG",
+    37: "CONVERT_TO_REGULAR",
+    39: "INCREASE_MARGIN",
+    40: "DECREASE_MARGIN",
+    41: "TRIGGER_ORDER"
+}
+
+ACTION_TYPE_MAP = {
+    "REGISTER_TOKEN":12,
+    "DEPOSIT_TOKEN":13,
+    "WITHDRAW_TOKEN":14,
+    "TRANSFER_TOKEN":15,
+    "CONFIRM_WITHDRAW":16,
+    "REJECT_WITHDRAW":17,
+    "REGISTER_SYMBOL":21,
+    "PLACE_ORDER": 24,
+    "CANCEL_ORDER": 25,
+    "UPDATE_FUNDING_RATE":26,
+    "REGISTER_FEE_TIER":27,
+    "REGISTER_ACCOUNT_FEE_TIER":28,
+    "UPDATE_INDEX_PRICE":29, # 更新指数价格
+    "APPROVE_AGENT": 30, # 授权或取消Agent
+    "SET_POSITION_MODE": 31,# 设置仓位模式
+    "REGISTER_RISK_LIMITS":32,# 注册风险限额
+    "CANCEL_BATCH_ORDERS":33, # 批量取消订单
+    "SET_POSITION_LEVERAGE": 34,# 设置仓位杠杆
+    "CONVERT_TO_MULTISIG":35, # 转换地址为多签
+    "UPDATE_MULTISIG_CONFIG":36,# 更新多签配置
+    "CONVERT_TO_REGULAR":37,# 转换多签地址为普通地址
+    "SETTLE_BATCH_FUNDING_FEES":38,# 批量结算资金费
+    "INCREASE_MARGIN":39,# 增加逐仓保证金
+    "DECREASE_MARGIN":40,# 减少逐仓保证金
+    "TRIGGER_ORDER":41 # 执行触发：计划委托、止盈止损、移动止盈止损
+}
 
 # === 订单状态映射 ===
 # API 返回 int 类型的订单状态，根据实际 API 文档调整

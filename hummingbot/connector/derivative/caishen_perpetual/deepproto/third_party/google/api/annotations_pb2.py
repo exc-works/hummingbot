@@ -25,54 +25,8 @@ _sym_db = _symbol_database.Default()
 from google.api import http_pb2 as google_dot_api_dot_http__pb2
 from google.protobuf import descriptor_pb2 as google_dot_protobuf_dot_descriptor__pb2
 
-# Ensure http_pb2 DESCRIPTOR is registered in the descriptor pool
-# This must be done before creating annotations_pb2 DESCRIPTOR
-_ = google_dot_api_dot_http__pb2.DESCRIPTOR
 
-# The issue: annotations_pb2 DESCRIPTOR references 'google/api/http.proto'
-# but http_pb2.DESCRIPTOR.name is 'third_party/google/api/http.proto'
-# We need to manually register http_pb2 DESCRIPTOR with the expected name 'google/api/http.proto'
-# Since protobuf 5.x uses C++ extension, we can't directly modify the pool
-# Instead, we need to re-serialize http_pb2 DESCRIPTOR with the correct name
-_pool = _descriptor_pool.Default()
-
-# Try to find if 'google/api/http.proto' is already registered
-try:
-    _pool.FindFileByName('google/api/http.proto')
-except KeyError:
-    # Not found, we need to register it
-    # Get the serialized data from http_pb2 DESCRIPTOR and re-register with correct name
-    try:
-        # Get the serialized data
-        _http_serialized = google_dot_api_dot_http__pb2.DESCRIPTOR.serialized_pb
-        # Replace the name in the serialized data from 'third_party/google/api/http.proto' to 'google/api/http.proto'
-        # The name is at the beginning: b'\n!third_party/google/api/http.proto' -> b'\n\x15google/api/http.proto'
-        # Length prefix: \n! = \n + 0x21 (33 bytes) -> \n\x15 = \n + 0x15 (21 bytes)
-        _http_serialized_fixed = _http_serialized.replace(
-            b'\n!third_party/google/api/http.proto',
-            b'\n\x15google/api/http.proto'
-        )
-        # Register with the correct name
-        _pool.AddSerializedFile(_http_serialized_fixed)
-    except Exception:
-        # If that fails, try to use the original serialized data
-        # This might work if the pool is lenient
-        pass
-
-# Create DESCRIPTOR
-# Fix: Change dependency reference from 'google/api/http.proto' to 'third_party/google/api/http.proto'
-# to match http_pb2.DESCRIPTOR.name
-_annotations_serialized = b'\n(third_party/google/api/annotations.proto\x12\ngoogle.api\x1a\x15google/api/http.proto\x1a google/protobuf/descriptor.proto:E\n\x04http\x12\x1e.google.protobuf.MethodOptions\x18\xb0\xca\xbc\" \x01(\x0b\x32\x14.google.api.HttpRuleBn\n\x0e\x63om.google.apiB\x10\x41nnotationsProtoP\x01ZAgoogle.golang.org/genproto/googleapis/api/annotations;annotations\xa2\x02\x04GAPIb\x06proto3'
-
-# Replace the dependency reference from 'google/api/http.proto' to 'third_party/google/api/http.proto'
-# Format: \x1a\x15 = dependency marker (26) + length (21 bytes for 'google/api/http.proto')
-# We need: \x1a( = dependency marker (26) + length (40 bytes for 'third_party/google/api/http.proto')
-_annotations_serialized_fixed = _annotations_serialized.replace(
-    b'\x1a\x15google/api/http.proto',
-    b'\x1a(third_party/google/api/http.proto'
-)
-
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(_annotations_serialized_fixed)
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n(third_party/google/api/annotations.proto\x12\ngoogle.api\x1a\x15google/api/http.proto\x1a google/protobuf/descriptor.proto:E\n\x04http\x12\x1e.google.protobuf.MethodOptions\x18\xb0\xca\xbc\" \x01(\x0b\x32\x14.google.api.HttpRuleBn\n\x0e\x63om.google.apiB\x10\x41nnotationsProtoP\x01ZAgoogle.golang.org/genproto/googleapis/api/annotations;annotations\xa2\x02\x04GAPIb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)

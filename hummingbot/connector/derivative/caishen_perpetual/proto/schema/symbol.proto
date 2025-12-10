@@ -38,3 +38,18 @@ message RegisterSymbolMessage {
   uint32 default_leverage = 13;
   uint32 risk_limits_id = 14;
 }
+
+message UpdateSymbolMessage {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+
+  optional int64 open_time = 3;  // 开盘时间，未开盘状态可更新
+  optional int64 close_time = 4;
+  optional uint32 max_number_of_order_each_match = 8;
+  optional uint32 max_number_of_order_each_account = 9;
+  optional uint32 funding_interval_hours = 10;
+  optional string funding_rate_bound = 11 [(schema.decimal) = true];
+  optional string price_limit_bound = 12 [(schema.decimal) = true];
+  optional uint32 default_leverage = 13;
+  optional uint32 risk_limits_id = 14;
+}

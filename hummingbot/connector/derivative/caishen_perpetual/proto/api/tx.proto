@@ -28,11 +28,12 @@ message SubmitTxResponse {
     TxError error = 1;
     BlockResult block_result = 2;
   }
+  bytes raw = 3;  // 序列化的完整TxResult数据
 }
 
 message TxError {
-  int32 code = 1;
-  share.schema.ErrorCode code_text = 2;
+  share.schema.ErrorCode code = 1;
+  string code_text = 2;
   string message = 3;
 }
 

@@ -28,7 +28,7 @@ from schema import tx_pb2 as schema_dot_tx__pb2
 from schema import error_pb2 as schema_dot_error__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0c\x61pi/tx.proto\x12\x02tx\x1a\x1cgoogle/api/annotations.proto\x1a\x14gogoproto/gogo.proto\x1a\x0fschema/tx.proto\x1a\x12schema/error.proto\":\n\x0fSubmitTxRequest\x12\'\n\x07message\x18\x01 \x01(\x0c\x42\x16\xf2\xde\x1f\x12\x62inding:\"required\"\"c\n\x10SubmitTxResponse\x12\x1c\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0b.tx.TxErrorH\x00\x12\'\n\x0c\x62lock_result\x18\x02 \x01(\x0b\x32\x0f.tx.BlockResultH\x00\x42\x08\n\x06result\"T\n\x07TxError\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\x12*\n\tcode_text\x18\x02 \x01(\x0e\x32\x17.share.schema.ErrorCode\x12\x0f\n\x07message\x18\x03 \x01(\t\"\x1d\n\x0b\x42lockResult\x12\x0e\n\x06number\x18\x01 \x01(\x04\x32N\n\x02Tx\x12H\n\x08SubmitTx\x12\x13.tx.SubmitTxRequest\x1a\x14.tx.SubmitTxResponse\"\x11\x82\xd3\xe4\x93\x02\x0b\"\x06/v1/tx:\x01*B(Z&github.com/exc-works/caishen/api/typesb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0c\x61pi/tx.proto\x12\x02tx\x1a\x1cgoogle/api/annotations.proto\x1a\x14gogoproto/gogo.proto\x1a\x0fschema/tx.proto\x1a\x12schema/error.proto\":\n\x0fSubmitTxRequest\x12\'\n\x07message\x18\x01 \x01(\x0c\x42\x16\xf2\xde\x1f\x12\x62inding:\"required\"\"p\n\x10SubmitTxResponse\x12\x1c\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0b.tx.TxErrorH\x00\x12\'\n\x0c\x62lock_result\x18\x02 \x01(\x0b\x32\x0f.tx.BlockResultH\x00\x12\x0b\n\x03raw\x18\x03 \x01(\x0c\x42\x08\n\x06result\"T\n\x07TxError\x12%\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x17.share.schema.ErrorCode\x12\x11\n\tcode_text\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\"\x1d\n\x0b\x42lockResult\x12\x0e\n\x06number\x18\x01 \x01(\x04\x32N\n\x02Tx\x12H\n\x08SubmitTx\x12\x13.tx.SubmitTxRequest\x1a\x14.tx.SubmitTxResponse\"\x11\x82\xd3\xe4\x93\x02\x0b\"\x06/v1/tx:\x01*B(Z&github.com/exc-works/caishen/api/typesb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -43,11 +43,11 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_SUBMITTXREQUEST']._serialized_start=109
   _globals['_SUBMITTXREQUEST']._serialized_end=167
   _globals['_SUBMITTXRESPONSE']._serialized_start=169
-  _globals['_SUBMITTXRESPONSE']._serialized_end=268
-  _globals['_TXERROR']._serialized_start=270
-  _globals['_TXERROR']._serialized_end=354
-  _globals['_BLOCKRESULT']._serialized_start=356
-  _globals['_BLOCKRESULT']._serialized_end=385
-  _globals['_TX']._serialized_start=387
-  _globals['_TX']._serialized_end=465
+  _globals['_SUBMITTXRESPONSE']._serialized_end=281
+  _globals['_TXERROR']._serialized_start=283
+  _globals['_TXERROR']._serialized_end=367
+  _globals['_BLOCKRESULT']._serialized_start=369
+  _globals['_BLOCKRESULT']._serialized_end=398
+  _globals['_TX']._serialized_start=400
+  _globals['_TX']._serialized_end=478
 # @@protoc_insertion_point(module_scope)

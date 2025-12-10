@@ -1,13 +1,15 @@
 # your_dex_perpetual_derivative.py
 
 import asyncio
+import decimal
+import base64
 import json
 import time
 from decimal import Decimal
 from typing import Any, AsyncIterable, Dict, List, Optional, Tuple
 
 from bidict import bidict
-
+from eth_utils import to_bytes
 
 from hummingbot.connector.constants import s_decimal_NaN
 from hummingbot.connector.derivative.caishen_perpetual import (
@@ -31,8 +33,9 @@ from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate
 from hummingbot.core.data_type.trade_fee import TokenAmount, TradeFeeBase
 from hummingbot.core.utils.estimate_fee import build_trade_fee
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
+from hummingbot.core.web_assistant.connections.data_types import RESTMethod
 from hummingbot.core.utils.async_utils import safe_ensure_future, safe_gather
-from hummingbot.connector.derivative.caishen_perpetual.caishen_perpetual_auth import make_and_submit_tx
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import tx_pb2
 
 
 class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
@@ -150,8 +153,15 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             KeyError: 如果交易对不存在
         """
         if trading_pair not in self._base_token_ids:
+            self.logger().error(
+                f"Base token ID not found for trading pair: {trading_pair}. "
+                f"Available trading pairs: {list(self._base_token_ids.keys())}. "
+                f"Total loaded pairs: {len(self._base_token_ids)}"
+            )
             raise KeyError(f"Base token ID not found for trading pair: {trading_pair}")
-        return self._base_token_ids[trading_pair]
+        token_id = self._base_token_ids[trading_pair]
+        self.logger().debug(f"Found base_token_id={token_id} for trading_pair={trading_pair}")
+        return token_id
     
     def get_quote_token_id(self, trading_pair: str) -> int:
         """
@@ -167,8 +177,15 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             KeyError: 如果交易对不存在
         """
         if trading_pair not in self._quote_token_ids:
+            self.logger().error(
+                f"Quote token ID not found for trading pair: {trading_pair}. "
+                f"Available trading pairs: {list(self._quote_token_ids.keys())}. "
+                f"Total loaded pairs: {len(self._quote_token_ids)}"
+            )
             raise KeyError(f"Quote token ID not found for trading pair: {trading_pair}")
-        return self._quote_token_ids[trading_pair]
+        token_id = self._quote_token_ids[trading_pair]
+        self.logger().debug(f"Found quote_token_id={token_id} for trading_pair={trading_pair}")
+        return token_id
     
     def _is_request_exception_related_to_time_synchronizer(self, request_exception: Exception):
         return False
@@ -191,7 +208,14 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         return False
 
     def _is_order_not_found_during_cancelation_error(self, cancelation_exception: Exception) -> bool:
-        # TODO: fixme
+        """
+        检查撤单异常是否表示订单不存在（错误码1139）
+        """
+        if isinstance(cancelation_exception, IOError):
+            error_str = str(cancelation_exception)
+            # 检查错误码1139（ORDER_NOT_FOUND）
+            if "1139" in error_str or "撤单失败: 1139" in error_str:
+                return True
         return False
 
     def quantize_order_price(self, trading_pair: str, price: Decimal) -> Decimal:
@@ -214,20 +238,65 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         
         return quantized_price
 
+    async def _api_request(
+            self,
+            path_url,
+            overwrite_url: Optional[str] = None,
+            method: RESTMethod = RESTMethod.GET,
+            params: Optional[Dict[str, Any]] = None,
+            data: Optional[Dict[str, Any]] = None,
+            is_auth_required: bool = False,
+            return_err: bool = False,
+            limit_id: Optional[str] = None,
+            trading_pair: Optional[str] = None,
+            headers: Optional[Dict[str, Any]] = None,
+            **kwargs,
+    ) -> Dict[str, Any]:
+        """
+        重写 _api_request 方法，使用 web_utils.get_rest_api_limit_id_for_endpoint 获取正确的 limit_id
+        这符合其他 connector 的模式（如 bybit_perpetual, okx_perpetual）
+        """
+        # 如果没有提供 limit_id，使用 web_utils 函数获取
+        if limit_id is None:
+            limit_id = web_utils.get_rest_api_limit_id_for_endpoint(
+                endpoint=path_url,
+                trading_pair=trading_pair,
+            )
+        
+        # 调用父类方法
+        return await super()._api_request(
+            path_url=path_url,
+            overwrite_url=overwrite_url,
+            method=method,
+            params=params,
+            data=data,
+            is_auth_required=is_auth_required,
+            return_err=return_err,
+            limit_id=limit_id,
+            headers=headers,
+            **kwargs,
+        )
+
     async def _update_trading_rules(self):
+        self.logger().info(f"开始更新交易规则，请求路径: {self.trading_rules_request_path}")
         exchange_info = await self._api_get(path_url=self.trading_rules_request_path)
+        self.logger().debug(f"获取到交易规则响应: code={exchange_info.get('code')}, symbols数量={len(exchange_info.get('data', {}).get('symbols', []))}")
         trading_rules_list = await self._format_trading_rules(exchange_info)
         self._trading_rules.clear()
         for trading_rule in trading_rules_list:
             self._trading_rules[trading_rule.trading_pair] = trading_rule
+        self.logger().info(f"已加载 {len(self._trading_rules)} 个交易规则")
         self._initialize_trading_pair_symbols_from_exchange_info(exchange_info=exchange_info)
+        self.logger().info(f"交易规则更新完成，已加载 {len(self._base_token_ids)} 个交易对的 token IDs")
 
     # 初始化获取交易对信息
     async def _initialize_trading_pair_symbol_map(self):
         try:
+            self.logger().info(f"开始初始化交易对符号映射，请求路径: {CONSTANTS.EXCHANGE_INFO_URL}")
             exchange_info = await self._api_get(path_url=CONSTANTS.EXCHANGE_INFO_URL)
-
+            self.logger().debug(f"获取到交易对信息响应: code={exchange_info.get('code')}, symbols数量={len(exchange_info.get('data', {}).get('symbols', []))}")
             self._initialize_trading_pair_symbols_from_exchange_info(exchange_info=exchange_info)
+            self.logger().info(f"交易对符号映射初始化完成，已加载 {len(self._base_token_ids)} 个交易对")
         except Exception:
             self.logger().exception("There was an error requesting symbols info.")
 
@@ -318,11 +387,31 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
 
     async def _place_cancel(self, order_id: str, tracked_order: InFlightOrder):
         action_type = "CANCEL_ORDER"
+        
+        # 获取 exchange_order_id（整数类型），caishen 撤单 API 需要使用 exchange_order_id 而不是 client_order_id
+        exchange_order_id = tracked_order.exchange_order_id
+        if not exchange_order_id:
+            # 如果 exchange_order_id 还没有设置，尝试等待获取
+            try:
+                exchange_order_id = await tracked_order.get_exchange_order_id()
+            except Exception as e:
+                self.logger().error(f"无法获取订单 {order_id} 的 exchange_order_id: {e}")
+                raise IOError(f"无法获取订单 {order_id} 的 exchange_order_id，无法撤单")
+        
+        # 将 exchange_order_id 转换为整数（caishen API 要求整数类型）
+        try:
+            order_id_int = int(exchange_order_id)
+        except (ValueError, TypeError) as e:
+            self.logger().error(f"订单 {order_id} 的 exchange_order_id '{exchange_order_id}' 无法转换为整数: {e}")
+            raise IOError(f"订单 {order_id} 的 exchange_order_id '{exchange_order_id}' 无效，无法撤单")
+        
         form_data = {
-            "order_id": order_id,
+            "order_id": order_id_int,  # 使用整数类型的 exchange_order_id
         }
 
-        cancel_result = await self.authenticator.make_and_submit_tx(self.api_key, self.secret_key, action_type, form_data)
+        block_hash_bytes = await self.get_latest()
+        encoded_message = await self.authenticator.make_tx(self.api_key,block_hash_bytes, action_type, form_data)
+        cancel_result = await self.submit_tx(encoded_message)
         
         """
         Cancel result 结构：
@@ -335,18 +424,37 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             "block_result": {
                 "number": "string"  // 区块号，大于0表示成功
             },
-            "raw": "string"
+            "raw_tx_result": "string"
         }
         """
         
         try:
-            # 如果返回的是字符串，先解析为 JSON
-            if isinstance(cancel_result, str):
-                cancel_result = json.loads(cancel_result)
+            # 首先检查顶层 code 字段
+            response_code = cancel_result.get("code", -1)
+            response_msg = cancel_result.get("msg", "")
+            
+            # 情况1: API 返回错误（code != 0）
+            if response_code != 0:
+                msg = f"撤单失败: code={response_code}, msg={response_msg}"
+                self.logger().warning(f"撤单失败 - Order ID: {order_id}, {msg}")
+                
+                # 如果错误码表示订单不存在（如 1139），调用 process_order_not_found
+                # 参考 hyperliquid 的处理方式
+                if response_code == 1139 or "not found" in response_msg.lower() or "does not exist" in response_msg.lower():
+                    self.logger().debug(f"订单 {order_id} 不存在（错误码: {response_code}），无需撤单")
+                    await self._order_tracker.process_order_not_found(order_id)
+                    # 对于1139错误码，不抛出异常，直接返回True，避免记录error日志
+                    return True
+                
+                return False, msg
+            
+            # 情况2: API 返回成功（code == 0），解析 data.result
+            data = cancel_result.get("data", {})
+            result = data.get("result", {})
             
             # 正常情况下 error 和 block_result 只有一个有值
-            error_info = cancel_result.get("error")
-            block_result = cancel_result.get("block_result")
+            error_info = result.get("error")
+            block_result = result.get("block_result")
             
             # 情况1: 有错误（error 有值，block_result 为空）
             if error_info and not block_result:
@@ -358,10 +466,15 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                     f"Error Code: {error_code}, Message: {error_message}"
                 )
                 
-                # 如果是订单不存在的错误，标记订单为未找到
-                if "not found" in error_message.lower() or "does not exist" in error_message.lower():
-                    self.logger().debug(f"订单 {order_id} 不存在，无需撤单")
+                # 如果是订单不存在的错误（错误码 1139 或错误消息包含 not found/does not exist），标记订单为未找到
+                # 参考 hyperliquid 的处理方式
+                if (error_code == 1139 or 
+                    "not found" in str(error_message).lower() or 
+                    "does not exist" in str(error_message).lower()):
+                    self.logger().debug(f"订单 {order_id} 不存在（错误码: {error_code}），无需撤单")
                     await self._order_tracker.process_order_not_found(order_id)
+                    # 对于1139错误码，不抛出异常，直接返回True，避免记录error日志
+                    return True
                 
                 raise IOError(f"撤单失败: {error_code} - {error_message}")
             
@@ -458,10 +571,210 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         if price is not None and order_type.is_limit_type():
             form_data['price'] = str(price)
 
-        order_result = await self.authenticator.make_and_submit_tx(self.api_key, self.secret_key, action_type, form_data)
-        # TODO: 解析订单结果并返回 (exchange_order_id, timestamp)
-        # 需要根据实际 API 响应格式解析
-        raise NotImplementedError("Order result parsing not implemented yet")
+        block_hash_bytes = await self.get_latest()
+        encoded_message = await self.authenticator.make_tx(self.api_key,block_hash_bytes, action_type, form_data)
+        order_result = await self.submit_tx(encoded_message)
+        
+        # 打印 API 返回结果
+        self.logger().info(f"下单 API 响应 - Order ID: {order_id}, Response: {order_result}")
+
+        # Safe response parsing with proper error handling
+        try:
+            # 首先检查顶层 code 字段
+            response_code = order_result.get("code", -1)
+            response_msg = order_result.get("msg", "")
+            
+            # 情况1: API 返回错误（code != 0）
+            if response_code != 0:
+                error_msg = f"code={response_code}, msg={response_msg}"
+                self.logger().error(f"Error submitting order {order_id}: {error_msg}")
+                raise IOError(f"Error submitting order {order_id}: {error_msg}")
+            
+            # 情况2: API 返回成功（code == 0），解析 data.raw 中的 protobuf 数据
+            data = order_result.get("data", {})
+            if not isinstance(data, dict):
+                raise IOError(f"Error submitting order {order_id}: Invalid data format")
+            
+            # 检查 data.result.error 中的错误（在解析 protobuf 之前）
+            result = data.get("result", {})
+            if isinstance(result, dict):
+                error_info = result.get("error")
+                if isinstance(error_info, dict):
+                    error_code = error_info.get("code")
+                    error_code_text = error_info.get("code_text", "")
+                    
+                    # 处理1114-NO_POSITION_TO_REDUCE错误：仓位已经完全平仓，移除追踪的仓位
+                    if error_code == 1114 or error_code_text == "NO_POSITION_TO_REDUCE":
+                        self.logger().warning(
+                            f"下单失败 - Order ID: {order_id}, "
+                            f"Error Code: {error_code} ({error_code_text}), "
+                            f"仓位已经完全平仓，移除追踪的仓位"
+                        )
+                        
+                        # 如果是平仓操作，移除对应的仓位
+                        if position_action == PositionAction.CLOSE:
+                            # 根据 trade_type 确定仓位方向
+                            # BUY 平 SHORT 仓位，SELL 平 LONG 仓位
+                            if trade_type == TradeType.BUY:
+                                position_side = PositionSide.SHORT
+                            else:  # TradeType.SELL
+                                position_side = PositionSide.LONG
+                            
+                            pos_key = self._perpetual_trading.position_key(trading_pair, position_side)
+                            removed_position = self._perpetual_trading.remove_position(pos_key)
+                            if removed_position:
+                                self.logger().info(
+                                    f"已移除追踪的仓位 - Trading Pair: {trading_pair}, "
+                                    f"Position Side: {position_side}, Position Key: {pos_key}"
+                                )
+                            else:
+                                self.logger().debug(
+                                    f"未找到要移除的仓位 - Trading Pair: {trading_pair}, "
+                                    f"Position Side: {position_side}, Position Key: {pos_key}"
+                                )
+                        
+                        error_message = error_info.get("message", error_code_text)
+                        error_msg = f"{error_code} - {error_message}" if error_code else error_message
+                        raise IOError(f"Error submitting order {order_id}: {error_msg}")
+            
+            raw_data_base64 = data.get("raw_tx_result", "")
+            if not raw_data_base64:
+                raise IOError(f"Error submitting order {order_id}: No raw data in response")
+            
+            # 解码 base64 并解析 protobuf
+            try:
+                raw_data_bytes = base64.b64decode(raw_data_base64)
+                tx_result = tx_pb2.TxResult()
+                tx_result.ParseFromString(raw_data_bytes)
+            except Exception as e:
+                raise IOError(f"Error submitting order {order_id}: Failed to parse protobuf raw data - {e}")
+            
+            # 检查是否有错误
+            if tx_result.HasField("error"):
+                error = tx_result.error
+                try:
+                    error_code = error.code if error.HasField("code") else None
+                    error_message = error.message if error.HasField("message") else ""
+                except ValueError:
+                    # 如果 HasField 检查失败（字段没有 presence），尝试直接访问
+                    error_code = getattr(error, "code", None)
+                    error_message = getattr(error, "message", "")
+                
+                # 处理1114-NO_POSITION_TO_REDUCE错误：仓位已经完全平仓，移除追踪的仓位
+                if error_code == 1114:
+                    self.logger().warning(
+                        f"下单失败 - Order ID: {order_id}, "
+                        f"Error Code: {error_code} (NO_POSITION_TO_REDUCE), "
+                        f"仓位已经完全平仓，移除追踪的仓位"
+                    )
+                    
+                    # 如果是平仓操作，移除对应的仓位
+                    if position_action == PositionAction.CLOSE:
+                        # 根据 trade_type 确定仓位方向
+                        # BUY 平 SHORT 仓位，SELL 平 LONG 仓位
+                        if trade_type == TradeType.BUY:
+                            position_side = PositionSide.SHORT
+                        else:  # TradeType.SELL
+                            position_side = PositionSide.LONG
+                        
+                        pos_key = self._perpetual_trading.position_key(trading_pair, position_side)
+                        removed_position = self._perpetual_trading.remove_position(pos_key)
+                        if removed_position:
+                            self.logger().info(
+                                f"已移除追踪的仓位 - Trading Pair: {trading_pair}, "
+                                f"Position Side: {position_side}, Position Key: {pos_key}"
+                            )
+                        else:
+                            self.logger().debug(
+                                f"未找到要移除的仓位 - Trading Pair: {trading_pair}, "
+                                f"Position Side: {position_side}, Position Key: {pos_key}"
+                            )
+                
+                error_msg = f"{error_code} - {error_message}" if error_code else error_message
+                self.logger().error(f"Error submitting order {order_id}: {error_msg}")
+                raise IOError(f"Error submitting order {order_id}: {error_msg}")
+            
+            # 检查是否有 PlaceOrderResult
+            # 尝试使用 HasField 检查，如果字段不存在则使用 hasattr 作为后备
+            has_place_order_result = False
+            place_order_result = None
+            
+            try:
+                if tx_result.HasField("place_order_result"):
+                    has_place_order_result = True
+                    place_order_result = tx_result.place_order_result
+            except (ValueError, AttributeError):
+                # 字段可能不存在，尝试直接访问属性
+                try:
+                    if hasattr(tx_result, "place_order_result"):
+                        place_order_result = tx_result.place_order_result
+                        if place_order_result is not None:
+                            has_place_order_result = True
+                except Exception:
+                    pass
+            
+            if has_place_order_result and place_order_result is not None:
+                # 提取订单ID
+                order_id_from_result = None
+                try:
+                    order_id_from_result = place_order_result.id if hasattr(place_order_result, "id") else None
+                except Exception as e:
+                    self.logger().warning(f"提取 PlaceOrderResult.id 时出错: {e}")
+                
+                if not order_id_from_result:
+                    raise IOError(f"Error submitting order {order_id}: No order ID in PlaceOrderResult")
+                
+                # 提取其他订单信息用于日志
+                try:
+                    size = place_order_result.size if hasattr(place_order_result, "size") else None
+                    filled = place_order_result.filled if hasattr(place_order_result, "filled") else None
+                    price = place_order_result.price if hasattr(place_order_result, "price") else None
+                    filled_price = place_order_result.filled_price if hasattr(place_order_result, "filled_price") else None
+                    client_order_id = place_order_result.client_order_id if hasattr(place_order_result, "client_order_id") else None
+                    status = place_order_result.status if hasattr(place_order_result, "status") else None
+                    
+                    self.logger().info(
+                        f"下单成功 - Order ID: {order_id}, "
+                        f"Result Order ID: {order_id_from_result}, "
+                        f"Size: {size}, Filled: {filled}, "
+                        f"Price: {price}, Filled Price: {filled_price}, "
+                        f"Client Order ID: {client_order_id}, Status: {status}"
+                    )
+                except Exception as e:
+                    self.logger().warning(f"提取 PlaceOrderResult 字段时出错: {e}")
+                    self.logger().info(f"下单成功 - Order ID: {order_id}, Result Order ID: {order_id_from_result}")
+                
+                # 返回订单ID和时间戳（参考 hyperliquid 的实现）
+                return (str(order_id_from_result), time.time())
+            
+            # 检查是否有 block_result（兼容旧格式）
+            if tx_result.HasField("block_result"):
+                block_result = tx_result.block_result
+                block_number = block_result.number if block_result.HasField("number") else 0
+                
+                if block_number > 0:
+                    self.logger().info(
+                        f"下单成功 - Order ID: {order_id}, Block Number: {block_number}"
+                    )
+                    # 如果没有 place_order_result，使用传入的 order_id 作为返回值
+                    return (order_id, time.time())
+                else:
+                    raise IOError(f"Error submitting order {order_id}: Invalid block number: {block_number}")
+            
+            # 异常情况：既没有 place_order_result 也没有 block_result 和 error
+            raise IOError(f"Error submitting order {order_id}: TxResult has no place_order_result, block_result, or error")
+                
+        except IOError:
+            # 重新抛出 IOError（下单失败的错误）
+            raise
+        except (KeyError, TypeError, AttributeError) as e:
+            error_msg = f"Failed to parse response - {e}"
+            self.logger().error(f"Error parsing order result for {order_id}: {error_msg}, result: {order_result}")
+            raise IOError(f"Error submitting order {order_id}: {error_msg}")
+        except Exception as e:
+            error_msg = f"Unexpected error - {e}"
+            self.logger().error(f"Error submitting order {order_id}: {error_msg}, result: {order_result}")
+            raise IOError(f"Error submitting order {order_id}: {error_msg}")
     
     async def _update_trade_history(self):
         """
@@ -746,6 +1059,18 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         return _order_update
 
     async def _iter_user_event_queue(self) -> AsyncIterable[Dict[str, any]]:
+        """
+        WebSocket 暂时未实现，此方法为空实现。
+        如果 _user_stream_tracker 为 None（WebSocket 被禁用），直接返回，不 yield 任何值。
+        """
+        # WebSocket 被禁用时，_user_stream_tracker 为 None
+        if self._user_stream_tracker is None:
+            # 直接返回，结束 generator（不 yield 任何值）
+            # 由于 _user_stream_event_listener 已经被重写为空实现，这个方法理论上不会被调用
+            # 但为了安全起见，我们在这里处理 None 的情况
+            return
+        
+        # 如果 WebSocket 已启用，使用正常的实现
         while True:
             try:
                 yield await self._user_stream_tracker.user_stream.get()
@@ -755,45 +1080,9 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                 self.logger().network(
                     "Unknown error. Retrying after 1 seconds.",
                     exc_info=True,
-                    app_warning_msg="Could not fetch user events from Hyperliquid. Check API key and network connection.",
+                    app_warning_msg="Could not fetch user events from Caishen Perpetual. Check API key and network connection.",
                 )
                 await self._sleep(1.0)
-
-    async def _user_stream_event_listener(self):
-        """
-        Listens to messages from _user_stream_tracker.user_stream queue.
-        Traders, Orders, and Balance updates from the WS.
-        """
-        user_channels = [
-            CONSTANTS.USER_ORDERS_ENDPOINT_NAME,
-            CONSTANTS.USEREVENT_ENDPOINT_NAME,
-        ]
-        async for event_message in self._iter_user_event_queue():
-            try:
-                if isinstance(event_message, dict):
-                    channel: str = event_message.get("channel", None)
-                    results = event_message.get("data", None)
-                elif event_message is asyncio.CancelledError:
-                    raise asyncio.CancelledError
-                else:
-                    raise Exception(event_message)
-                if channel not in user_channels:
-                    self.logger().error(
-                        f"Unexpected message in user stream: {event_message}.", exc_info=True)
-                    continue
-                if channel == CONSTANTS.USER_ORDERS_ENDPOINT_NAME:
-                    for order_msg in results:
-                        self._process_order_message(order_msg)
-                elif channel == CONSTANTS.USEREVENT_ENDPOINT_NAME:
-                    if "fills" in results:
-                        for trade_msg in results["fills"]:
-                            await self._process_trade_message(trade_msg)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                self.logger().error(
-                    "Unexpected error in user stream listener loop.", exc_info=True)
-                await self._sleep(5.0)
 
     async def _process_trade_message(self, trade: Dict[str, Any], client_order_id: Optional[str] = None):
         """
@@ -991,15 +1280,23 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         
         data = exchange_info.get("data", {})
         symbols = data.get("symbols", [])
+        self.logger().info(f"开始初始化交易对符号映射，共 {len(symbols)} 个交易对")
+        
+        loaded_count = 0
+        skipped_count = 0
+        error_count = 0
         
         # 遍历每个交易对信息并建立映射
         for symbol_info in symbols:
             try:
-                # 检查交易对状态是否可用 (status=1 表示可用)
-                if symbol_info.get("status") != 1:
-                    continue
+                exchange_symbol = symbol_info.get("symbol", "UNKNOWN")
+                status = symbol_info.get("status")
                 
-                exchange_symbol = symbol_info["symbol"]  # e.g., "ETH-USDC"
+                # 检查交易对状态是否可用 (status=1 表示可用)
+                if status != 1:
+                    self.logger().debug(f"跳过不可用的交易对: {exchange_symbol}, status={status}")
+                    skipped_count += 1
+                    continue
                 
                 # base_token 和 quote_token 是整数 token ID（用于 API 调用）
                 base_token_id = symbol_info.get("base_token")  # e.g., 102
@@ -1023,15 +1320,35 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                 # 保存 base_token 和 quote_token（整数 token ID），用于后续 API 调用（下单、调整杠杆等）
                 if base_token_id is not None:
                     self._base_token_ids[trading_pair] = int(base_token_id)
+                else:
+                    self.logger().warning(f"交易对 {trading_pair} ({exchange_symbol}) 的 base_token_id 为 None")
+                    
                 if quote_token_id is not None:
                     self._quote_token_ids[trading_pair] = int(quote_token_id)
+                else:
+                    self.logger().warning(f"交易对 {trading_pair} ({exchange_symbol}) 的 quote_token_id 为 None")
+                
+                self.logger().debug(
+                    f"已加载交易对: {trading_pair} ({exchange_symbol}), "
+                    f"base_token_id={base_token_id}, quote_token_id={quote_token_id}, "
+                    f"funding_interval={funding_interval_hours}h"
+                )
+                loaded_count += 1
                 
             except Exception as exception:
+                error_count += 1
                 self.logger().error(
-                    f"解析交易对信息时出错 ({exception}). Symbol: {symbol_info}"
+                    f"解析交易对信息时出错 ({exception}). Symbol: {symbol_info}",
+                    exc_info=True
                 )
         
         self._set_trading_pair_symbol_map(mapping)
+        self.logger().info(
+            f"交易对符号映射初始化完成: 成功加载 {loaded_count} 个, "
+            f"跳过 {skipped_count} 个, 错误 {error_count} 个. "
+            f"已存储的 token IDs: base_token_ids={self._base_token_ids}, "
+            f"quote_token_ids={self._quote_token_ids}"
+        )
 
 
     async def _get_last_traded_price(self, trading_pair: str) -> float:
@@ -1126,14 +1443,43 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         quote = CONSTANTS.CURRENCY
         
         # 总余额 = 钱包余额
-        total_balance = Decimal(str(balance_info.get("wallet", "0")))
+        try:
+            wallet_str = str(balance_info.get("wallet", "0") or "0")
+            total_balance = Decimal(wallet_str)
+            if total_balance.is_nan() or total_balance.is_infinite():
+                total_balance = Decimal("0")
+        except (ValueError, TypeError, decimal.InvalidOperation):
+            self.logger().warning(f"无法解析钱包余额: {balance_info.get('wallet')}, 使用 0")
+            total_balance = Decimal("0")
         
         # 可用余额 = 钱包余额 - 所有冻结资金
-        isolated_position_frozen = Decimal(str(balance_info.get("isolated_position_frozen", "0")))
-        isolated_order_frozen = Decimal(str(balance_info.get("isolated_order_frozen", "0")))
-        cross_order_frozen = Decimal(str(balance_info.get("cross_order_frozen", "0")))
+        try:
+            isolated_position_frozen = Decimal(str(balance_info.get("isolated_position_frozen", "0") or "0"))
+            if isolated_position_frozen.is_nan() or isolated_position_frozen.is_infinite():
+                isolated_position_frozen = Decimal("0")
+        except (ValueError, TypeError, decimal.InvalidOperation):
+            isolated_position_frozen = Decimal("0")
         
+        try:
+            isolated_order_frozen = Decimal(str(balance_info.get("isolated_order_frozen", "0") or "0"))
+            if isolated_order_frozen.is_nan() or isolated_order_frozen.is_infinite():
+                isolated_order_frozen = Decimal("0")
+        except (ValueError, TypeError, decimal.InvalidOperation):
+            isolated_order_frozen = Decimal("0")
+        
+        try:
+            cross_order_frozen = Decimal(str(balance_info.get("cross_order_frozen", "0") or "0"))
+            if cross_order_frozen.is_nan() or cross_order_frozen.is_infinite():
+                cross_order_frozen = Decimal("0")
+        except (ValueError, TypeError, decimal.InvalidOperation):
+            cross_order_frozen = Decimal("0")
+        
+        # 计算可用余额，确保不会是负数或 NaN
         available_balance = total_balance - isolated_position_frozen - isolated_order_frozen - cross_order_frozen
+        if available_balance < Decimal("0"):
+            available_balance = Decimal("0")
+        if available_balance.is_nan() or available_balance.is_infinite():
+            available_balance = Decimal("0")
         
         # 更新账户余额
         self._account_balances[quote] = total_balance
@@ -1181,12 +1527,15 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             hb_trading_pair = await self.trading_pair_associated_to_exchange_symbol(ex_trading_pair)
 
             position_side = PositionSide.LONG if position.get("side") == 0 else PositionSide.SHORT
-            # unrealized_pnl = Decimal(position.get("unrealizedPnl")) fixme
+            unrealized_pnl = Decimal(position.get("unrealized_pnl")) 
             entry_price = Decimal(position.get("entry_price"))
-            amount = Decimal(position.get("size", 0))
-            # leverage = Decimal(position.get("leverage").get("value")) fixme
+            size = Decimal(position.get("size", 0))
+            # 根据持仓方向设置 amount 的正负号：LONG 为正数，SHORT 为负数
+            # 参考 okx_perpetual 的处理方式
+            amount = size * (Decimal("-1.0") if position_side == PositionSide.SHORT else Decimal("1.0"))
+            leverage = Decimal(position.get("leverage")) 
             pos_key = self._perpetual_trading.position_key(hb_trading_pair, position_side)
-            if amount != 0:
+            if abs(amount) > 0:
                 _position = Position(
                     trading_pair=hb_trading_pair,
                     position_side=position_side,
@@ -1222,9 +1571,24 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         
         使用存储的 base_token 和 quote_token ID 来构建请求
         """
+        self.logger().info(f"开始设置杠杆: trading_pair={trading_pair}, leverage={leverage}")
+        self.logger().debug(
+            f"当前已加载的交易对数量: base_token_ids={len(self._base_token_ids)}, "
+            f"quote_token_ids={len(self._quote_token_ids)}, "
+            f"已加载的交易对: {list(self._base_token_ids.keys())}"
+        )
+        
         # 获取 base_token 和 quote_token ID（整数）
-        base_token_id = self.get_base_token_id(trading_pair)
-        quote_token_id = self.get_quote_token_id(trading_pair)
+        try:
+            base_token_id = self.get_base_token_id(trading_pair)
+            quote_token_id = self.get_quote_token_id(trading_pair)
+            self.logger().debug(f"获取到 token IDs: base_token_id={base_token_id}, quote_token_id={quote_token_id}")
+        except KeyError as e:
+            self.logger().error(
+                f"设置杠杆失败: 无法获取交易对的 token IDs. "
+                f"这可能是因为交易对信息尚未加载完成。错误: {e}"
+            )
+            return False, str(e)
         
         action_type = "SET_POSITION_LEVERAGE"
         form_data = {
@@ -1234,25 +1598,71 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         }
         
         try:
-            response = self.authenticator.make_and_submit_tx(self.api_key, self.secret_key, action_type, form_data)
-            # 如果返回的是字符串，先解析为 JSON
-            if isinstance(response, str):
-                set_result = json.loads(response)
+            block_hash_bytes = await self.get_latest()
+            encoded_message = await self.authenticator.make_tx(self.api_key,block_hash_bytes, action_type, form_data)
+            set_result = await self.submit_tx(encoded_message)
+            self.logger().info(f"设置杠杆 API 响应: {set_result}")
             
-            # 正常情况下 error 和 block_result 只有一个有值
-            error_info = set_result.get("error")
-            if not error_info:
-                return True, ""
-            else:
-                msg = "设置杠杆失败"
-                return False,msg
+            # 解析 API 响应结构: {'code': 0, 'msg': '', 'data': {'result': {'block_result': {...}}}}
+            # 首先检查顶层 code 字段
+            response_code = set_result.get("code", -1)
+            response_msg = set_result.get("msg", "")
+            
+            # 情况1: API 返回错误（code != 0）
+            if response_code != 0:
+                msg = f"设置杠杆失败: code={response_code}, msg={response_msg}"
+                self.logger().warning(f"设置杠杆失败 - Trading Pair: {trading_pair}, Leverage: {leverage}, {msg}")
+                return False, msg
+            
+            # 情况2: API 返回成功（code == 0），解析 data.result
+            data = set_result.get("data", {})
+            result = data.get("result", {})
+            
+            # 检查是否有 error
+            error_info = result.get("error")
+            block_result = result.get("block_result")
+            
+            # 情况2.1: 有错误信息
+            if error_info:
+                error_code = error_info.get("code", "")
+                error_message = error_info.get("message", "")
+                msg = f"设置杠杆失败: {error_code} - {error_message}"
+                self.logger().warning(f"设置杠杆失败 - Trading Pair: {trading_pair}, Leverage: {leverage}, Error: {msg}")
+                return False, msg
+            
+            # 情况2.2: 成功，有 block_result
+            if block_result:
+                block_number = block_result.get("number", "0")
+                try:
+                    block_num = int(block_number)
+                    if block_num > 0:
+                        self.logger().info(
+                            f"设置杠杆成功 - Trading Pair: {trading_pair}, Leverage: {leverage}, Block Number: {block_number}"
+                        )
+                        return True, ""
+                    else:
+                        msg = f"设置杠杆返回无效的区块号: {block_number}"
+                        self.logger().warning(f"设置杠杆失败 - Trading Pair: {trading_pair}, Leverage: {leverage}, {msg}")
+                        return False, msg
+                except (ValueError, TypeError):
+                    msg = f"无法解析区块号: {block_number}"
+                    self.logger().error(f"设置杠杆失败 - Trading Pair: {trading_pair}, Leverage: {leverage}, {msg}")
+                    return False, msg
+            
+            # 情况2.3: 异常情况（既没有 error 也没有 block_result）
+            msg = f"设置杠杆结果异常: code={response_code}, data.result 中既没有 error 也没有 block_result, result={result}"
+            self.logger().error(f"设置杠杆失败 - Trading Pair: {trading_pair}, Leverage: {leverage}, {msg}")
+            return False, msg
+            
         except json.JSONDecodeError as e:
-            msg = "设置杠杆结果 JSON 解析失败"
-            return False,msg
+            msg = f"设置杠杆结果 JSON 解析失败: {e}"
+            self.logger().error(f"设置杠杆失败 - Trading Pair: {trading_pair}, Leverage: {leverage}, {msg}")
+            return False, msg
             
         except (KeyError, TypeError) as e:
-            msg = "设置杠杆结果格式错误"
-            return False,msg
+            msg = f"设置杠杆结果格式错误: {e}"
+            self.logger().error(f"设置杠杆失败 - Trading Pair: {trading_pair}, Leverage: {leverage}, {msg}")
+            return False, msg
         
 
     
@@ -1397,3 +1807,194 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         
         # 转为毫秒时间戳
         return int(last_funding_time_sec * 1000)
+
+    async def submit_tx(self,message_bytes,print_flag=True):
+        # 将 bytes 转换为 base64
+        message_base64 = base64.b64encode(message_bytes).decode("utf-8")
+        payload={
+            "message":message_base64,
+            "async":False,
+            "include_raw_tx_result":True
+        }
+
+        result = await self._api_post(
+            path_url = CONSTANTS.SUBMIT_TX_URL,
+            data=payload,
+            is_auth_required=False)
+            
+        return result
+
+    async def get_latest(self,print_flag=True):
+        '''
+        获取最新的区块
+        :param print_flag:
+        :return:
+        '''
+        result = await self._api_get(
+            path_url = CONSTANTS.GET_LATEST_BLOCK_URL,
+            is_auth_required=False)
+        block_hash = result['data']['block']['hash']
+        block_hash_bytes = to_bytes(hexstr=block_hash)
+        return block_hash_bytes
+    
+    def parse_tx_result_raw_data(self, raw_data_base64: str) -> Dict[str, Any]:
+        """
+        解析 TxResult 的 raw 数据（base64 编码的 protobuf 数据）
+        
+        Args:
+            raw_data_base64: base64 编码的 protobuf 原始数据
+            
+        Returns:
+            包含解析结果的字典，格式：
+            {
+                "has_error": bool,
+                "error": {...} or None,
+                "has_block_result": bool,
+                "block_result": {...} or None,
+                "has_place_order_result": bool,
+                "place_order_result": {...} or None,
+                "which_extra": str or None,  # extra oneof 中的字段名
+                "order_id": int or None,  # 从 place_order_result.id 提取的订单ID
+            }
+        """
+        result = {
+            "has_error": False,
+            "error": None,
+            "has_block_result": False,
+            "block_result": None,
+            "has_place_order_result": False,
+            "place_order_result": None,
+            "which_extra": None,
+            "order_id": None,
+        }
+        
+        try:
+            # 解码 base64
+            raw_data_bytes = base64.b64decode(raw_data_base64)
+            
+            # 解析 protobuf
+            tx_result = tx_pb2.TxResult()
+            tx_result.ParseFromString(raw_data_bytes)
+            
+            # 检查 error (result oneof)
+            try:
+                if tx_result.HasField("error"):
+                    result["has_error"] = True
+                    error = tx_result.error
+                    error_code = getattr(error, "code", "")
+                    error_message = getattr(error, "message", "")
+                    result["error"] = {
+                        "code": error_code,
+                        "message": error_message
+                    }
+            except (ValueError, AttributeError):
+                pass
+            
+            # 检查 block_result (result oneof)
+            try:
+                if tx_result.HasField("block_result"):
+                    result["has_block_result"] = True
+                    block_result = tx_result.block_result
+                    block_number = getattr(block_result, "number", 0)
+                    result["block_result"] = {
+                        "number": block_number
+                    }
+            except (ValueError, AttributeError):
+                pass
+            
+            # 检查 extra oneof 中的字段
+            try:
+                which_extra = tx_result.WhichOneof("extra")
+                result["which_extra"] = which_extra
+                
+                if which_extra == "place_order_result":
+                    result["has_place_order_result"] = True
+                    place_order_result = tx_result.place_order_result
+                    
+                    # 提取订单ID
+                    order_id = getattr(place_order_result, "id", None)
+                    result["order_id"] = order_id if order_id and order_id > 0 else None
+                    
+                    # 提取其他字段
+                    size = getattr(place_order_result, "size", None)
+                    filled = getattr(place_order_result, "filled", None)
+                    price = getattr(place_order_result, "price", None)
+                    filled_price = getattr(place_order_result, "filled_price", None)
+                    client_order_id = getattr(place_order_result, "client_order_id", None)
+                    status = getattr(place_order_result, "status", None)
+                    
+                    result["place_order_result"] = {
+                        "id": result["order_id"],
+                        "size": size,
+                        "filled": filled,
+                        "price": price,
+                        "filled_price": filled_price,
+                        "client_order_id": client_order_id,
+                        "status": status,
+                    }
+                elif which_extra == "cancel_liquidation_orders_result":
+                    cancel_result = tx_result.cancel_liquidation_orders_result
+                    ids = list(getattr(cancel_result, "ids", []))
+                    exited_liquidation_mode = getattr(cancel_result, "exited_liquidation_mode", False)
+                    result["cancel_liquidation_orders_result"] = {
+                        "ids": ids,
+                        "exited_liquidation_mode": exited_liquidation_mode
+                    }
+            except (ValueError, AttributeError):
+                pass
+        
+        except Exception as e:
+            self.logger().error(f"解析 raw 数据时出错: {e}")
+            raise
+        
+        return result
+    
+    def test_parse_tx_result_raw_data(self):
+        """
+        测试解析 raw 数据的方法
+        
+        使用日志中的实际数据进行测试
+        """
+        # 测试数据: 设置杠杆的响应（只有 block_result）
+        test_raw = "CiBf4waO/cqUYd0WQujtWCbOQV94L73Ote5ybHymZorDDxoFCIf4igI="
+        
+        print("\n" + "=" * 60)
+        print("测试解析 TxResult raw 数据")
+        print("=" * 60)
+        print(f"\n测试数据 (base64): {test_raw}")
+        
+        try:
+            result = self.parse_tx_result_raw_data(test_raw)
+            
+            print("\n解析结果:")
+            print(json.dumps(result, indent=2, default=str, ensure_ascii=False))
+            
+            # 验证解析结果
+            print("\n验证结果:")
+            assert result["has_block_result"] == True, "应该有 block_result"
+            assert result["block_result"] is not None, "block_result 不应该为 None"
+            assert result["block_result"]["number"] > 0, "block_number 应该大于 0"
+            print(f"✅ block_result 解析正确: block_number = {result['block_result']['number']}")
+            
+            assert result["has_error"] == False, "不应该有 error"
+            print("✅ 没有 error")
+            
+            if result["has_place_order_result"]:
+                assert result["order_id"] is not None, "如果有 place_order_result，应该有 order_id"
+                print(f"✅ place_order_result 解析正确: order_id = {result['order_id']}")
+            else:
+                print("ℹ️  没有 place_order_result（这是正常的，因为这是设置杠杆的响应）")
+            
+            print("\n" + "=" * 60)
+            print("✅ 所有测试通过！")
+            print("=" * 60)
+            return True
+            
+        except AssertionError as e:
+            print(f"\n❌ 测试失败: {e}")
+            return False
+        except Exception as e:
+            print(f"\n❌ 测试过程中发生错误: {e}")
+            import traceback
+            traceback.print_exc()
+            return False

@@ -22,10 +22,11 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from schema import extensions_pb2 as schema_dot_extensions__pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import extensions_pb2 as schema_dot_extensions__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12schema/order.proto\x12\x0cshare.schema\x1a\x17schema/extensions.proto\"\xee\x02\n\x14TriggerParamsMessage\x12\x39\n\x11trigger_direction\x18\x01 \x01(\x0e\x32\x1e.share.schema.TriggerDirection\x12\x1b\n\rtrigger_price\x18\x02 \x01(\tB\x04\x88\xb5\x18\x01\x12\x33\n\x12trigger_order_type\x18\x03 \x01(\x0e\x32\x17.share.schema.OrderType\x12\x18\n\x05price\x18\x04 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x17\n\x04size\x18\x05 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x35\n\rtime_in_force\x18\x06 \x01(\x0e\x32\x1e.share.schema.OrderTimeInForce\x12\x13\n\x0breduce_only\x18\x07 \x01(\x08\x12\x37\n\x08stp_mode\x18\x08 \x01(\x0e\x32%.share.schema.SelfTradePreventionModeB\x08\n\x06_priceB\x07\n\x05_size\"\xd8\x03\n\x15TrailingParamsMessage\x12)\n\tstop_type\x18\x01 \x01(\x0e\x32\x16.share.schema.StopType\x12<\n\x13trailing_delta_type\x18\x02 \x01(\x0e\x32\x1f.share.schema.TrailingDeltaType\x12\x1c\n\x0etrailing_delta\x18\x03 \x01(\tB\x04\x88\xb5\x18\x01\x12#\n\x10\x61\x63tivation_price\x18\x04 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x33\n\x12trigger_order_type\x18\x05 \x01(\x0e\x32\x17.share.schema.OrderType\x12\x18\n\x05price\x18\x06 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x17\n\x04size\x18\x07 \x01(\tB\x04\x88\xb5\x18\x01H\x02\x88\x01\x01\x12\x35\n\rtime_in_force\x18\x08 \x01(\x0e\x32\x1e.share.schema.OrderTimeInForce\x12\x13\n\x0breduce_only\x18\t \x01(\x08\x12\x37\n\x08stp_mode\x18\n \x01(\x0e\x32%.share.schema.SelfTradePreventionModeB\x13\n\x11_activation_priceB\x08\n\x06_priceB\x07\n\x05_size\"\xbb\x05\n\x11PlaceOrderMessage\x12\x12\n\nbase_token\x18\x01 \x01(\r\x12\x13\n\x0bquote_token\x18\x02 \x01(\r\x12(\n\x04side\x18\x03 \x01(\x0e\x32\x1a.share.schema.PositionSide\x12%\n\x04type\x18\x04 \x01(\x0e\x32\x17.share.schema.OrderType\x12\x35\n\rtime_in_force\x18\x05 \x01(\x0e\x32\x1e.share.schema.OrderTimeInForce\x12\x18\n\x05price\x18\x06 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x17\n\x04size\x18\x07 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x13\n\x0breduce_only\x18\x08 \x01(\x08\x12\x18\n\x0bposition_id\x18\t \x01(\x04H\x02\x88\x01\x01\x12\x38\n\x07trigger\x18\n \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x03\x88\x01\x01\x12\x33\n\x02tp\x18\x0b \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x04\x88\x01\x01\x12\x33\n\x02sl\x18\x0c \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x05\x88\x01\x01\x12:\n\x08trailing\x18\r \x01(\x0b\x32#.share.schema.TrailingParamsMessageH\x06\x88\x01\x01\x12\x37\n\x08stp_mode\x18\x0e \x01(\x0e\x32%.share.schema.SelfTradePreventionMode\x12\x1c\n\x0f\x63lient_order_id\x18\x10 \x01(\x0cH\x07\x88\x01\x01\x42\x08\n\x06_priceB\x07\n\x05_sizeB\x0e\n\x0c_position_idB\n\n\x08_triggerB\x05\n\x03_tpB\x05\n\x03_slB\x0b\n\t_trailingB\x12\n\x10_client_order_id\"j\n\x12\x43\x61ncelOrderMessage\x12\x15\n\x08order_id\x18\x01 \x01(\x04H\x00\x88\x01\x01\x12\x1c\n\x0f\x63lient_order_id\x18\x02 \x01(\x0cH\x01\x88\x01\x01\x42\x0b\n\t_order_idB\x12\n\x10_client_order_id\"K\n\x18\x43\x61ncelBatchOrdersMessage\x12/\n\x05\x62\x61tch\x18\x01 \x03(\x0b\x32 .share.schema.CancelOrderMessage\"\'\n\x13TriggerOrderMessage\x12\x10\n\x08order_id\x18\x01 \x01(\x04*#\n\x0cPositionSide\x12\x08\n\x04LONG\x10\x00\x12\t\n\x05SHORT\x10\x01*\'\n\x0cPositionMode\x12\t\n\x05\x43ROSS\x10\x00\x12\x0c\n\x08ISOLATED\x10\x01*9\n\x0ePositionStatus\x12\n\n\x06NORMAL\x10\x00\x12\x0f\n\x0bLIQUIDATING\x10\x01\x12\n\n\x06\x43LOSED\x10\x02*X\n\tOrderType\x12\t\n\x05LIMIT\x10\x00\x12\n\n\x06MARKET\x10\x01\x12\x0b\n\x07TRIGGER\x10\x02\x12\x19\n\x15TAKE_PROFIT_STOP_LOSS\x10\x03\x12\x0c\n\x08TRAILING\x10\x04*W\n\x10OrderTimeInForce\x12\x19\n\x15INVALID_TIME_IN_FORCE\x10\x00\x12\x07\n\x03GTC\x10\x01\x12\x07\n\x03IOC\x10\x02\x12\x07\n\x03\x46OK\x10\x03\x12\r\n\tPOST_ONLY\x10\x04*8\n\x10TriggerDirection\x12\x11\n\rTRIGGER_ABOVE\x10\x00\x12\x11\n\rTRIGGER_BELOW\x10\x01*A\n\x08StopType\x12\x15\n\x11INVALID_STOP_TYPE\x10\x00\x12\r\n\tSTOP_LOSS\x10\x01\x12\x0f\n\x0bTAKE_PROFIT\x10\x02*R\n\x11TrailingDeltaType\x12\x1f\n\x1bINVALID_TRAILING_DELTA_TYPE\x10\x00\x12\x0c\n\x08\x44ISTANCE\x10\x01\x12\x0e\n\nPERCENTAGE\x10\x02*[\n\x17SelfTradePreventionMode\x12\x0b\n\x07NOT_SET\x10\x00\x12\x10\n\x0c\x45XPIRE_MAKER\x10\x01\x12\x10\n\x0c\x45XPIRE_TAKER\x10\x02\x12\x0f\n\x0b\x45XPIRE_BOTH\x10\x03\x42+Z)github.com/exc-works/caishen/share/schemab\x06proto3')
+
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12schema/order.proto\x12\x0cshare.schema\x1a\x17schema/extensions.proto\"\xee\x02\n\x14TriggerParamsMessage\x12\x39\n\x11trigger_direction\x18\x01 \x01(\x0e\x32\x1e.share.schema.TriggerDirection\x12\x1b\n\rtrigger_price\x18\x02 \x01(\tB\x04\x88\xb5\x18\x01\x12\x33\n\x12trigger_order_type\x18\x03 \x01(\x0e\x32\x17.share.schema.OrderType\x12\x18\n\x05price\x18\x04 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x17\n\x04size\x18\x05 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x35\n\rtime_in_force\x18\x06 \x01(\x0e\x32\x1e.share.schema.OrderTimeInForce\x12\x13\n\x0breduce_only\x18\x07 \x01(\x08\x12\x37\n\x08stp_mode\x18\x08 \x01(\x0e\x32%.share.schema.SelfTradePreventionModeB\x08\n\x06_priceB\x07\n\x05_size\"\xd8\x03\n\x15TrailingParamsMessage\x12)\n\tstop_type\x18\x01 \x01(\x0e\x32\x16.share.schema.StopType\x12<\n\x13trailing_delta_type\x18\x02 \x01(\x0e\x32\x1f.share.schema.TrailingDeltaType\x12\x1c\n\x0etrailing_delta\x18\x03 \x01(\tB\x04\x88\xb5\x18\x01\x12#\n\x10\x61\x63tivation_price\x18\x04 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x33\n\x12trigger_order_type\x18\x05 \x01(\x0e\x32\x17.share.schema.OrderType\x12\x18\n\x05price\x18\x06 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x17\n\x04size\x18\x07 \x01(\tB\x04\x88\xb5\x18\x01H\x02\x88\x01\x01\x12\x35\n\rtime_in_force\x18\x08 \x01(\x0e\x32\x1e.share.schema.OrderTimeInForce\x12\x13\n\x0breduce_only\x18\t \x01(\x08\x12\x37\n\x08stp_mode\x18\n \x01(\x0e\x32%.share.schema.SelfTradePreventionModeB\x13\n\x11_activation_priceB\x08\n\x06_priceB\x07\n\x05_size\"\xbb\x05\n\x11PlaceOrderMessage\x12\x12\n\nbase_token\x18\x01 \x01(\r\x12\x13\n\x0bquote_token\x18\x02 \x01(\r\x12(\n\x04side\x18\x03 \x01(\x0e\x32\x1a.share.schema.PositionSide\x12%\n\x04type\x18\x04 \x01(\x0e\x32\x17.share.schema.OrderType\x12\x35\n\rtime_in_force\x18\x05 \x01(\x0e\x32\x1e.share.schema.OrderTimeInForce\x12\x18\n\x05price\x18\x06 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x17\n\x04size\x18\x07 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x13\n\x0breduce_only\x18\x08 \x01(\x08\x12\x18\n\x0bposition_id\x18\t \x01(\x04H\x02\x88\x01\x01\x12\x38\n\x07trigger\x18\n \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x03\x88\x01\x01\x12\x33\n\x02tp\x18\x0b \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x04\x88\x01\x01\x12\x33\n\x02sl\x18\x0c \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x05\x88\x01\x01\x12:\n\x08trailing\x18\r \x01(\x0b\x32#.share.schema.TrailingParamsMessageH\x06\x88\x01\x01\x12\x37\n\x08stp_mode\x18\x0e \x01(\x0e\x32%.share.schema.SelfTradePreventionMode\x12\x1c\n\x0f\x63lient_order_id\x18\x10 \x01(\x0cH\x07\x88\x01\x01\x42\x08\n\x06_priceB\x07\n\x05_sizeB\x0e\n\x0c_position_idB\n\n\x08_triggerB\x05\n\x03_tpB\x05\n\x03_slB\x0b\n\t_trailingB\x12\n\x10_client_order_id\"j\n\x12\x43\x61ncelOrderMessage\x12\x15\n\x08order_id\x18\x01 \x01(\x04H\x00\x88\x01\x01\x12\x1c\n\x0f\x63lient_order_id\x18\x02 \x01(\x0cH\x01\x88\x01\x01\x42\x0b\n\t_order_idB\x12\n\x10_client_order_id\"K\n\x18\x43\x61ncelBatchOrdersMessage\x12/\n\x05\x62\x61tch\x18\x01 \x03(\x0b\x32 .share.schema.CancelOrderMessage\"\xb3\x01\n\x1e\x43\x61ncelLiquidationOrdersMessage\x12\x15\n\x07\x61\x63\x63ount\x18\x01 \x01(\x0c\x42\x04\x90\xb5\x18\x01\x12(\n\x04mode\x18\x02 \x01(\x0e\x32\x1a.share.schema.PositionMode\x12\x17\n\nbase_token\x18\x03 \x01(\rH\x00\x88\x01\x01\x12\x18\n\x0bquote_token\x18\x04 \x01(\rH\x01\x88\x01\x01\x42\r\n\x0b_base_tokenB\x0e\n\x0c_quote_token\"\'\n\x13TriggerOrderMessage\x12\x10\n\x08order_id\x18\x01 \x01(\x04*#\n\x0cPositionSide\x12\x08\n\x04LONG\x10\x00\x12\t\n\x05SHORT\x10\x01*\'\n\x0cPositionMode\x12\t\n\x05\x43ROSS\x10\x00\x12\x0c\n\x08ISOLATED\x10\x01*I\n\x0ePositionStatus\x12\n\n\x06NORMAL\x10\x00\x12\x0f\n\x0bLIQUIDATING\x10\x01\x12\n\n\x06\x43LOSED\x10\x02\x12\x0e\n\nLIQUIDATED\x10\x03*X\n\tOrderType\x12\t\n\x05LIMIT\x10\x00\x12\n\n\x06MARKET\x10\x01\x12\x0b\n\x07TRIGGER\x10\x02\x12\x19\n\x15TAKE_PROFIT_STOP_LOSS\x10\x03\x12\x0c\n\x08TRAILING\x10\x04*\x96\x01\n\x0bOrderStatus\x12\x0b\n\x07INVALID\x10\x00\x12\x07\n\x03NEW\x10\x01\x12\x0b\n\x07PENDING\x10\x02\x12\r\n\tCANCELLED\x10\x03\x12\x0b\n\x07\x45XPIRED\x10\x04\x12\x14\n\x10PARTIALLY_FILLED\x10\x05\x12\x17\n\x13PARTIALLY_CANCELLED\x10\x06\x12\n\n\x06\x46ILLED\x10\x07\x12\r\n\tTRIGGERED\x10\x08*W\n\x10OrderTimeInForce\x12\x19\n\x15INVALID_TIME_IN_FORCE\x10\x00\x12\x07\n\x03GTC\x10\x01\x12\x07\n\x03IOC\x10\x02\x12\x07\n\x03\x46OK\x10\x03\x12\r\n\tPOST_ONLY\x10\x04*8\n\x10TriggerDirection\x12\x11\n\rTRIGGER_ABOVE\x10\x00\x12\x11\n\rTRIGGER_BELOW\x10\x01*A\n\x08StopType\x12\x15\n\x11INVALID_STOP_TYPE\x10\x00\x12\r\n\tSTOP_LOSS\x10\x01\x12\x0f\n\x0bTAKE_PROFIT\x10\x02*R\n\x11TrailingDeltaType\x12\x1f\n\x1bINVALID_TRAILING_DELTA_TYPE\x10\x00\x12\x0c\n\x08\x44ISTANCE\x10\x01\x12\x0e\n\nPERCENTAGE\x10\x02*[\n\x17SelfTradePreventionMode\x12\x0b\n\x07NOT_SET\x10\x00\x12\x10\n\x0c\x45XPIRE_MAKER\x10\x01\x12\x10\n\x0c\x45XPIRE_TAKER\x10\x02\x12\x0f\n\x0b\x45XPIRE_BOTH\x10\x03\x42+Z)github.com/exc-works/caishen/share/schemab\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -51,24 +52,28 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_PLACEORDERMESSAGE'].fields_by_name['price']._serialized_options = b'\210\265\030\001'
   _globals['_PLACEORDERMESSAGE'].fields_by_name['size']._loaded_options = None
   _globals['_PLACEORDERMESSAGE'].fields_by_name['size']._serialized_options = b'\210\265\030\001'
-  _globals['_POSITIONSIDE']._serialized_start=1833
-  _globals['_POSITIONSIDE']._serialized_end=1868
-  _globals['_POSITIONMODE']._serialized_start=1870
-  _globals['_POSITIONMODE']._serialized_end=1909
-  _globals['_POSITIONSTATUS']._serialized_start=1911
-  _globals['_POSITIONSTATUS']._serialized_end=1968
-  _globals['_ORDERTYPE']._serialized_start=1970
-  _globals['_ORDERTYPE']._serialized_end=2058
-  _globals['_ORDERTIMEINFORCE']._serialized_start=2060
-  _globals['_ORDERTIMEINFORCE']._serialized_end=2147
-  _globals['_TRIGGERDIRECTION']._serialized_start=2149
-  _globals['_TRIGGERDIRECTION']._serialized_end=2205
-  _globals['_STOPTYPE']._serialized_start=2207
-  _globals['_STOPTYPE']._serialized_end=2272
-  _globals['_TRAILINGDELTATYPE']._serialized_start=2274
-  _globals['_TRAILINGDELTATYPE']._serialized_end=2356
-  _globals['_SELFTRADEPREVENTIONMODE']._serialized_start=2358
-  _globals['_SELFTRADEPREVENTIONMODE']._serialized_end=2449
+  _globals['_CANCELLIQUIDATIONORDERSMESSAGE'].fields_by_name['account']._loaded_options = None
+  _globals['_CANCELLIQUIDATIONORDERSMESSAGE'].fields_by_name['account']._serialized_options = b'\220\265\030\001'
+  _globals['_POSITIONSIDE']._serialized_start=2015
+  _globals['_POSITIONSIDE']._serialized_end=2050
+  _globals['_POSITIONMODE']._serialized_start=2052
+  _globals['_POSITIONMODE']._serialized_end=2091
+  _globals['_POSITIONSTATUS']._serialized_start=2093
+  _globals['_POSITIONSTATUS']._serialized_end=2166
+  _globals['_ORDERTYPE']._serialized_start=2168
+  _globals['_ORDERTYPE']._serialized_end=2256
+  _globals['_ORDERSTATUS']._serialized_start=2259
+  _globals['_ORDERSTATUS']._serialized_end=2409
+  _globals['_ORDERTIMEINFORCE']._serialized_start=2411
+  _globals['_ORDERTIMEINFORCE']._serialized_end=2498
+  _globals['_TRIGGERDIRECTION']._serialized_start=2500
+  _globals['_TRIGGERDIRECTION']._serialized_end=2556
+  _globals['_STOPTYPE']._serialized_start=2558
+  _globals['_STOPTYPE']._serialized_end=2623
+  _globals['_TRAILINGDELTATYPE']._serialized_start=2625
+  _globals['_TRAILINGDELTATYPE']._serialized_end=2707
+  _globals['_SELFTRADEPREVENTIONMODE']._serialized_start=2709
+  _globals['_SELFTRADEPREVENTIONMODE']._serialized_end=2800
   _globals['_TRIGGERPARAMSMESSAGE']._serialized_start=62
   _globals['_TRIGGERPARAMSMESSAGE']._serialized_end=428
   _globals['_TRAILINGPARAMSMESSAGE']._serialized_start=431
@@ -79,6 +84,8 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_CANCELORDERMESSAGE']._serialized_end=1713
   _globals['_CANCELBATCHORDERSMESSAGE']._serialized_start=1715
   _globals['_CANCELBATCHORDERSMESSAGE']._serialized_end=1790
-  _globals['_TRIGGERORDERMESSAGE']._serialized_start=1792
-  _globals['_TRIGGERORDERMESSAGE']._serialized_end=1831
+  _globals['_CANCELLIQUIDATIONORDERSMESSAGE']._serialized_start=1793
+  _globals['_CANCELLIQUIDATIONORDERSMESSAGE']._serialized_end=1972
+  _globals['_TRIGGERORDERMESSAGE']._serialized_start=1974
+  _globals['_TRIGGERORDERMESSAGE']._serialized_end=2013
 # @@protoc_insertion_point(module_scope)

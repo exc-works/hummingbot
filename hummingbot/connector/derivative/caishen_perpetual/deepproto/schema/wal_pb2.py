@@ -22,8 +22,8 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from schema import error_pb2 as schema_dot_error__pb2
-from schema import changes_collector_pb2 as schema_dot_changes__collector__pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import error_pb2 as schema_dot_error__pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import changes_collector_pb2 as schema_dot_changes__collector__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10schema/wal.proto\x12\x0cshare.schema\x1a\x12schema/error.proto\x1a\x1eschema/changes_collector.proto\"e\n\x0c\x41\x63tionResult\x12\"\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x13.share.schema.Error\x12\x31\n\tcollector\x18\x02 \x01(\x0b\x32\x1e.share.schema.ChangesCollectorB+Z)github.com/exc-works/caishen/share/schemab\x06proto3')

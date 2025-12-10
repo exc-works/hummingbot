@@ -8,142 +8,269 @@ import "schema/extensions.proto";
 enum ErrorCode {
   NO_ERROR = 0;
   reserved 1 to 1000;
-  RECENT_BLOCK_HASH_NOT_FOUND = 1001;  // recent block hash not found or expired
-  RECENT_BLOCK_NOT_FINALIZED = 1002;   // recent block not finalized
-  DUPLICATED_TX_HASH = 1003;           // duplicated tx hash
-  MALFORMED_DATA = 1004;               // malformed data
-  CHAIN_ALREADY_INITIALIZED = 1005;    // chain already initialized
-  MISSING_SIGNATURES = 1006;           // missing signatures
-  TOO_MANY_SIGNATURES = 1007;          // too many signatures
-  NOT_PROPOSER = 1008;                 // not proposer
-  BAD_ACCOUNT = 1009;                  // bad account
-  UNAUTHORIZED = 1010;                 // unauthorized
-  INSUFFICIENT_SIGNATURES = 1011;      // Insufficient signatures
-  DUPLICATED_SIGNER = 1012;            // duplicated signer
-  BAD_TARGET_ADDRESS = 1013;           // bad target address
-  MESSAGE_TOO_LARGE = 1014;            // The transaction message is too large
+  // recent block hash not found or expired
+  RECENT_BLOCK_HASH_NOT_FOUND = 1001;
+  // recent block not finalized
+  RECENT_BLOCK_NOT_FINALIZED = 1002;
+  // duplicated tx hash
+  DUPLICATED_TX_HASH = 1003;
+  // malformed data
+  MALFORMED_DATA = 1004;
+  // chain already initialized
+  CHAIN_ALREADY_INITIALIZED = 1005;
+  // missing signatures
+  MISSING_SIGNATURES = 1006;
+  // too many signatures
+  TOO_MANY_SIGNATURES = 1007;
+  // not proposer
+  NOT_PROPOSER = 1008;
+  // bad account
+  BAD_ACCOUNT = 1009;
+  // unauthorized
+  UNAUTHORIZED = 1010;
+  // Insufficient signatures
+  INSUFFICIENT_SIGNATURES = 1011;
+  // duplicated signer
+  DUPLICATED_SIGNER = 1012;
+  // bad target address
+  BAD_TARGET_ADDRESS = 1013;
+  // The transaction message is too large
+  MESSAGE_TOO_LARGE = 1014;
   reserved 1015 to 1050;
 
-  UNSUPPORTED_ACTION_TYPE = 1051;       // unsupported action type
-  TOKEN_ALREADY_REGISTERED = 1052;      // token already registered
-  TOKEN_DECIMALS_TOO_LARGE = 1053;      // token decimals too large
-  TOKEN_NOT_FOUND = 1054;               // token not found
-  MALFORMED_DECIMAL_VALUE = 1055;       // malformed decimal value
-  POSITIVE_VALUE_REQUIRED = 1056;       // positive value required
-  AMOUNT_DECIMALS_TOO_LARGE = 1057;     // amount decimals too large
-  DEPOSIT_DISABLED = 1058;              // deposit disabled
-  BAD_CHAIN_ID = 1059;                  // bad chain id
-  PROPOSERS_CANNOT_EMPTY = 1060;        // proposers cannot empty
-  CHAIN_ALREADY_REGISTERED = 1061;      // chain already registered
-  CHAIN_NOT_REGISTERED = 1062;          // chain not registered
-  IDEMPOTENCY_KEY_ALREADY_USED = 1063;  // idempotency key already used
-  BASE_AND_QUOTE_TOKEN_CANNOT_BE_SAME =
-      1064;                          // base and quote token cannot be same
-  BAD_PRICE_LIMIT_BOUND = 1065;      // bad price limit rate
-  BAD_LEVERAGE = 1066;               // bad leverage
-  BAD_MMR = 1067;                    // bad MMR
-  MISSING_RANGE = 1068;              // missing range
-  BAD_RANGE_LOWER = 1069;            // bad range lower
-  BAD_RANGE_UPPER = 1070;            // bad range upper
-  BAD_RISK_LIMITS = 1071;            // bad risk limits
-  SYMBOL_ALREADY_REGISTERED = 1072;  // symbol already registered
-  BAD_FUNDING_RATE_BOUND = 1073;     // bad funding rate bound
-  FIRST_FEE_TIER_MUST_ZERO = 1074;   // first fee tier must be zero
-  FEE_TIER_MUST_CONTINUOUS = 1075;   // fee tier must be continuous
-  TAKER_FEE_RATE_MUST_NOT_NEGATIVE = 1076;  // taker fee rate must not negative
-  FEE_TIER_LEVEL_TOO_LARGE = 1077;          // fee tier level too large
-  FEE_TIERS_CANNOT_EMPTY = 1078;            // fee tiers cannot empty
-  FEE_TIER_NOT_FOUND = 1079;                // fee tier not found
-  UPDATE_STALE_PRICE = 1080;                // update stale price
-  UNAPPROVED_AGENT = 1081;                  // unapproved agent wallet
-  MAX_AGENTS_EXCEEDED = 1082;               // exceeded the agent wallet limit
-  AGENT_ALREADY_EXISTS = 1083;              // agent wallet already exists
-  AGENT_NOT_FOUND = 1084;                   // agent wallet not found
-  AGENT_NAME_MAX_LENGTH_EXCEEDED =
-      1085;  // agent name exceeds the maximum length limit
-  MAX_VALID_TIME_EXCEEDED =
-      1086;  // agent wallet expired time exceeds the max valid time
-  AGENT_NAME_REQUIRED = 1087;     // agent name required
-  BAD_DEFAULT_LEVERAGE = 1088;    // bad default leverage
-  BAD_TRIGGER_PRICE = 1089;       // bad trigger price
-  BAD_TRIGGER_ORDER_TYPE = 1090;  // bad trigger order type
-  TRIGGER_LIMIT_ORDER_MISSING_LIMIT_PRICE =
-      1091;  // trigger limit order missing limit price
-  TRIGGER_MARKET_ORDER_CANNOT_HAVE_LIMIT_PRICE =
-      1092;                      // trigger market order cannot have limit price
-  BAD_TRIGGER_DIRECTION = 1093;  // bad trigger direction
-  MISSING_TRIGGER_PARAMS = 1094;         // missing trigger params
-  MISSING_TP_OR_SL_PARAMS = 1095;        // missing tp or sl params
-  BAD_STOP_TYPE = 1096;                  // bad stop type
-  BAD_ACTIVATION_PRICE = 1097;           // bad activation price
-  BAD_TRAILING_BASE_PRICE = 1098;        // bad trailing base price
-  BAD_TRAILING_DELTA_TYPE = 1099;        // bad trailing delta type
-  BAD_TRAILING_DELTA = 1100;             // bad trailing delta
-  BAD_ORDER_ACTION = 1101;               // bad action
-  BAD_ORDER_TYPE = 1102;                 // bad order type
-  BAD_ORDER_TIME_IN_FORCE = 1103;        // bad order time in force
-  BAD_CLIENT_ORDER_ID = 1104;            // bad client order id
-  SYMBOL_NOT_FOUND = 1105;               // symbol not found
-  SYMBOL_NOT_OPEN = 1106;                // symbol not open
-  SYMBOL_ALREADY_CLOSED = 1107;          // symbol already closed
-  INSUFFICIENT_MARGIN = 1108;            // insufficient margin
-  TOO_MANY_ORDERS = 1109;                // too many orders
-  POST_ONLY_CONDITION_MISMATCH = 1110;   // post only condition mismatch
-  FOK_CONDITION_MISMATCH = 1111;         // fok condition mismatch
-  TOO_MANY_ORDERS_TO_MATCH = 1112;       // too many orders to match
-  NOT_ENOUGH_ORDERS_TO_MATCH = 1113;     // not enough orders to match
-  NO_POSITION_TO_REDUCE = 1114;          // no position to reduce
-  REDUCE_PRICE_NOT_BETTER = 1115;        // reduce price not better
-  DUPLICATED_CLIENT_ORDER_ID = 1116;     // duplicated client order id
-  PRICE_OUT_OF_RESTRICTED_RANGE = 1117;  // price out of restricted range
-  REDUCE_PRICE_OUT_OF_LIQUIDATION_PRICE =
-      1118;                             // reduce price out of liquidation price
-  BAD_PRICE = 1119;                     // bad price
-  BAD_SIZE = 1120;                      // bad size
-  PRICE_DECIMALS_TOO_LARGE = 1121;      // price decimals too large
-  TICK_SIZE_CONDITION_MISMATCH = 1122;  // tick size condition mismatch
-  SIZE_DECIMALS_TOO_LARGE = 1123;       // size decimals too large
-  SIZE_TOO_SMALL = 1124;                // size too small
-  LOT_SIZE_CONDITION_MISMATCH = 1125;   // lot size condition mismatch
-  BAD_POSITION_MODE = 1126;             // bad position mode
-  MARKET_ORDER_SHOULD_NOT_SET_PRICE =
-      1127;                         // market order should not set price
-  NO_TRADE_PRICE = 1128;            // no trade price
-  MISSING_TRAILING_PARAMS = 1129;   // missing trailing params
-  BAD_RISK_LIMITS_ID = 1130;        // bad risk limits id
-  RISK_LIMITS_ID_NOT_FOUND = 1131;  // risk limits id not found
-  RISK_LIMITS_ID_ALREADY_REGISTERED =
-      1132;  // risk limits id already registered
-  RISK_LIMITS_RANGE_MUST_CONTINUOUS =
-      1133;  // risk limits range must continuous
-  MUST_NOT_SET_WHEN_REDUCE_ONLY =
-      1134;  // must not set trigger, tp, sl, trailing when reduce only is true
-  UNSUPPORTED_TAKE_PROFIT_STOP_LOSS_COMBINATION =
-      1135;  // unsupported take profit stop loss combination
-  POSITION_ALREADY_CLOSED = 1136;         // position already closed
-  BAD_SELF_TRADE_PREVENTION_MODE = 1137;  // bad self trade prevention mode
-  ORDER_ID_AND_CLIENT_ORDER_ID_CANNOT_BE_BOTH_EMPTY =
-      1138;                // order id and client order id cannot be both empty
-  ORDER_NOT_FOUND = 1139;  // order not found
-  TOO_MANY_ORDERS_TO_CANCEL = 1140;  // too many orders to cancel
-  ACCOUNT_TYPE_MISMATCH = 1141;      // account type mismatch
-  INVALID_THRESHOLD = 1142;          // invalid threshold
-  BAD_AGENT_ADDRESS = 1143;          // bad agent address
-  POSITION_RISK_LIMIT_EXCEEDED =
-      1144;  // The order would cause the position to exceed the maximum
-             // leverage allowed by the risk limit
-  TOO_MANY_POSITIONS_TO_SETTLE =
-      1145;  // There are too many positions to settle funding fees
-  POSITION_IN_LIQUIDATION =
-      1146;             // The position is in liquidation, cannot be operated
-  BAD_RECEIVER = 1147;  // The receiver is not valid
-  BAD_IDEMPOTENCY_KEY = 1148;         // The idempotency key is not valid
-  BAD_HASH = 1149;                    // The hash is not valid
-  PENDING_WITHDRAW_NOT_FOUND = 1150;  // The pending withdraw is not found
-  NOT_PENDING_ORDER = 1151;           // The order is not a pending order
-  UNEXPECTED_ORDER_SIDE = 1152;  // The reduce only order side cannot be the
-                                 // same as the position side
-  BAD_FUNDING_INTERVAL_HOURS = 1153;  // The funding interval hours is invalid
+  // unsupported action type
+  UNSUPPORTED_ACTION_TYPE = 1051;
+  // token already registered
+  TOKEN_ALREADY_REGISTERED = 1052;
+  // token decimals too large
+  TOKEN_DECIMALS_TOO_LARGE = 1053;
+  // token not found
+  TOKEN_NOT_FOUND = 1054;
+  // malformed decimal value
+  MALFORMED_DECIMAL_VALUE = 1055;
+  // positive value required
+  POSITIVE_VALUE_REQUIRED = 1056;
+  // amount decimals too large
+  AMOUNT_DECIMALS_TOO_LARGE = 1057;
+  // deposit disabled
+  DEPOSIT_DISABLED = 1058;
+  // bad chain id
+  BAD_CHAIN_ID = 1059;
+  // proposers cannot empty
+  PROPOSERS_CANNOT_EMPTY = 1060;
+  // chain already registered
+  CHAIN_ALREADY_REGISTERED = 1061;
+  // chain not registered
+  CHAIN_NOT_REGISTERED = 1062;
+  // idempotency key already used
+  IDEMPOTENCY_KEY_ALREADY_USED = 1063;
+  // base and quote token cannot be same
+  BASE_AND_QUOTE_TOKEN_CANNOT_BE_SAME = 1064;
+  // bad price limit rate
+  BAD_PRICE_LIMIT_BOUND = 1065;
+  // bad leverage
+  BAD_LEVERAGE = 1066;
+  // bad MMR
+  BAD_MMR = 1067;
+  // missing range
+  MISSING_RANGE = 1068;
+  // bad range lower
+  BAD_RANGE_LOWER = 1069;
+  // bad range upper
+  BAD_RANGE_UPPER = 1070;
+  // bad risk limits
+  BAD_RISK_LIMITS = 1071;
+  // symbol already registered
+  SYMBOL_ALREADY_REGISTERED = 1072;
+  // bad funding rate bound
+  BAD_FUNDING_RATE_BOUND = 1073;
+  // first fee tier must be zero
+  FIRST_FEE_TIER_MUST_ZERO = 1074;
+  // fee tier must be continuous
+  FEE_TIER_MUST_CONTINUOUS = 1075;
+  // taker fee rate must not negative
+  TAKER_FEE_RATE_MUST_NOT_NEGATIVE = 1076;
+  // fee tier level too large
+  FEE_TIER_LEVEL_TOO_LARGE = 1077;
+  // fee tiers cannot empty
+  FEE_TIERS_CANNOT_EMPTY = 1078;
+  // fee tier not found
+  FEE_TIER_NOT_FOUND = 1079;
+  // update stale price
+  UPDATE_STALE_PRICE = 1080;
+  // unapproved agent wallet
+  UNAPPROVED_AGENT = 1081;
+  // exceeded the agent wallet limit
+  MAX_AGENTS_EXCEEDED = 1082;
+  // agent wallet already exists
+  AGENT_ALREADY_EXISTS = 1083;
+  // agent wallet not found
+  AGENT_NOT_FOUND = 1084;
+  // agent name exceeds the maximum length limit
+  AGENT_NAME_MAX_LENGTH_EXCEEDED = 1085;
+  // agent wallet expired time exceeds the max valid time
+  MAX_VALID_TIME_EXCEEDED = 1086;
+  // agent name required
+  AGENT_NAME_REQUIRED = 1087;
+  // bad default leverage
+  BAD_DEFAULT_LEVERAGE = 1088;
+  // bad trigger price
+  BAD_TRIGGER_PRICE = 1089;
+  // bad trigger order type
+  BAD_TRIGGER_ORDER_TYPE = 1090;
+  // trigger limit order missing limit price
+  TRIGGER_LIMIT_ORDER_MISSING_LIMIT_PRICE = 1091;
+  // trigger market order cannot have limit price
+  TRIGGER_MARKET_ORDER_CANNOT_HAVE_LIMIT_PRICE = 1092;
+  // bad trigger direction
+  BAD_TRIGGER_DIRECTION = 1093;
+  // missing trigger params
+  MISSING_TRIGGER_PARAMS = 1094;
+  // missing tp or sl params
+  MISSING_TP_OR_SL_PARAMS = 1095;
+  // bad stop type
+  BAD_STOP_TYPE = 1096;
+  // bad activation price
+  BAD_ACTIVATION_PRICE = 1097;
+  // bad trailing base price
+  BAD_TRAILING_BASE_PRICE = 1098;
+  // bad trailing delta type
+  BAD_TRAILING_DELTA_TYPE = 1099;
+  // bad trailing delta
+  BAD_TRAILING_DELTA = 1100;
+  // bad action
+  BAD_ORDER_ACTION = 1101;
+  // bad order type
+  BAD_ORDER_TYPE = 1102;
+  // bad order time in force
+  BAD_ORDER_TIME_IN_FORCE = 1103;
+  // bad client order id
+  BAD_CLIENT_ORDER_ID = 1104;
+  // symbol not found
+  SYMBOL_NOT_FOUND = 1105;
+  // symbol not open
+  SYMBOL_NOT_OPEN = 1106;
+  // symbol already closed
+  SYMBOL_ALREADY_CLOSED = 1107;
+  // insufficient margin
+  INSUFFICIENT_MARGIN = 1108;
+  // too many orders
+  TOO_MANY_ORDERS = 1109;
+  // post only condition mismatch
+  POST_ONLY_CONDITION_MISMATCH = 1110;
+  // fok condition mismatch
+  FOK_CONDITION_MISMATCH = 1111;
+  // The order would match too many counter orders. Please reduce the order size
+  MATCH_LIMIT_EXCEEDED = 1112;
+  // not enough orders to match
+  NOT_ENOUGH_ORDERS_TO_MATCH = 1113;
+  // no position to reduce
+  NO_POSITION_TO_REDUCE = 1114;
+  // reduce price not better
+  REDUCE_PRICE_NOT_BETTER = 1115;
+  // duplicated client order id
+  DUPLICATED_CLIENT_ORDER_ID = 1116;
+  // price out of restricted range
+  PRICE_OUT_OF_RESTRICTED_RANGE = 1117;
+  // reduce price out of liquidation price
+  REDUCE_PRICE_OUT_OF_LIQUIDATION_PRICE = 1118;
+  // bad price
+  BAD_PRICE = 1119;
+  // bad size
+  BAD_SIZE = 1120;
+  // price decimals too large
+  PRICE_DECIMALS_TOO_LARGE = 1121;
+  // tick size condition mismatch
+  TICK_SIZE_CONDITION_MISMATCH = 1122;
+  // size decimals too large
+  SIZE_DECIMALS_TOO_LARGE = 1123;
+  // size too small
+  SIZE_TOO_SMALL = 1124;
+  // lot size condition mismatch
+  LOT_SIZE_CONDITION_MISMATCH = 1125;
+  // bad position mode
+  BAD_POSITION_MODE = 1126;
+  // market order should not set price
+  MARKET_ORDER_SHOULD_NOT_SET_PRICE = 1127;
+  // no trade price
+  NO_TRADE_PRICE = 1128;
+  // missing trailing params
+  MISSING_TRAILING_PARAMS = 1129;
+  // bad risk limits id
+  BAD_RISK_LIMITS_ID = 1130;
+  // risk limits id not found
+  RISK_LIMITS_ID_NOT_FOUND = 1131;
+  // risk limits id already registered
+  RISK_LIMITS_ID_ALREADY_REGISTERED = 1132;
+  // risk limits range must continuous
+  RISK_LIMITS_RANGE_MUST_CONTINUOUS = 1133;
+  // must not set trigger, tp, sl, trailing when reduce only is true
+  MUST_NOT_SET_WHEN_REDUCE_ONLY = 1134;
+  // unsupported take profit stop loss combination
+  UNSUPPORTED_TAKE_PROFIT_STOP_LOSS_COMBINATION = 1135;
+  // position already closed
+  POSITION_ALREADY_CLOSED = 1136;
+  // bad self trade prevention mode
+  BAD_SELF_TRADE_PREVENTION_MODE = 1137;
+  // order id and client order id cannot be both empty
+  ORDER_ID_AND_CLIENT_ORDER_ID_CANNOT_BE_BOTH_EMPTY = 1138;
+  // order not found
+  ORDER_NOT_FOUND = 1139;
+  // too many orders to cancel
+  TOO_MANY_ORDERS_TO_CANCEL = 1140;
+  // account type mismatch
+  ACCOUNT_TYPE_MISMATCH = 1141;
+  // invalid threshold
+  INVALID_THRESHOLD = 1142;
+  // bad agent address
+  BAD_AGENT_ADDRESS = 1143;
+  // The order would cause the position to exceed the maximum
+  // leverage allowed by the risk limit
+  POSITION_RISK_LIMIT_EXCEEDED = 1144;
+  // There are too many positions to settle funding fees
+  TOO_MANY_POSITIONS_TO_SETTLE = 1145;
+  // The position is in liquidation mode; the requested operation is
+  // not allowed
+  LIQUIDATION_MODE_OPERATION_NOT_ALLOWED = 1146;
+  // The receiver is not valid
+  BAD_RECEIVER = 1147;
+  // The idempotency key is not valid
+  BAD_IDEMPOTENCY_KEY = 1148;
+  // The hash is not valid
+  BAD_HASH = 1149;
+  // The pending withdraw is not found
+  PENDING_WITHDRAW_NOT_FOUND = 1150;
+  // The order is not a pending order
+  NOT_PENDING_ORDER = 1151;
+  // The reduce only order side cannot be the
+  // same as the position side
+  UNEXPECTED_ORDER_SIDE = 1152;
+  // The funding interval hours is invalid
+  BAD_FUNDING_INTERVAL_HOURS = 1153;
+  // Should net set base token and quote token
+  SHOULD_NOT_SET_BASE_AND_QUOTE_TOKEN = 1154;
+  // The position is not found
+  POSITION_NOT_FOUND = 1155;
+  // The position is not in liquidation mode
+  POSITION_NOT_IN_LIQUIDATION_MODE = 1156;
+  // The position’s maintenance margin rate is insufficient to exit
+  // liquidation mode
+  POSITION_MAINTENANCE_MARGIN_RATE_INSUFFICIENT = 1157;
+  // The position’s maintenance margin rate is too high, cannot enter
+  // liquidation mode
+  POSITION_MAINTENANCE_MARGIN_RATE_TOO_HIGH = 1158;
+  // The symbol open time is invalid
+  BAD_SYMBOL_OPEN_TIME = 1159;
+  // The symbol close time is invalid
+  BAD_SYMBOL_CLOSE_TIME = 1160;
+  // Failed to calculate the bankruptcy price
+  CALCULATE_BANKRUPTCY_PRICE_FAILED = 1161;
+  // There are still open orders. Please cancel all
+  // open orders before liquidating the position
+  OPEN_ORDERS_EXIST = 1162;
+  // The insurance fund is not allowed to enter liquidation mode, so the
+  // operation is rejected
+  INSURANCE_FUND_CANNOT_ENTER_LIQUIDATION_MODE = 1163;
 }
 
 message Error {

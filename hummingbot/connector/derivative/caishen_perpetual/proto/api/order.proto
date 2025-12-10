@@ -20,11 +20,8 @@ service Order {
 }
 
 message ListOpenOrdersRequest {
-  bytes account = 1 [
-    (gogoproto.moretags) = "form:\"account\" binding:\"required\"",
-    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
-    (gogoproto.nullable) = false
-  ];
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
 }
 
 message ListOpenOrdersResponse {
@@ -34,7 +31,8 @@ message ListOpenOrdersResponse {
 message OrderResponse {
   uint64 order_id = 1;
   bytes account = 2 [
-    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
     (gogoproto.nullable) = false
   ];
   uint32 base_token = 3;
@@ -52,8 +50,8 @@ message OrderResponse {
         "github.com/exc-works/caishen/share/schema.OrderType",
     (gogoproto.nullable) = false
   ];
-  share.schema.PositionMode mode = 7;
-  share.schema.PositionSide side = 8;
+  share.schema.PositionMode mode = 7 [(gogoproto.jsontag) = "mode"];
+  share.schema.PositionSide side = 8 [(gogoproto.jsontag) = "side"];
   string price = 9 [
     (gogoproto.customtype) =
         "github.com/exc-works/caishen/common/math/decimal.Decimal",
@@ -94,8 +92,9 @@ message OrderResponse {
         "github.com/exc-works/caishen/share/schema.OrderTimeInForce",
     (gogoproto.nullable) = false
   ];
-  bool reduce_only = 16;
-  share.schema.SelfTradePreventionMode stp_mode = 17;
+  bool reduce_only = 16 [(gogoproto.jsontag) = "reduce_only"];
+  share.schema.SelfTradePreventionMode stp_mode = 17
+      [(gogoproto.jsontag) = "stp_mode"];
   uint64 position_id = 18;
   // The status of the order.
   //  - 0: invalid order
@@ -104,15 +103,15 @@ message OrderResponse {
   //  - 3: cancelled order
   //  - 4: expired order
   //  - 5: partially_filled order
-  //  - 6: partially_filled_and_cancelled order
+  //  - 6: partially_cancelled order
   //  - 7: filled order
   int32 status = 19 [
     (gogoproto.customtype) =
-        "github.com/exc-works/caishen/engine/runtime/types.OrderStatus",
+        "github.com/exc-works/caishen/share/schema.OrderStatus",
     (gogoproto.nullable) = false
   ];
   // unix millisecs
-  int64 on_chain_created_at = 20 [(gogoproto.jsontag) = "time,string"];
+  int64 on_chain_created_at = 20 [(gogoproto.jsontag) = "on_chain_created_at"];
   // The trigger of the order, only available for trigger order
   TriggerParamsResponse trigger = 21 [(gogoproto.jsontag) = "trigger"];
   // The trigger of the order, only available for take profit stop
@@ -125,12 +124,13 @@ message OrderResponse {
       [(gogoproto.jsontag) = "sl", (gogoproto.customname) = "SL"];
   // True if the take profit order is triggered,
   // False if the stop loss order is triggered.
-  bool tp_triggered = 24;
+  bool tp_triggered = 24 [(gogoproto.jsontag) = "tp_triggered"];
   // The trailing of the order, only available for trailing order
   TrailingParamsResponse trailing = 25 [(gogoproto.jsontag) = "trailing"];
-  int64 on_chain_closed_at = 26 [(gogoproto.jsontag) = "time,string"];
-  int32 trigger_error_code = 27;
-  uint64 trigger_order_id = 28;
+  int64 on_chain_closed_at = 26 [(gogoproto.jsontag) = "on_chain_closed_at"];
+  int32 trigger_error_code = 27 [(gogoproto.jsontag) = "trigger_error_code"];
+  uint64 trigger_order_id = 28 [(gogoproto.jsontag) = "trigger_order_id"];
+  bool liquidation_order = 29 [(gogoproto.jsontag) = "liquidation_order"];
 }
 
 message TriggerParamsResponse {
@@ -178,8 +178,9 @@ message TriggerParamsResponse {
         "github.com/exc-works/caishen/share/schema.OrderTimeInForce",
     (gogoproto.nullable) = false
   ];
-  bool reduce_only = 7;
-  share.schema.SelfTradePreventionMode stp_mode = 8;
+  bool reduce_only = 7 [(gogoproto.jsontag) = "reduce_only"];
+  share.schema.SelfTradePreventionMode stp_mode = 8
+      [(gogoproto.jsontag) = "stp_mode"];
 }
 
 message TrailingParamsResponse {
@@ -250,16 +251,14 @@ message TrailingParamsResponse {
         "github.com/exc-works/caishen/share/schema.OrderTimeInForce",
     (gogoproto.nullable) = false
   ];
-  bool reduce_only = 11;
-  share.schema.SelfTradePreventionMode stp_mode = 12;
+  bool reduce_only = 11 [(gogoproto.jsontag) = "reduce_only"];
+  share.schema.SelfTradePreventionMode stp_mode = 12
+      [(gogoproto.jsontag) = "stp_mode"];
 }
 
 message ListOrderHistoryRequest {
-  bytes account = 1 [
-    (gogoproto.moretags) = "form:\"account\" binding:\"required\"",
-    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
-    (gogoproto.nullable) = false
-  ];
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
   // The symbol of the order. e.g. BTC-USDT
   string symbol = 2 [(gogoproto.moretags) = "form:\"symbol\""];
   // The type of the order.

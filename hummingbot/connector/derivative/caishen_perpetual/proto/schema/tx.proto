@@ -5,6 +5,7 @@ option go_package = "github.com/exc-works/caishen/share/schema";
 
 import "schema/extensions.proto";
 import "schema/error.proto";
+import "schema/order.proto";
 
 enum TxActionType {
   UNKNOWN_TYPE = 0;
@@ -14,33 +15,38 @@ enum TxActionType {
 
   ENABLE_CHAIN = 10;
   DISABLE_CHAIN = 11;
-  REGISTER_TOKEN = 12;
-  DEPOSIT_TOKEN = 13;
-  WITHDRAW_TOKEN = 14;
-  TRANSFER_TOKEN = 15;
-  CONFIRM_WITHDRAW = 16;
-  REJECT_WITHDRAW = 17;
+  REGISTER_TOKEN = 12;    // 注册Token
+  DEPOSIT_TOKEN = 13;     // 链上充值
+  WITHDRAW_TOKEN = 14;    // 链上提现
+  TRANSFER_TOKEN = 15;    // 转账
+  CONFIRM_WITHDRAW = 16;  // 确认链上提现
+  REJECT_WITHDRAW = 17;   // 拒绝链上提现
   reserved 18 to 20;
-  REGISTER_SYMBOL = 21;
-  reserved 22 to 23;  // CLOSE_ENGINE = 22, UPDATE_SYMBOL = 23;
-  PLACE_ORDER = 24;
-  CANCEL_ORDER = 25;
-  UPDATE_FUNDING_RATE = 26;
-  REGISTER_FEE_TIER = 27;
-  REGISTER_ACCOUNT_FEE_TIER = 28;
-  UPDATE_INDEX_PRICE = 29;
-  APPROVE_AGENT = 30;
-  SET_POSITION_MODE = 31;
-  REGISTER_RISK_LIMITS = 32;
-  CANCEL_BATCH_ORDERS = 33;
-  SET_POSITION_LEVERAGE = 34;
-  CONVERT_TO_MULTISIG = 35;
-  UPDATE_MULTISIG_CONFIG = 36;
-  CONVERT_TO_REGULAR = 37;
-  SETTLE_BATCH_FUNDING_FEES = 38;
-  INCREASE_MARGIN = 39;
-  DECREASE_MARGIN = 40;
-  TRIGGER_ORDER = 41;
+  REGISTER_SYMBOL = 21;  // 注册交易对
+  reserved 22;           // CLOSE_ENGINE = 22
+  UPDATE_SYMBOL = 23;
+  PLACE_ORDER = 24;                // 下单
+  CANCEL_ORDER = 25;               // 取消订单
+  UPDATE_FUNDING_RATE = 26;        // 更新资金费率
+  REGISTER_FEE_TIER = 27;          // 注册费率等级
+  REGISTER_ACCOUNT_FEE_TIER = 28;  // 设置账户费率等级
+  UPDATE_INDEX_PRICE = 29;         // 更新指数价格
+  APPROVE_AGENT = 30;              // 授权或取消 Agent
+  SET_POSITION_MODE = 31;          // 设置仓位模式
+  REGISTER_RISK_LIMITS = 32;       // 注册风险限额
+  CANCEL_BATCH_ORDERS = 33;        // 批量取消订单
+  SET_POSITION_LEVERAGE = 34;      // 设置仓位杠杆
+  CONVERT_TO_MULTISIG = 35;        // 转换地址为多签
+  UPDATE_MULTISIG_CONFIG = 36;     // 更新多签配置
+  CONVERT_TO_REGULAR = 37;         // 转换多签地址为普通地址
+  SETTLE_BATCH_FUNDING_FEES = 38;  // 批量结算资金费
+  INCREASE_MARGIN = 39;            // 增加逐仓保证金
+  DECREASE_MARGIN = 40;            // 减少逐仓保证金
+  TRIGGER_ORDER = 41;              // 执行触发：计划委托、止盈止损、移动止盈止损
+  ENTER_LIQUIDATION_MODE = 42;     // 进入清算模式
+  EXIT_LIQUIDATION_MODE = 43;      // 退出清算模式
+  CANCEL_LIQUIDATION_ORDERS = 44;  // 撤销清算模式下的订单
+  LIQUIDATE_POSITION = 45;         // 清算仓位
 }
 
 message StartBlockMessage {
@@ -73,11 +79,29 @@ message BlockResult {
 }
 
 message TxResult {
+  message CancelLiquidationOrdersResult {
+    repeated uint64 ids = 1;           // canceled order ids
+    bool exited_liquidation_mode = 2;  // whether exited liquidation mode
+  }
+  message PlaceOrderResult {
+    uint64 id = 1;  // order id
+    optional string size = 2 [(schema.decimal) = true];
+    optional string filled = 3 [(schema.decimal) = true];
+    optional string price = 4 [(schema.decimal) = true];
+    optional string filled_price = 5 [(schema.decimal) = true];
+    optional bytes client_order_id = 6;
+    OrderStatus status = 7;
+  }
+
   bytes tx_hash = 1 [(schema.hash) = true];  // tx hash for matching
   oneof result {
     Error error = 2;
     BlockResult block_result = 3;
   }
+  oneof extra {
+    CancelLiquidationOrdersResult cancel_liquidation_orders_result = 6;
+    PlaceOrderResult place_order_result = 7;
+  }  // extra results for special actions
 }
 
 message Block {

@@ -27,7 +27,7 @@ from gogoproto import gogo_pb2 as gogoproto_dot_gogo__pb2
 from schema import extensions_pb2 as schema_dot_extensions__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11\x61pi/funding.proto\x12\x07\x66unding\x1a\x1cgoogle/api/annotations.proto\x1a\x14gogoproto/gogo.proto\x1a\x17schema/extensions.proto\"\xcb\x01\n\x1bListFundingHistoriesRequest\x12\x34\n\x06symbol\x18\x01 \x01(\tB$\xf2\xde\x1f form:\"symbol\" binding:\"required\"\x12<\n\nstart_time\x18\x03 \x01(\x03\x42(\xf2\xde\x1f$form:\"start_time\" binding:\"required\"\x12\x38\n\x08\x65nd_time\x18\x04 \x01(\x03\x42&\xf2\xde\x1f\"form:\"end_time\" binding:\"required\"\"R\n\x1cListFundingHistoriesResponse\x12\x32\n\x11\x66unding_histories\x18\x01 \x03(\x0b\x32\x17.funding.FundingHistory\"\xa7\x01\n\x0e\x46undingHistory\x12\x1d\n\x04time\x18\x01 \x01(\x03\x42\x0f\xea\xde\x1f\x0btime,string\x12V\n\x0c\x66unding_rate\x18\x02 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12\x1e\n\x16\x66unding_interval_hours\x18\x03 \x01(\r\"\x87\x01\n\x1fListRealTimeFundingRatesRequest\x12!\n\x06symbol\x18\x01 \x01(\tB\x11\xf2\xde\x1f\rform:\"symbol\"\x12\x41\n\x16\x66unding_interval_hours\x18\x02 \x01(\rB!\xf2\xde\x1f\x1d\x66orm:\"funding_interval_hours\"\"a\n ListRealTimeFundingRatesResponse\x12=\n\x17real_time_funding_rates\x18\x01 \x03(\x0b\x32\x1c.funding.RealTimeFundingRate\"\xe5\x02\n\x13RealTimeFundingRate\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x1e\n\x16\x66unding_interval_hours\x18\x02 \x01(\r\x12\x62\n\x18\x66unding_rate_lower_bound\x18\x03 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12\x62\n\x18\x66unding_rate_upper_bound\x18\x04 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12V\n\x0c\x66unding_rate\x18\x05 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\"\x1d\n\x1bListFundingIntervalsRequest\">\n\x1cListFundingIntervalsResponse\x12\x1e\n\x16\x66unding_interval_hours\x18\x01 \x03(\r2\xa1\x03\n\x07\x46unding\x12\x80\x01\n\x14ListFundingHistories\x12$.funding.ListFundingHistoriesRequest\x1a%.funding.ListFundingHistoriesResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/funding/history\x12\x8d\x01\n\x18ListRealTimeFundingRates\x12(.funding.ListRealTimeFundingRatesRequest\x1a).funding.ListRealTimeFundingRatesResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/funding/realtime\x12\x82\x01\n\x14ListFundingIntervals\x12$.funding.ListFundingIntervalsRequest\x1a%.funding.ListFundingIntervalsResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/v1/funding/intervalsB(Z&github.com/exc-works/caishen/api/typesb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11\x61pi/funding.proto\x12\x07\x66unding\x1a\x1cgoogle/api/annotations.proto\x1a\x14gogoproto/gogo.proto\x1a\x17schema/extensions.proto\"\xcb\x01\n\x1bListFundingHistoriesRequest\x12\x34\n\x06symbol\x18\x01 \x01(\tB$\xf2\xde\x1f form:\"symbol\" binding:\"required\"\x12<\n\nstart_time\x18\x03 \x01(\x03\x42(\xf2\xde\x1f$form:\"start_time\" binding:\"required\"\x12\x38\n\x08\x65nd_time\x18\x04 \x01(\x03\x42&\xf2\xde\x1f\"form:\"end_time\" binding:\"required\"\"R\n\x1cListFundingHistoriesResponse\x12\x32\n\x11\x66unding_histories\x18\x01 \x03(\x0b\x32\x17.funding.FundingHistory\"\xa0\x01\n\x0e\x46undingHistory\x12\x16\n\x04time\x18\x01 \x01(\x03\x42\x08\xea\xde\x1f\x04time\x12V\n\x0c\x66unding_rate\x18\x02 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12\x1e\n\x16\x66unding_interval_hours\x18\x03 \x01(\r\"\x87\x01\n\x1fListRealTimeFundingRatesRequest\x12!\n\x06symbol\x18\x01 \x01(\tB\x11\xf2\xde\x1f\rform:\"symbol\"\x12\x41\n\x16\x66unding_interval_hours\x18\x02 \x01(\rB!\xf2\xde\x1f\x1d\x66orm:\"funding_interval_hours\"\"a\n ListRealTimeFundingRatesResponse\x12=\n\x17real_time_funding_rates\x18\x01 \x03(\x0b\x32\x1c.funding.RealTimeFundingRate\"\xe5\x02\n\x13RealTimeFundingRate\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x1e\n\x16\x66unding_interval_hours\x18\x02 \x01(\r\x12\x62\n\x18\x66unding_rate_lower_bound\x18\x03 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12\x62\n\x18\x66unding_rate_upper_bound\x18\x04 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12V\n\x0c\x66unding_rate\x18\x05 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\"\x1d\n\x1bListFundingIntervalsRequest\">\n\x1cListFundingIntervalsResponse\x12\x1e\n\x16\x66unding_interval_hours\x18\x01 \x03(\r2\xa1\x03\n\x07\x46unding\x12\x80\x01\n\x14ListFundingHistories\x12$.funding.ListFundingHistoriesRequest\x1a%.funding.ListFundingHistoriesResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/funding/history\x12\x8d\x01\n\x18ListRealTimeFundingRates\x12(.funding.ListRealTimeFundingRatesRequest\x1a).funding.ListRealTimeFundingRatesResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/funding/realtime\x12\x82\x01\n\x14ListFundingIntervals\x12$.funding.ListFundingIntervalsRequest\x1a%.funding.ListFundingIntervalsResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/v1/funding/intervalsB(Z&github.com/exc-works/caishen/api/typesb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -42,7 +42,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_LISTFUNDINGHISTORIESREQUEST'].fields_by_name['end_time']._loaded_options = None
   _globals['_LISTFUNDINGHISTORIESREQUEST'].fields_by_name['end_time']._serialized_options = b'\362\336\037\"form:\"end_time\" binding:\"required\"'
   _globals['_FUNDINGHISTORY'].fields_by_name['time']._loaded_options = None
-  _globals['_FUNDINGHISTORY'].fields_by_name['time']._serialized_options = b'\352\336\037\013time,string'
+  _globals['_FUNDINGHISTORY'].fields_by_name['time']._serialized_options = b'\352\336\037\004time'
   _globals['_FUNDINGHISTORY'].fields_by_name['funding_rate']._loaded_options = None
   _globals['_FUNDINGHISTORY'].fields_by_name['funding_rate']._serialized_options = b'\310\336\037\000\332\336\0378github.com/exc-works/caishen/common/math/decimal.Decimal'
   _globals['_LISTREALTIMEFUNDINGRATESREQUEST'].fields_by_name['symbol']._loaded_options = None
@@ -66,17 +66,17 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_LISTFUNDINGHISTORIESRESPONSE']._serialized_start=313
   _globals['_LISTFUNDINGHISTORIESRESPONSE']._serialized_end=395
   _globals['_FUNDINGHISTORY']._serialized_start=398
-  _globals['_FUNDINGHISTORY']._serialized_end=565
-  _globals['_LISTREALTIMEFUNDINGRATESREQUEST']._serialized_start=568
-  _globals['_LISTREALTIMEFUNDINGRATESREQUEST']._serialized_end=703
-  _globals['_LISTREALTIMEFUNDINGRATESRESPONSE']._serialized_start=705
-  _globals['_LISTREALTIMEFUNDINGRATESRESPONSE']._serialized_end=802
-  _globals['_REALTIMEFUNDINGRATE']._serialized_start=805
-  _globals['_REALTIMEFUNDINGRATE']._serialized_end=1162
-  _globals['_LISTFUNDINGINTERVALSREQUEST']._serialized_start=1164
-  _globals['_LISTFUNDINGINTERVALSREQUEST']._serialized_end=1193
-  _globals['_LISTFUNDINGINTERVALSRESPONSE']._serialized_start=1195
-  _globals['_LISTFUNDINGINTERVALSRESPONSE']._serialized_end=1257
-  _globals['_FUNDING']._serialized_start=1260
-  _globals['_FUNDING']._serialized_end=1677
+  _globals['_FUNDINGHISTORY']._serialized_end=558
+  _globals['_LISTREALTIMEFUNDINGRATESREQUEST']._serialized_start=561
+  _globals['_LISTREALTIMEFUNDINGRATESREQUEST']._serialized_end=696
+  _globals['_LISTREALTIMEFUNDINGRATESRESPONSE']._serialized_start=698
+  _globals['_LISTREALTIMEFUNDINGRATESRESPONSE']._serialized_end=795
+  _globals['_REALTIMEFUNDINGRATE']._serialized_start=798
+  _globals['_REALTIMEFUNDINGRATE']._serialized_end=1155
+  _globals['_LISTFUNDINGINTERVALSREQUEST']._serialized_start=1157
+  _globals['_LISTFUNDINGINTERVALSREQUEST']._serialized_end=1186
+  _globals['_LISTFUNDINGINTERVALSRESPONSE']._serialized_start=1188
+  _globals['_LISTFUNDINGINTERVALSRESPONSE']._serialized_end=1250
+  _globals['_FUNDING']._serialized_start=1253
+  _globals['_FUNDING']._serialized_end=1670
 # @@protoc_insertion_point(module_scope)

@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package trade;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "schema/order.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Trade {
+  rpc ListTrades(ListTradesRequest) returns (ListTradesResponse) {
+    option (google.api.http).get = "/v1/trades/by-account";
+  }
+
+  rpc ListTradesBySymbol(ListTradesBySymbolRequest)
+      returns (ListTradesBySymbolResponse) {
+    option (google.api.http).get = "/v1/trades/by-symbol";
+  }
+}
+
+message ListTradesRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // Optional order ID filter
+  uint64 order_id = 2 [(gogoproto.moretags) = "form:\"order_id\""];
+  // Cursor for pagination. Pass 0 for the first page.
+  uint64 cursor = 3 [(gogoproto.moretags) = "form:\"cursor\""];
+  uint64 limit = 4 [(gogoproto.moretags) = "form:\"limit\""];
+}
+
+message ListTradesResponse {
+  repeated TradeResponse trades = 1;
+  // The cursor for the next page.
+  uint64 cursor = 2;
+}
+
+message TradeResponse {
+  bytes account = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  uint32 base_token = 2;
+  uint32 quote_token = 3;
+  string symbol = 4;
+  uint64 order_id = 5;
+  share.schema.PositionMode mode = 6 [(gogoproto.jsontag) = "mode"];
+  share.schema.PositionSide side = 7 [(gogoproto.jsontag) = "side"];
+  bool is_maker = 8 [(gogoproto.jsontag) = "is_maker"];
+  string price = 9 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string size = 10 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "size"
+  ];
+  string fee = 11 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // unix millisecs
+  int64 on_chain_created_at = 12 [(gogoproto.jsontag) = "on_chain_created_at"];
+}
+
+message ListTradesBySymbolRequest {
+  // Text format of the symbol, "BTC-USDC" for example.
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+}
+
+message ListTradesBySymbolResponse {
+  repeated TradeBySymbolResponse trades = 1;
+}
+
+message TradeBySymbolResponse {
+  string symbol = 1;
+  share.schema.PositionSide side = 2 [(gogoproto.jsontag) = "side"];
+  string size = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string price = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // unix millisecs
+  int64 time = 5 [(gogoproto.jsontag) = "time"];
+  string tx_hash = 6 [(gogoproto.jsontag) = "tx_hash"];
+}

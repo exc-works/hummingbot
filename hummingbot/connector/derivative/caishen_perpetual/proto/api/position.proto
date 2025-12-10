@@ -17,13 +17,164 @@ service Position {
       get: "/v1/positions/open"
     };
   }
-  // 根据账户查询仓位历史
+  // 根据账户查询仓位历史流水
   rpc ListPositionsLedgerHistory(ListPositionsLedgerHistoryRequest)
       returns (ListPositionsLedgerHistoryResponse) {
     option (google.api.http) = {
       get: "/v1/positions/ledger/history"
     };
   }
+  // 根据账户查询历史仓位
+  rpc ListPositionsHistory(ListPositionsHistoryRequest)
+      returns (ListPositionsHistoryResponse) {
+    option (google.api.http) = {
+      get: "/v1/positions/history"
+    };
+  }
+  // 查询用户所有交易对的仓位设置(杠杆、逐仓/全仓等)
+  rpc ListPositionModes(ListPositionModesRequest)
+      returns (ListPositionModesResponse) {
+    option (google.api.http) = {
+      get: "/v1/positions/modes"
+    };
+  }
+
+  // 查询用户全币种资金费历史
+  rpc ListPositionFundingHistory(ListPositionFundingHistoryRequest)
+      returns (ListPositionFundingHistoryResponse) {
+    option (google.api.http) = {
+      get: "/v1/positions/funding/history"
+    };
+  }
+}
+
+message ListPositionFundingHistoryRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 游标，第一页传0，后续传返回值
+  uint64 cursor = 2 [(gogoproto.moretags) = "form:\"cursor\""];
+  uint64 limit = 3 [(gogoproto.moretags) = "form:\"limit\""];
+}
+
+message ListPositionFundingHistoryResponse {
+  repeated PositionFundingHistory history = 1;
+  // 下页游标, null表示无更多数据
+  google.protobuf.UInt64Value cursor = 2
+      [(gogoproto.customtype) = "uint64", (gogoproto.nullable) = true];
+}
+
+message PositionFundingHistory {
+  uint64 position_id = 1;
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  share.schema.PositionMode mode = 3 [(gogoproto.jsontag) = "mode"];
+
+  share.schema.PositionSide side = 4 [(gogoproto.jsontag) = "side"];
+
+  uint32 base_token = 5;
+  uint32 quote_token = 6;
+
+  // Text format of the symbol, "BTC-USDT" for example.
+  string symbol = 7;
+
+  string size = 8 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+
+  string funding_fee = 9 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+
+  int64 on_chain_created_at = 10 [(gogoproto.jsontag) = "time,string"];
+}
+
+message ListPositionModesRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+}
+
+message ListPositionModesResponse {
+  repeated PositionModeSetting modes = 1;
+}
+
+message PositionModeSetting {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  // 0-Cross 1-Isolated
+  share.schema.PositionMode mode = 3 [(gogoproto.jsontag) = "mode"];
+  ;
+  uint32 isolated_leverage = 4;
+  uint32 cross_leverage = 5;
+}
+
+message ListPositionsHistoryRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 游标，第一页传0，后续传返回值
+  uint64 cursor = 2 [(gogoproto.moretags) = "form:\"cursor\""];
+  uint64 limit = 3 [(gogoproto.moretags) = "form:\"limit\""];
+}
+
+message ListPositionsHistoryResponse {
+  repeated PositionHistory history = 1;
+  // 下页游标, null表示无更多数据
+  google.protobuf.UInt64Value cursor = 2
+      [(gogoproto.customtype) = "uint64", (gogoproto.nullable) = true];
+}
+
+message PositionHistory {
+  uint64 position_id = 1;
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  share.schema.PositionMode mode = 3 [(gogoproto.jsontag) = "mode"];
+  ;
+  share.schema.PositionSide side = 4 [(gogoproto.jsontag) = "side"];
+  uint32 base_token = 5;
+  uint32 quote_token = 6;
+  // Text format of the symbol, "BTC-USDT" for example.
+  string symbol = 7;
+  string entry_price = 8 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string realized_pnl = 9 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string taker_fee_rate = 10 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string funding_fee = 11 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  uint32 risk_limits_id = 12;
+  // unix millisecs
+  int64 on_chain_at = 13 [(gogoproto.jsontag) = "on_chain_at,string"];
+  // unix millisecs
+  int64 on_chain_closed_at = 14
+      [(gogoproto.jsontag) = "on_chain_closed_at,string"];
+  bool liquidation_order = 15 [(gogoproto.jsontag) = "liquidation_order"];
+  string size = 16 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
 }
 
 message ListPositionsLedgerHistoryRequest {
@@ -48,8 +199,10 @@ message PositionLedgerHistory {
         "github.com/exc-works/caishen/common/base.AccountId",
     (gogoproto.nullable) = false
   ];
-  share.schema.PositionMode mode = 3;
-  share.schema.PositionSide side = 4;
+  share.schema.PositionMode mode = 3 [(gogoproto.jsontag) = "mode"];
+  ;
+  share.schema.PositionSide side = 4 [(gogoproto.jsontag) = "side"];
+
   uint32 base_token = 5;
   uint32 quote_token = 6;
 
@@ -79,6 +232,13 @@ message PositionLedgerHistory {
   ];
   // unix millisecs
   int64 on_chain_at = 13 [(gogoproto.jsontag) = "on_chain_at,string"];
+
+  string size = 14 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  bool liquidation_order = 15 [(gogoproto.jsontag) = "liquidation_order"];
 }
 
 message ListOpenPositionsRequest {
@@ -98,9 +258,10 @@ message OpenPosition {
     (gogoproto.nullable) = false
   ];
   // 0-Cross 1-Isolated
-  share.schema.PositionMode mode = 3;
+  share.schema.PositionMode mode = 3 [(gogoproto.jsontag) = "mode"];
+  ;
   // 0-Long 1-Short
-  share.schema.PositionSide side = 4;
+  share.schema.PositionSide side = 4 [(gogoproto.jsontag) = "side"];
   uint32 base_token = 5;
   uint32 quote_token = 6;
 
@@ -116,11 +277,11 @@ message OpenPosition {
         "github.com/exc-works/caishen/common/math/decimal.Decimal",
     (gogoproto.nullable) = false
   ];
-  // Valid when mode is 1(Isolated)
-  string isolated_margin = 10 [
+
+  string margin = 10 [
     (gogoproto.customtype) =
         "github.com/exc-works/caishen/common/math/decimal.Decimal",
-    (gogoproto.nullable) = true
+    (gogoproto.nullable) = false
   ];
   string realized_pnl = 11 [
     (gogoproto.customtype) =
@@ -146,5 +307,57 @@ message OpenPosition {
   uint32 risk_limits_id = 15;
 
   // unix millisecs
-  int64 on_chain_created_at = 16 [(gogoproto.jsontag) = "time,string"];
+  int64 on_chain_created_at = 16 [(gogoproto.jsontag) = "on_chain_created_at"];
+  bool liquidation_order = 17 [(gogoproto.jsontag) = "liquidation_order"];
+  share.schema.PositionStatus status = 18 [(gogoproto.jsontag) = "status"];
+
+  // 通过标记价格计算的未实现盈亏
+  string unrealized_pnl = 19 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+
+  // 收益率(基于unrealized_pnl计算得出)
+  string roi = 20 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 标记价格
+  string mark_price = 21 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+
+  // 维持保证金率
+  string mmr = 22 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+
+  // 维持保证金
+  string mm = 23 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+
+  // 实际维持保证金率
+  string actual_mmr = 24 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+
+  // 盈亏平衡价
+  string break_even_price = 25 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+
+  uint32 leverage = 26 [(gogoproto.jsontag) = "leverage"];
 }

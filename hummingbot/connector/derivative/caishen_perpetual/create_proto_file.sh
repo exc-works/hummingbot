@@ -23,7 +23,7 @@
 #
 ## 设定输入和输出目录
 INPUT_DIR="proto/"
-OUTPUT_DIR="deepproto/"
+OUTPUT_DIR="deepproto1/"
 
 # 创建输出目录（如果不存在）
 mkdir -p $OUTPUT_DIR

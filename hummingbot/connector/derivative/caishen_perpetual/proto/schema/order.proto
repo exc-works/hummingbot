@@ -17,8 +17,9 @@ enum PositionMode {
 
 enum PositionStatus {
   NORMAL = 0;       // 正常持仓
-  LIQUIDATING = 1;  // 正在进行强平（逐档下调风险限额 + IOC）
+  LIQUIDATING = 1;  // 正在清算中
   CLOSED = 2;       // 已平仓
+  LIQUIDATED = 3;   // 已清算
 }
 
 enum OrderType {
@@ -27,6 +28,31 @@ enum OrderType {
   TRIGGER = 2;
   TAKE_PROFIT_STOP_LOSS = 3;
   TRAILING = 4;
+}
+
+enum OrderStatus {
+  // 默认值，无实际业务含义。订单永远不会以 INVALID 状态存在于系统中。
+  INVALID = 0;
+  // 普通订单（或条件订单初始记录）已创建，尚未进入撮合或触发。
+  NEW = 1;
+  // 条件订单已经达到触发条件，正在等待触发后生成新的普通订单进入订单簿。
+  PENDING = 2;
+  // 订单被取消。仅适用于未发生任何成交的订单。
+  // 仅从 NEW 和 PENDING 转化而来。
+  CANCELLED = 3;
+  // 订单过期。典型场景：
+  // - IOC 订单无成交而过期
+  // - IOC 订单部分成交后剩余部分过期
+  // 可由 NEW 或 PARTIALLY_FILLED 转化而来。
+  EXPIRED = 4;
+  // 订单已部分成交。可由 NEW 转化而来。
+  PARTIALLY_FILLED = 5;
+  // 订单部分成交后被取消。由 PARTIALLY_FILLED 转化而来。
+  PARTIALLY_CANCELLED = 6;
+  // 订单已完全成交。可由 NEW 或 PARTIALLY_FILLED 转化而来。
+  FILLED = 7;
+  // 订单已经触发。可由 PENDING 转化而来。
+  TRIGGERED = 8;
 }
 
 enum OrderTimeInForce {
@@ -55,9 +81,13 @@ enum TrailingDeltaType {
 }
 
 enum SelfTradePreventionMode {
+  // 订单不受自成交预防机制的影响。系统不会对账户进行对比，也不会使订单失效，交易将正常执行
   NOT_SET = 0;
+  // 潜在挂单订单的剩余数量将立即失效以防止交易执行
   EXPIRE_MAKER = 1;
+  // 吃单订单的剩余数量将立即失效以防止交易执行
   EXPIRE_TAKER = 2;
+  // 吃单订单和潜在挂单订单的剩余数量均将立即失效以防止交易执行
   EXPIRE_BOTH = 3;
 }
 
@@ -129,6 +159,14 @@ message CancelOrderMessage {
 
 message CancelBatchOrdersMessage {
   repeated CancelOrderMessage batch = 1;
+}
+
+// 撤销处于清算模式的仓位的订单
+message CancelLiquidationOrdersMessage {
+  bytes account = 1 [(schema.address) = true];
+  PositionMode mode = 2;
+  optional uint32 base_token = 3;
+  optional uint32 quote_token = 4;
 }
 
 message TriggerOrderMessage {

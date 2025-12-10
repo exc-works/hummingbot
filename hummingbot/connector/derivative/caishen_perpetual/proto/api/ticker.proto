@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package ticker;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "schema/order.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Ticker {
+  rpc ListTickers(ListTickersRequest) returns (ListTickersResponse) {
+    option (google.api.http).get = "/v1/tickers";
+  }
+
+  rpc GetTickerBySymbol(GetTickerBySymbolRequest) returns (TickerResponse) {
+    option (google.api.http).get = "/v1/tickers/by-symbol";
+  }
+}
+
+message ListTickersRequest {}
+
+message ListTickersResponse {
+  repeated TickerResponse tickers = 1;
+}
+
+message GetTickerBySymbolRequest {
+  // Text format of the symbol, "BTC-USDT" for example.
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+}
+
+message TickerResponse {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  // Text format of the symbol, "BTC-USDT" for example.
+  string symbol = 3;
+  // 最新成交价
+  string price = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 24小时内第一笔成交的价格
+  string open_price_24h = 5 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "OpenPrice24H"
+  ];
+  // 24小时价格变化
+  string price_change_24h = 6 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "PriceChange24H"
+  ];
+  // 24小时价格变化百分比
+  string price_change_percentage_24h = 7 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "PriceChangePercentage24H"
+  ];
+  // Mark price
+  string mark_price = 8 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // Index price
+  string index_price = 9 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 24小时最高成交价
+  string high_24h = 10 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "High24H"
+  ];
+  // 24小时最低成交价
+  string low_24h = 11 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "Low24H"
+  ];
+  // 24h base token volume
+  string base_volume_24h = 12 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "BaseVolume24H"
+  ];
+  // 24h quote token volume
+  string quote_volume_24h = 13 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "QuoteVolume24H"
+  ];
+  // 24h transaction count
+  uint64 tx_count_24h = 14 [(gogoproto.customname) = "TxCount24H"];
+  // 24h buy transaction count
+  uint64 buy_tx_count_24h = 15 [(gogoproto.customname) = "BuyTxCount24H"];
+  // unix milliseconds
+  int64 last_tx_at = 16 [(gogoproto.jsontag) = "last_tx_at"];
+}

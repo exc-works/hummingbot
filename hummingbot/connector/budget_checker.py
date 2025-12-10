@@ -1,6 +1,7 @@
 import typing
 from collections import defaultdict
 from copy import copy
+import decimal
 from decimal import Decimal
 from typing import Dict, List
 
@@ -127,21 +128,43 @@ class BudgetChecker:
             else self._exchange.get_balance
         )
 
+        def _safe_get_balance(token: str) -> Decimal:
+            """安全获取余额，确保返回值不是 NaN 或无效值"""
+            try:
+                balance = balance_fn(token)
+                # 确保 balance 是有效的 Decimal
+                if not isinstance(balance, Decimal):
+                    balance = Decimal(str(balance))
+                # 检查是否是 NaN 或无穷大
+                if balance.is_nan() or balance.is_infinite():
+                    return Decimal("0")
+                # 确保 locked_collateral 也是有效的
+                locked = self._locked_collateral.get(token, Decimal("0"))
+                if not isinstance(locked, Decimal):
+                    locked = Decimal(str(locked))
+                if locked.is_nan() or locked.is_infinite():
+                    locked = Decimal("0")
+                # 计算可用余额
+                available = balance - locked
+                # 确保结果不是 NaN 或负数
+                if available.is_nan() or available.is_infinite():
+                    return Decimal("0")
+                if available < Decimal("0"):
+                    return Decimal("0")
+                return available
+            except (ValueError, TypeError, decimal.InvalidOperation):
+                # 如果出现任何错误，返回 0
+                return Decimal("0")
+
         if order_candidate.order_collateral is not None:
             token, _ = order_candidate.order_collateral
-            available_balances[token] = (
-                balance_fn(token) - self._locked_collateral[token]
-            )
+            available_balances[token] = _safe_get_balance(token)
         if order_candidate.percent_fee_collateral is not None:
             token, _ = order_candidate.percent_fee_collateral
-            available_balances[token] = (
-                balance_fn(token) - self._locked_collateral[token]
-            )
+            available_balances[token] = _safe_get_balance(token)
         for entry in order_candidate.fixed_fee_collaterals:
             token, _ = entry
-            available_balances[token] = (
-                balance_fn(token) - self._locked_collateral[token]
-            )
+            available_balances[token] = _safe_get_balance(token)
 
         return available_balances
 

@@ -22,10 +22,10 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from schema import chain_pb2 as schema_dot_chain__pb2
-from schema import token_pb2 as schema_dot_token__pb2
-from schema import symbol_pb2 as schema_dot_symbol__pb2
-from schema import fee_tier_pb2 as schema_dot_fee__tier__pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import chain_pb2 as schema_dot_chain__pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import token_pb2 as schema_dot_token__pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import symbol_pb2 as schema_dot_symbol__pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import fee_tier_pb2 as schema_dot_fee__tier__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x14schema/genesis.proto\x12\x0cshare.schema\x1a\x12schema/chain.proto\x1a\x12schema/token.proto\x1a\x13schema/symbol.proto\x1a\x15schema/fee_tier.proto\"\xca\x03\n\x0eGenesisMessage\x12\x10\n\x08\x63hain_id\x18\x01 \x01(\x04\x12\x12\n\nchain_name\x18\x02 \x01(\t\x12\x11\n\tproposers\x18\x03 \x03(\x0c\x12\x38\n\x0e\x65nabled_chains\x18\x04 \x03(\x0b\x32 .share.schema.EnableChainMessage\x12=\n\x11registered_tokens\x18\x05 \x03(\x0b\x32\".share.schema.RegisterTokenMessage\x12\x39\n\x0e\x64\x65posit_tokens\x18\x06 \x03(\x0b\x32!.share.schema.DepositTokenMessage\x12G\n\x16registered_risk_limits\x18\x07 \x03(\x0b\x32\'.share.schema.RegisterRiskLimitsMessage\x12?\n\x12registered_symbols\x18\x08 \x03(\x0b\x32#.share.schema.RegisterSymbolMessage\x12\x41\n\x13registered_fee_tier\x18\t \x01(\x0b\x32$.share.schema.RegisterFeeTierMessageB+Z)github.com/exc-works/caishen/share/schemab\x06proto3')

@@ -9,6 +9,7 @@ import "schema/order.proto";
 import "schema/symbol.proto";
 import "schema/fee_tier.proto";
 import "schema/error.proto";
+import "schema/tx.proto";
 import "google/protobuf/timestamp.proto";
 
 message ChangesCollector {
@@ -23,10 +24,11 @@ message ChangesCollector {
   OrderChange order_change = 7;
   PositionChange position_change = 8;
   PriceChange price_change = 9;
+  BlockChange block_change = 10;
 }
 
 message BlockChange {
-  BlockChangeEntry change = 1;
+  repeated BlockChangeEntry changes = 1;
 }
 
 message BlockChangeEntry {
@@ -39,7 +41,8 @@ message BlockChangeEntry {
     bytes hash = 2 [(schema.hash) = true];
   }
   message TxProcessed {
-
+    TxActionType action = 1;
+    Error error = 2;
   }
 
   oneof change {
@@ -58,12 +61,10 @@ message AssetChangeEntry {
     Deposited deposited = 1;
     Withdrew withdrew = 2;
     PositionFundingSettled position_funding_settled = 3;
-    InsuranceFundingLossCovered insurance_funding_loss_covered = 4;
     OrderPlaced order_placed = 5;
-    InsuranceExecutedFeeLossCovered insurance_executed_fee_loss_covered = 6;
     PositionIncreased position_increased = 7;
     PositionDecreased position_decreased = 8;
-    InsurancePnLLossCovered insurance_pnl_loss_covered = 9;
+    InsuranceFundPnLLossCovered insurance_fund_pnl_loss_covered = 9;
     PositionMarginIncreased position_margin_increased = 10;
     PositionMarginDecreased position_margin_decreased = 11;
     TransferIn transfer_in = 12;
@@ -72,6 +73,10 @@ message AssetChangeEntry {
     WithdrewRejected withdrew_rejected = 15;
     OrderFrozenReleased order_frozen_released = 16;
     PositionLeverageChanged position_leverage_changed = 17;
+    AccountBankruptcyLossCovered account_bankruptcy_loss_covered = 18;
+    InsuranceFundBankruptcyLossCovered insurance_fund_bankruptcy_loss_covered =
+        19;
+    InsuranceFundMarginTransferred insurance_fund_margin_transferred = 20;
   }
 
   message Deposited {
@@ -150,19 +155,6 @@ message AssetChangeEntry {
     string isolated_position_frozen = 9 [(schema.decimal) = true];
   }
 
-  // 保险基金补贴资金费事件
-  message InsuranceFundingLossCovered {
-    // position id
-    uint64 id = 1;
-    uint32 base_token = 2;
-    uint32 quote_token = 3;
-    PositionMode mode = 4;
-    PositionSide side = 5;
-    string amount = 6 [(schema.decimal) = true];
-    string wallet = 7 [(schema.decimal) = true];
-    bytes account = 8 [(schema.address) = true];
-  }
-
   // 下单事件
   message OrderPlaced {
     // order id
@@ -175,19 +167,6 @@ message AssetChangeEntry {
     optional string cross_order_frozen = 7 [(schema.decimal) = true];
     optional string isolated_order_frozen = 8 [(schema.decimal) = true];
     bytes account = 9 [(schema.address) = true];
-  }
-
-  // 保险基金补贴平仓手续费事件
-  message InsuranceExecutedFeeLossCovered {
-    // position id
-    uint64 id = 1;
-    uint32 base_token = 2;
-    uint32 quote_token = 3;
-    PositionMode mode = 4;
-    PositionSide side = 5;
-    string amount = 6 [(schema.decimal) = true];
-    string wallet = 7 [(schema.decimal) = true];
-    bytes account = 8 [(schema.address) = true];
   }
 
   // 加仓事件
@@ -222,14 +201,15 @@ message AssetChangeEntry {
     optional string isolated_position_frozen = 10 [(schema.decimal) = true];
   }
 
-  // 保险基金补贴PnL事件
-  message InsurancePnLLossCovered {
+  // 保险基金补贴清算仓位的PnL事件
+  message InsuranceFundPnLLossCovered {
     // position id
     uint64 id = 1;
     uint32 base_token = 2;
     uint32 quote_token = 3;
     PositionMode mode = 4;
     PositionSide side = 5;
+    // 当为负数时，表示保险基金补贴PnL；当为正数时，表示在清算仓位时，保险基金赚的金额
     string amount = 6 [(schema.decimal) = true];
     string wallet = 7 [(schema.decimal) = true];
     bytes account = 8 [(schema.address) = true];
@@ -280,6 +260,42 @@ message AssetChangeEntry {
     optional string isolated_position_frozen = 5 [(schema.decimal) = true];
     optional string isolated_order_frozen = 6 [(schema.decimal) = true];
     optional string cross_order_frozen = 7 [(schema.decimal) = true];
+  }
+
+  // 账户因穿仓补贴而发生余额变动
+  message AccountBankruptcyLossCovered {
+    bytes account = 1 [(schema.address) = true];
+    uint32 token_id = 2;
+    // 补贴的金额（正数）
+    string amount = 3 [(schema.decimal) = true];
+    // 补贴后钱包余额
+    string wallet = 4 [(schema.decimal) = true];
+  }
+
+  // 保险基金因向账户补贴穿仓损失而发生余额变动
+  message InsuranceFundBankruptcyLossCovered {
+    bytes account = 1 [(schema.address) = true];
+    uint32 token_id = 2;
+    // 补贴的金额（负数）
+    string amount = 3 [(schema.decimal) = true];
+    // 补贴后钱包余额
+    string wallet = 4 [(schema.decimal) = true];
+  }
+
+  // 保险基金因账户穿仓而获得剩余保证金而发生余额变动
+  message InsuranceFundMarginTransferred {
+    // 被合并仓位的 position id
+    uint64 id = 1;
+    // 保险基金账户
+    bytes account = 2 [(schema.address) = true];
+    uint32 base_token = 3;
+    uint32 quote_token = 4;
+    // 当为正数时，表示获得的盈亏，否则表示补贴的盈亏
+    string realized_pnl = 5 [(schema.decimal) = true];
+    // 当为负数时，表示获得的手续费，否则表示补贴的手续费
+    string fee = 6 [(schema.decimal) = true];
+    // 补贴后钱包余额
+    string wallet = 7 [(schema.decimal) = true];
   }
 }
 
@@ -473,6 +489,19 @@ message MetadataChangeEntry {
     bytes account = 1 [(schema.address) = true];
     FeeTierMessage fee_tier = 2;
   }
+  message MultisigConverted {
+    bytes account = 1 [(schema.address) = true];
+    repeated bytes signers = 2;
+    uint32 threshold = 3;
+  }
+  message MultisigConfigUpdated {
+    bytes account = 1 [(schema.address) = true];
+    repeated bytes signers = 2;
+    uint32 threshold = 3;
+  }
+  message MultisigDisabled {
+    bytes account = 1 [(schema.address) = true];
+  }
   oneof change {
     ChainEnabled chain_enabled = 1;
     ChainDisabled chain_disabled = 2;
@@ -484,6 +513,9 @@ message MetadataChangeEntry {
     AgentRevoked agent_revoked = 8;
     AgentExpired agent_expired = 9;
     AccountFeeTierChanged account_fee_tier_changed = 10;
+    MultisigConverted multisig_converted = 11;
+    MultisigConfigUpdated multisig_config_updated = 12;
+    MultisigDisabled multisig_disabled = 13;
   }
 }
 
@@ -535,6 +567,7 @@ message OrderChangeEntry {
     optional TrailingParams trailing = 19;
     SelfTradePreventionMode stp_mode = 20;
     optional bytes client_order_id = 21;
+    bool liquidation_order = 22;
   }
   message OrderCancelled {
     uint64 id = 1;
@@ -596,6 +629,7 @@ message OrderChangeEntry {
     // 失败原因
     ErrorCode error_code = 8;
     optional bytes client_order_id = 9;
+    bool tp_triggered = 10;
   }
   message OrderTriggerSucceeded {
     uint64 id = 1;
@@ -607,6 +641,7 @@ message OrderChangeEntry {
     OrderType type = 7;
     uint64 triggered_order_id = 8;
     optional bytes client_order_id = 9;
+    bool tp_triggered = 10;
   }
   message OrderAmended {
     uint64 id = 1;
@@ -667,6 +702,7 @@ message PositionChangeEntry {
     string taker_fee_rate = 14 [(schema.decimal) = true];
     uint32 risk_limits_id = 15;
     string funding_growth = 16 [(schema.decimal) = true];
+    uint32 leverage = 17;
   }
   message PositionDecreased {
     uint64 id = 1;
@@ -684,6 +720,8 @@ message PositionChangeEntry {
     string realized_pnl = 11 [(schema.decimal) = true];
     string realized_pnl_after = 12 [(schema.decimal) = true];
     optional string isolated_margin_after = 13 [(schema.decimal) = true];
+    bool liquidation_order = 14;  // 是否为清算导致的平仓
+    uint32 leverage = 17;
   }
   message PositionFundingSettled {
     uint64 id = 1;
@@ -731,6 +769,17 @@ message PositionChangeEntry {
     // 正数表示逐仓保证金增加，负数表示逐仓保证金减少
     string amount = 5 [(schema.decimal) = true];
     string isolated_margin_after = 6 [(schema.decimal) = true];
+    PositionMode mode = 7;
+    uint32 leverage = 8;
+  }
+  message PositionStatusChanged {
+    uint64 id = 1;
+    bytes account = 2 [(schema.address) = true];
+    uint32 base_token = 3;
+    uint32 quote_token = 4;
+    PositionMode mode = 5;
+    PositionSide side = 6;
+    PositionStatus status = 7;
   }
 
   oneof change {
@@ -741,5 +790,6 @@ message PositionChangeEntry {
     PositionMarginIncreased margin_increased = 5;
     PositionMarginDecreased margin_decreased = 6;
     PositionLeverageChanged leverage_changed = 7;
+    PositionStatusChanged status_changed = 8;
   }
 }

@@ -22,7 +22,7 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from schema import extensions_pb2 as schema_dot_extensions__pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import extensions_pb2 as schema_dot_extensions__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12schema/price.proto\x12\x0cshare.schema\x1a\x17schema/extensions.proto\"^\n\x17UpdateIndexPriceMessage\x12\x30\n\x06prices\x18\x01 \x03(\x0b\x32 .share.schema.SymbolPriceMessage\x12\x11\n\ttimestamp\x18\x04 \x01(\x03\"X\n\x12SymbolPriceMessage\x12\x12\n\nbase_token\x18\x01 \x01(\r\x12\x13\n\x0bquote_token\x18\x02 \x01(\r\x12\x19\n\x0bindex_price\x18\x03 \x01(\tB\x04\x88\xb5\x18\x01\x42+Z)github.com/exc-works/caishen/share/schemab\x06proto3')

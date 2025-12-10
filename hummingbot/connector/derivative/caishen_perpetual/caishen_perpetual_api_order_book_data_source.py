@@ -77,10 +77,10 @@ class CaishenPerpetualAPIOrderBookDataSource(PerpetualAPIOrderBookDataSource):
             }
         }
         """
-        exchange_symbol = await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
+        exchange_symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
         
         # 获取 ticker 数据（包含 index_price 和 mark_price）
-        ticker_response = await self._api_get(
+        ticker_response = await self._connector._api_get(
             path_url=CONSTANTS.TICKER_PRICE_CHANGE_URL,
             params={"symbol": exchange_symbol}
         )
@@ -151,10 +151,24 @@ class CaishenPerpetualAPIOrderBookDataSource(PerpetualAPIOrderBookDataSource):
         
         返回格式:
         {
-            "sequence": "string",
-            "timestamp": "2025-12-04T08:16:26.891Z",
-            "asks": [{"price": "string", "size": "string"}],
-            "bids": [{"price": "string", "size": "string"}]
+            "code": 0,
+            "msg": "",
+            "data": {
+                "sequence": 2920,
+                "timestamp": "2025-12-10T02:28:51.001Z",
+                "asks": [
+                {
+                    "price": "180",
+                    "size": "1"
+                }
+                ],
+                "bids": [
+                {
+                    "price": "100",
+                    "size": "1"
+                }
+                ]
+            }
         }
         """
         exchange_symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
@@ -177,9 +191,23 @@ class CaishenPerpetualAPIOrderBookDataSource(PerpetualAPIOrderBookDataSource):
         """
         snapshot_response: Dict[str, Any] = await self._request_order_book_snapshot(trading_pair)
         
+        # 检查 API 返回的状态码
+        response_code = snapshot_response.get("code", -1)
+        if response_code != 0:
+            msg = f"获取订单簿快照失败: code={response_code}, msg={snapshot_response.get('msg', '')}"
+            self.logger().error(msg)
+            raise IOError(msg)
+        
+        # 从 data 字段中提取数据
+        data = snapshot_response.get("data", {})
+        if not data:
+            msg = "订单簿快照响应中缺少 'data' 字段"
+            self.logger().error(msg)
+            raise IOError(msg)
+        
         # 从 ISO 8601 时间戳转换为 Unix 时间戳（秒）
-        # 格式: "2025-12-04T08:16:26.891Z"
-        timestamp_str = snapshot_response.get('timestamp', '')
+        # 格式: "2025-12-10T02:28:51.001Z"
+        timestamp_str = data.get('timestamp', '')
         if timestamp_str:
             from datetime import datetime
             # 处理 ISO 8601 格式，去掉 'Z' 后缀
@@ -189,14 +217,14 @@ class CaishenPerpetualAPIOrderBookDataSource(PerpetualAPIOrderBookDataSource):
         else:
             timestamp = int(time.time())
         
-        # 解析 bids 和 asks
-        # 新格式: [{"price": "string", "size": "string"}]
-        bids = [[float(item['price']), float(item['size'])] for item in snapshot_response.get('bids', [])]
-        asks = [[float(item['price']), float(item['size'])] for item in snapshot_response.get('asks', [])]
+        # 解析 bids 和 asks（从 data 字段中获取）
+        # 格式: [{"price": "string", "size": "string"}]
+        bids = [[float(item['price']), float(item['size'])] for item in data.get('bids', [])]
+        asks = [[float(item['price']), float(item['size'])] for item in data.get('asks', [])]
         
         # 使用 sequence 作为 update_id，如果没有则使用 timestamp
-        sequence = snapshot_response.get('sequence', '')
-        update_id = int(sequence) if sequence and sequence.isdigit() else timestamp
+        sequence = data.get('sequence', '')
+        update_id = int(sequence) if sequence and str(sequence).isdigit() else timestamp
         
         snapshot_msg: OrderBookMessage = OrderBookMessage(
             OrderBookMessageType.SNAPSHOT, 
@@ -325,7 +353,7 @@ class CaishenPerpetualAPIOrderBookDataSource(PerpetualAPIOrderBookDataSource):
         pass
 
     async def _request_complete_funding_info(self, trading_pair: str):
-        exchange_symbol = await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
+        exchange_symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
         funding_interval_hours = self._connector._funding_interval_hours.get(trading_pair, 8)
         data = await self._connector._api_get(path_url=CONSTANTS.EXCHANGE_INFO_URL,
                                                params={"symbol": exchange_symbol, "funding_interval_hours": funding_interval_hours})

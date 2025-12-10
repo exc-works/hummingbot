@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package symbol;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Symbol {
+  rpc ListSymbols(ListSymbolsRequest) returns (ListSymbolsResponse) {
+    option (google.api.http).get = "/v1/symbols";
+  }
+}
+
+message ListSymbolsRequest {}
+
+message ListSymbolsResponse {
+  repeated ListSymbolResponse symbols = 1;
+}
+
+message ListSymbolResponse {
+  string symbol = 1;
+  uint32 base_token = 2;
+  string base_token_symbol = 3;
+  uint32 quote_token = 4;
+  string quote_token_symbol = 5;
+  string tick_size = 6 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string lot_size = 7 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string min_size = 8 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  uint32 max_number_of_order_each_account = 9;
+  uint32 max_number_of_order_each_match = 10;
+  uint32 funding_interval_hours = 11;
+  string funding_rate_bound = 12 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string price_limit_bound = 13 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  uint32 default_leverage = 14;
+  // The status of the symbol
+  //  - 1: valid
+  //  - 2: invalid
+  int64 status = 15 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/repo/types/symbol.Status",
+    (gogoproto.nullable) = false
+  ];
+  int64 open_at = 16 [(gogoproto.jsontag) = "open_at"];
+  int64 close_at = 17 [(gogoproto.jsontag) = "close_at"];
+  string risk_limit = 18 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/engine/runtime/types.RiskLimits",
+    (gogoproto.nullable) = false
+  ];
+}

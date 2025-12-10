@@ -11,9 +11,8 @@ import "google/protobuf/timestamp.proto";
 message SimpleSequenceMessage {
   uint64 sequence_id = 1;
   google.protobuf.Timestamp time = 2;
-  google.protobuf.Timestamp publish_time = 3;
-  uint64 block = 4;
-  bytes tx_hash = 5 [(schema.hash) = true];
+  uint64 block = 3;
+  bytes tx_hash = 4 [(schema.hash) = true];
 }
 
 message SequenceMessage {

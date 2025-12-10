@@ -1,5 +1,4 @@
 # caishen_perpetual_auth.py
-import base64
 import json
 import time
 from typing import Any, Dict, Tuple
@@ -13,9 +12,9 @@ from eth_utils import to_hex, to_checksum_address, to_bytes
 from hummingbot.connector.derivative.caishen_perpetual.deepproto import __init__ as _deepproto_init
 
 # Now we can safely import proto files
-from hummingbot.connector.derivative.caishen_perpetual.deepproto.api.position_pb2 import SetPositionLeverageMessage,SetPositionModeMessage
-from hummingbot.connector.derivative.caishen_perpetual.deepproto.api.order_pb2 import PlaceOrderMessage, CancelOrderMessage
-from hummingbot.connector.derivative.caishen_perpetual.deepproto.api import tx_pb2
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema.position_pb2 import SetPositionLeverageMessage,SetPositionModeMessage
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema.order_pb2 import PlaceOrderMessage, CancelOrderMessage
+from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema import tx_pb2
 from hummingbot.connector.derivative.caishen_perpetual.deepproto.schema.tx_pb2 import TxMessage
 
 
@@ -117,6 +116,16 @@ class CaishenPerpetualAuth(AuthBase):
         else:
             raise ValueError(f"Unsupported action type: {action_type}")
 
+    def get_tx_action_type(self,action_type: str) -> int:
+
+        """获取 action 类型的枚举值"""
+        return CONSTANTS.ACTION_TYPE_MAP.get(action_type, 0)
+
+    def get_action_name(self,action_value: int) -> str:
+
+        """根据 action 枚举值获取名称"""
+        return CONSTANTS.ACTION_NAME_MAP.get(action_value, "UNKNOWN_TYPE")
+
     # 准备设置杠杆数据
     def prepare_set_position_leverage(self,form_data: dict) -> bytes:
         msg = SetPositionLeverageMessage()
@@ -167,8 +176,7 @@ class CaishenPerpetualAuth(AuthBase):
 
         return msg.SerializeToString()
 
-    async def make_and_submit_tx(self,address,private_key,action_type,form_data):
-        block_hash_bytes = await self.get_latest()
+    async def make_tx(self,address,block_hash_bytes,action_type,form_data) -> str:
         chain_id = CONSTANTS.CHAIN_ID
         data_bytes = self.prepare_action_data(action_type, form_data)
 
@@ -185,7 +193,7 @@ class CaishenPerpetualAuth(AuthBase):
             "data": data_bytes,
         }
         # 5. 签名
-        signature = self.sign_tx_message(private_key, tx_message)
+        signature = self.sign_tx_message(tx_message)
 
         # 6. 创建完整的 TxMessage protobuf 对象并编码
         tx_msg = TxMessage()
@@ -195,45 +203,9 @@ class CaishenPerpetualAuth(AuthBase):
         tx_msg.target_address = target_address_bytes
         tx_msg.data = data_bytes
         tx_msg.signatures.append(signature)
-        encoded_message = tx_msg.SerializeToString()
+        return tx_msg.SerializeToString()
 
-        # 7. 提交交易
-        response = self.submit_tx(encoded_message)
-        return response
-
-    async def submit_tx(self,message_bytes,print_flag=True):
-        # 将 bytes 转换为 base64
-        message_base64 = base64.b64encode(message_bytes).decode("utf-8")
-        payload={
-            "message":message_base64
-        }
-
-        result = await self._api_post(
-            path_url = CONSTANTS.SUBMIT_TX_URL,
-            data=payload,
-            is_auth_required=False)
-            
-        print(result.url)
-        if print_flag:
-            print(result.text)
-        return result.text
-
-    async def get_latest(self,print_flag=True):
-        '''
-        获取最新的区块
-        :param print_flag:
-        :return:
-        '''
-        result = await self._api_get(
-            path_url = CONSTANTS.GET_LATEST_BLOCK_URL,
-            is_auth_required=False)
-        print(result.url)
-        if print_flag:
-            print(result.text)
-        data_json = json.loads(result.text)
-        block_hash = data_json['data']['block']['hash']
-        block_hash_bytes = to_bytes(hexstr=block_hash)
-        return block_hash_bytes
+    
 
     async def rest_authenticate(self, request: RESTRequest) -> RESTRequest:
         return request# pass-through

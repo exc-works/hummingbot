@@ -81,3 +81,21 @@ def float_to_wire(x: float) -> str:
         rounded = "0"
     normalized = Decimal(rounded).normalize()
     return f"{normalized:f}"
+
+
+def get_rest_api_limit_id_for_endpoint(endpoint: str, trading_pair: Optional[str] = None) -> str:
+    """
+    根据 endpoint 获取对应的 rate limit ID
+    
+    由于 caishen_perpetual 只有一个全局 rate limit，所有 endpoint 都返回 "All"
+    如果将来需要为不同 endpoint 设置不同的 rate limit，可以在这里扩展
+    
+    Args:
+        endpoint: API endpoint 路径，如 "/v1/symbols"
+        trading_pair: 交易对（可选，目前未使用）
+        
+    Returns:
+        rate limit ID，目前总是返回 "All"
+    """
+    # 目前所有 endpoint 都使用全局 rate limit
+    return CONSTANTS.ALL_ENDPOINTS_LIMIT

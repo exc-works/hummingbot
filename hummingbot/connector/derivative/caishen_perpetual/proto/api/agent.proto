@@ -14,11 +14,8 @@ service Agent {
 }
 
 message ListAgentsRequest {
-  string account = 1 [
-    (gogoproto.moretags) = "form:\"account\" binding:\"required\"",
-    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
-    (gogoproto.nullable) = false
-  ];
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
 }
 
 message ListAgentsResponse {
@@ -27,9 +24,10 @@ message ListAgentsResponse {
 
 message AgentResponse {
   bytes agent = 1 [
-    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
     (gogoproto.nullable) = false
   ];
   string name = 2;
-  int64 expired_time = 3 [(gogoproto.jsontag) = "expired_time, string"];
+  int64 expired_time = 3 [(gogoproto.jsontag) = "expired_time"];
 }

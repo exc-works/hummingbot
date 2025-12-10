@@ -26,7 +26,7 @@ from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
 from gogoproto import gogo_pb2 as gogoproto_dot_gogo__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x61pi/agent.proto\x12\x05\x61gent\x1a\x1cgoogle/api/annotations.proto\x1a\x14gogoproto/gogo.proto\"\x81\x01\n\x11ListAgentsRequest\x12l\n\x07\x61\x63\x63ount\x18\x01 \x01(\tB[\xc8\xde\x1f\x00\xda\xde\x1f.github.com/ethereum/go-ethereum/common.Address\xf2\xde\x1f!form:\"account\" binding:\"required\"\":\n\x12ListAgentsResponse\x12$\n\x06\x61gents\x18\x01 \x03(\x0b\x32\x14.agent.AgentResponse\"\x94\x01\n\rAgentResponse\x12\x45\n\x05\x61gent\x18\x01 \x01(\x0c\x42\x36\xc8\xde\x1f\x00\xda\xde\x1f.github.com/ethereum/go-ethereum/common.Address\x12\x0c\n\x04name\x18\x02 \x01(\t\x12.\n\x0c\x65xpired_time\x18\x03 \x01(\x03\x42\x18\xea\xde\x1f\x14\x65xpired_time, string2^\n\x05\x41gent\x12U\n\nListAgents\x12\x18.agent.ListAgentsRequest\x1a\x19.agent.ListAgentsResponse\"\x12\x82\xd3\xe4\x93\x02\x0c\x12\n/v1/agentsB(Z&github.com/exc-works/caishen/api/typesb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x61pi/agent.proto\x12\x05\x61gent\x1a\x1cgoogle/api/annotations.proto\x1a\x14gogoproto/gogo.proto\"K\n\x11ListAgentsRequest\x12\x36\n\x07\x61\x63\x63ount\x18\x01 \x01(\tB%\xf2\xde\x1f!form:\"account\" binding:\"required\"\":\n\x12ListAgentsResponse\x12$\n\x06\x61gents\x18\x01 \x03(\x0b\x32\x14.agent.AgentResponse\"\x90\x01\n\rAgentResponse\x12I\n\x05\x61gent\x18\x01 \x01(\x0c\x42:\xc8\xde\x1f\x00\xda\xde\x1f\x32github.com/exc-works/caishen/common/base.AccountId\x12\x0c\n\x04name\x18\x02 \x01(\t\x12&\n\x0c\x65xpired_time\x18\x03 \x01(\x03\x42\x10\xea\xde\x1f\x0c\x65xpired_time2^\n\x05\x41gent\x12U\n\nListAgents\x12\x18.agent.ListAgentsRequest\x1a\x19.agent.ListAgentsResponse\"\x12\x82\xd3\xe4\x93\x02\x0c\x12\n/v1/agentsB(Z&github.com/exc-works/caishen/api/typesb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,19 +35,19 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z&github.com/exc-works/caishen/api/types'
   _globals['_LISTAGENTSREQUEST'].fields_by_name['account']._loaded_options = None
-  _globals['_LISTAGENTSREQUEST'].fields_by_name['account']._serialized_options = b'\310\336\037\000\332\336\037.github.com/ethereum/go-ethereum/common.Address\362\336\037!form:\"account\" binding:\"required\"'
+  _globals['_LISTAGENTSREQUEST'].fields_by_name['account']._serialized_options = b'\362\336\037!form:\"account\" binding:\"required\"'
   _globals['_AGENTRESPONSE'].fields_by_name['agent']._loaded_options = None
-  _globals['_AGENTRESPONSE'].fields_by_name['agent']._serialized_options = b'\310\336\037\000\332\336\037.github.com/ethereum/go-ethereum/common.Address'
+  _globals['_AGENTRESPONSE'].fields_by_name['agent']._serialized_options = b'\310\336\037\000\332\336\0372github.com/exc-works/caishen/common/base.AccountId'
   _globals['_AGENTRESPONSE'].fields_by_name['expired_time']._loaded_options = None
-  _globals['_AGENTRESPONSE'].fields_by_name['expired_time']._serialized_options = b'\352\336\037\024expired_time, string'
+  _globals['_AGENTRESPONSE'].fields_by_name['expired_time']._serialized_options = b'\352\336\037\014expired_time'
   _globals['_AGENT'].methods_by_name['ListAgents']._loaded_options = None
   _globals['_AGENT'].methods_by_name['ListAgents']._serialized_options = b'\202\323\344\223\002\014\022\n/v1/agents'
-  _globals['_LISTAGENTSREQUEST']._serialized_start=79
-  _globals['_LISTAGENTSREQUEST']._serialized_end=208
-  _globals['_LISTAGENTSRESPONSE']._serialized_start=210
-  _globals['_LISTAGENTSRESPONSE']._serialized_end=268
-  _globals['_AGENTRESPONSE']._serialized_start=271
-  _globals['_AGENTRESPONSE']._serialized_end=419
-  _globals['_AGENT']._serialized_start=421
-  _globals['_AGENT']._serialized_end=515
+  _globals['_LISTAGENTSREQUEST']._serialized_start=78
+  _globals['_LISTAGENTSREQUEST']._serialized_end=153
+  _globals['_LISTAGENTSRESPONSE']._serialized_start=155
+  _globals['_LISTAGENTSRESPONSE']._serialized_end=213
+  _globals['_AGENTRESPONSE']._serialized_start=216
+  _globals['_AGENTRESPONSE']._serialized_end=360
+  _globals['_AGENT']._serialized_start=362
+  _globals['_AGENT']._serialized_end=456
 # @@protoc_insertion_point(module_scope)

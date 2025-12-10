@@ -29,3 +29,24 @@ message DecreaseMarginMessage {
   uint32 quote_token = 2;
   string amount = 3 [(schema.decimal) = true];
 }
+
+message EnterLiquidationModeMessage {
+  bytes account = 1 [(schema.address) = true];
+  PositionMode mode = 2;
+  optional uint32 base_token = 3;
+  optional uint32 quote_token = 4;
+}
+
+message ExitLiquidationModeMessage {
+  bytes account = 1 [(schema.address) = true];
+  PositionMode mode = 2;
+  optional uint32 base_token = 3;
+  optional uint32 quote_token = 4;
+}
+
+message LiquidatePositionMessage {
+  bytes account = 1 [(schema.address) = true];
+  PositionMode mode = 2;
+  optional uint32 base_token = 3;
+  optional uint32 quote_token = 4;
+}

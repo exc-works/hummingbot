@@ -558,7 +558,46 @@ class PerpetualMarketMakingStrategy(StrategyPyBase):
                 profit_spread = self._long_profit_taking_spread if position.amount > 0 else self._short_profit_taking_spread
                 take_profit_price = position.entry_price * (Decimal("1") + profit_spread) if position.amount > 0 \
                     else position.entry_price * (Decimal("1") - profit_spread)
-                price = market.quantize_order_price(self.trading_pair, take_profit_price)
+                
+                # 量化价格
+                quantized_price = market.quantize_order_price(self.trading_pair, take_profit_price)
+                price_quantum = market.get_order_price_quantum(self.trading_pair, quantized_price)
+                entry_price_quantized = market.quantize_order_price(self.trading_pair, position.entry_price)
+                
+                # 如果 profit_spread 为 0 或接近 0，确保平仓价格能够精确匹配或超过 entry_price
+                # 对于做空持仓（amount < 0），平仓需要买入，价格应该 >= entry_price（向上取整）
+                # 对于做多持仓（amount > 0），平仓需要卖出，价格应该 <= entry_price（向下取整）
+                if abs(profit_spread) < Decimal("0.0001"):  # profit_spread 接近 0
+                    if position.amount < 0:  # SHORT 持仓，平仓需要买入
+                        # 确保价格 >= entry_price（向上取整到下一个 tick）
+                        # 如果量化后的价格 < entry_price，或者原始 entry_price > 量化后的价格，则向上调整
+                        if quantized_price < entry_price_quantized:
+                            # 量化后的价格小于 entry_price，向上调整
+                            price = entry_price_quantized + price_quantum
+                        elif position.entry_price > entry_price_quantized:
+                            # 原始 entry_price 大于量化后的价格（被向下取整了），向上调整一个 tick
+                            price = entry_price_quantized + price_quantum
+                        elif quantized_price == entry_price_quantized and position.entry_price == entry_price_quantized:
+                            # 完全匹配，但为了确保能够成交，向上调整一个 tick
+                            price = entry_price_quantized + price_quantum
+                        else:
+                            # 默认情况：如果原始 entry_price <= 量化后的价格，也向上调整一个 tick 以确保能够成交
+                            price = entry_price_quantized + price_quantum
+                    else:  # LONG 持仓，平仓需要卖出
+                        # 确保价格 <= entry_price（向下取整）
+                        if quantized_price > entry_price_quantized:
+                            # 量化后的价格大于 entry_price，向下调整
+                            price = entry_price_quantized
+                        elif position.entry_price < entry_price_quantized:
+                            # 原始 entry_price 小于量化后的价格（被向上取整了），向下调整一个 tick
+                            price = max(entry_price_quantized - price_quantum, price_quantum)
+                        elif quantized_price == entry_price_quantized and position.entry_price == entry_price_quantized:
+                            # 完全匹配，但为了确保能够成交，向下调整一个 tick
+                            price = max(entry_price_quantized - price_quantum, price_quantum)
+                        else:
+                            price = quantized_price
+                else:
+                    price = quantized_price
                 size = market.quantize_order_amount(self.trading_pair, abs(position.amount))
                 old_exit_orders = [
                     o for o in self.active_orders

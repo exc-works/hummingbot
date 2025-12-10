@@ -26,7 +26,7 @@ from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
 from gogoproto import gogo_pb2 as gogoproto_dot_gogo__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11\x61pi/balance.proto\x12\x07\x62\x61lance\x1a\x1cgoogle/api/annotations.proto\x1a\x14gogoproto/gogo.proto\"\x83\x01\n\x13ListBalancesRequest\x12l\n\x07\x61\x63\x63ount\x18\x01 \x01(\x0c\x42[\xc8\xde\x1f\x00\xda\xde\x1f.github.com/ethereum/go-ethereum/common.Address\xf2\xde\x1f!form:\"account\" binding:\"required\"\"B\n\x14ListBalancesResponse\x12*\n\x08\x62\x61lances\x18\x01 \x03(\x0b\x32\x18.balance.BalanceResponse\"\xa8\x03\n\x0f\x42\x61lanceResponse\x12\x10\n\x08token_id\x18\x01 \x01(\r\x12P\n\x06wallet\x18\x02 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12\x62\n\x18isolated_position_frozen\x18\x03 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12_\n\x15isolated_order_frozen\x18\x04 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12\\\n\x12\x63ross_order_frozen\x18\x05 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12\x0e\n\x06symbol\x18\x06 \x01(\t2l\n\x07\x42\x61lance\x12\x61\n\x0cListBalances\x12\x1c.balance.ListBalancesRequest\x1a\x1d.balance.ListBalancesResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\x0c/v1/balancesB(Z&github.com/exc-works/caishen/api/typesb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11\x61pi/balance.proto\x12\x07\x62\x61lance\x1a\x1cgoogle/api/annotations.proto\x1a\x14gogoproto/gogo.proto\"M\n\x13ListBalancesRequest\x12\x36\n\x07\x61\x63\x63ount\x18\x01 \x01(\tB%\xf2\xde\x1f!form:\"account\" binding:\"required\"\"B\n\x14ListBalancesResponse\x12*\n\x08\x62\x61lances\x18\x01 \x03(\x0b\x32\x18.balance.BalanceResponse\"\xa8\x03\n\x0f\x42\x61lanceResponse\x12\x10\n\x08token_id\x18\x01 \x01(\r\x12P\n\x06wallet\x18\x02 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12\x62\n\x18isolated_position_frozen\x18\x03 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12_\n\x15isolated_order_frozen\x18\x04 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12\\\n\x12\x63ross_order_frozen\x18\x05 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12\x0e\n\x06symbol\x18\x06 \x01(\t\"O\n\x15GetUSDCBalanceRequest\x12\x36\n\x07\x61\x63\x63ount\x18\x01 \x01(\tB%\xf2\xde\x1f!form:\"account\" binding:\"required\"\"k\n\x16GetUSDCBalanceResponse\x12)\n\x07\x62\x61lance\x18\x01 \x01(\x0b\x32\x18.balance.BalanceResponse\x12&\n\x08\x66\x65\x65_tier\x18\x02 \x01(\x0b\x32\x14.balance.FeeTierInfo\"\xbd\x01\n\x0b\x46\x65\x65TierInfo\x12\x0c\n\x04tier\x18\x01 \x01(\r\x12O\n\x05taker\x18\x02 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal\x12O\n\x05maker\x18\x03 \x01(\tB@\xc8\xde\x1f\x00\xda\xde\x1f\x38github.com/exc-works/caishen/common/math/decimal.Decimal2\xda\x01\n\x07\x42\x61lance\x12\x61\n\x0cListBalances\x12\x1c.balance.ListBalancesRequest\x1a\x1d.balance.ListBalancesResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\x0c/v1/balances\x12l\n\x0eGetUSDCBalance\x12\x1e.balance.GetUSDCBalanceRequest\x1a\x1f.balance.GetUSDCBalanceResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/balances/usdcB(Z&github.com/exc-works/caishen/api/typesb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,7 +35,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z&github.com/exc-works/caishen/api/types'
   _globals['_LISTBALANCESREQUEST'].fields_by_name['account']._loaded_options = None
-  _globals['_LISTBALANCESREQUEST'].fields_by_name['account']._serialized_options = b'\310\336\037\000\332\336\037.github.com/ethereum/go-ethereum/common.Address\362\336\037!form:\"account\" binding:\"required\"'
+  _globals['_LISTBALANCESREQUEST'].fields_by_name['account']._serialized_options = b'\362\336\037!form:\"account\" binding:\"required\"'
   _globals['_BALANCERESPONSE'].fields_by_name['wallet']._loaded_options = None
   _globals['_BALANCERESPONSE'].fields_by_name['wallet']._serialized_options = b'\310\336\037\000\332\336\0378github.com/exc-works/caishen/common/math/decimal.Decimal'
   _globals['_BALANCERESPONSE'].fields_by_name['isolated_position_frozen']._loaded_options = None
@@ -44,14 +44,28 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_BALANCERESPONSE'].fields_by_name['isolated_order_frozen']._serialized_options = b'\310\336\037\000\332\336\0378github.com/exc-works/caishen/common/math/decimal.Decimal'
   _globals['_BALANCERESPONSE'].fields_by_name['cross_order_frozen']._loaded_options = None
   _globals['_BALANCERESPONSE'].fields_by_name['cross_order_frozen']._serialized_options = b'\310\336\037\000\332\336\0378github.com/exc-works/caishen/common/math/decimal.Decimal'
+  _globals['_GETUSDCBALANCEREQUEST'].fields_by_name['account']._loaded_options = None
+  _globals['_GETUSDCBALANCEREQUEST'].fields_by_name['account']._serialized_options = b'\362\336\037!form:\"account\" binding:\"required\"'
+  _globals['_FEETIERINFO'].fields_by_name['taker']._loaded_options = None
+  _globals['_FEETIERINFO'].fields_by_name['taker']._serialized_options = b'\310\336\037\000\332\336\0378github.com/exc-works/caishen/common/math/decimal.Decimal'
+  _globals['_FEETIERINFO'].fields_by_name['maker']._loaded_options = None
+  _globals['_FEETIERINFO'].fields_by_name['maker']._serialized_options = b'\310\336\037\000\332\336\0378github.com/exc-works/caishen/common/math/decimal.Decimal'
   _globals['_BALANCE'].methods_by_name['ListBalances']._loaded_options = None
   _globals['_BALANCE'].methods_by_name['ListBalances']._serialized_options = b'\202\323\344\223\002\016\022\014/v1/balances'
-  _globals['_LISTBALANCESREQUEST']._serialized_start=83
-  _globals['_LISTBALANCESREQUEST']._serialized_end=214
-  _globals['_LISTBALANCESRESPONSE']._serialized_start=216
-  _globals['_LISTBALANCESRESPONSE']._serialized_end=282
-  _globals['_BALANCERESPONSE']._serialized_start=285
-  _globals['_BALANCERESPONSE']._serialized_end=709
-  _globals['_BALANCE']._serialized_start=711
-  _globals['_BALANCE']._serialized_end=819
+  _globals['_BALANCE'].methods_by_name['GetUSDCBalance']._loaded_options = None
+  _globals['_BALANCE'].methods_by_name['GetUSDCBalance']._serialized_options = b'\202\323\344\223\002\023\022\021/v1/balances/usdc'
+  _globals['_LISTBALANCESREQUEST']._serialized_start=82
+  _globals['_LISTBALANCESREQUEST']._serialized_end=159
+  _globals['_LISTBALANCESRESPONSE']._serialized_start=161
+  _globals['_LISTBALANCESRESPONSE']._serialized_end=227
+  _globals['_BALANCERESPONSE']._serialized_start=230
+  _globals['_BALANCERESPONSE']._serialized_end=654
+  _globals['_GETUSDCBALANCEREQUEST']._serialized_start=656
+  _globals['_GETUSDCBALANCEREQUEST']._serialized_end=735
+  _globals['_GETUSDCBALANCERESPONSE']._serialized_start=737
+  _globals['_GETUSDCBALANCERESPONSE']._serialized_end=844
+  _globals['_FEETIERINFO']._serialized_start=847
+  _globals['_FEETIERINFO']._serialized_end=1036
+  _globals['_BALANCE']._serialized_start=1039
+  _globals['_BALANCE']._serialized_end=1257
 # @@protoc_insertion_point(module_scope)
