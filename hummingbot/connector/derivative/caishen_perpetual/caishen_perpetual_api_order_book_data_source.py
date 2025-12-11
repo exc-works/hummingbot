@@ -294,6 +294,37 @@ class CaishenPerpetualAPIOrderBookDataSource(PerpetualAPIOrderBookDataSource):
         while True:
             await self._sleep(3600.0)  # 保持任务运行但不做任何事
 
+    async def listen_for_order_book_snapshots(self, ev_loop: asyncio.AbstractEventLoop, output: asyncio.Queue):
+        """
+        重写父类方法，当 WebSocket 禁用时，定期通过 REST API 请求订单簿快照。
+        这样可以确保 orderbook 能够及时更新，而不是等待 1 小时超时。
+        
+        注意：父类方法会等待消息队列中的快照消息，但因为我们禁用了 WebSocket，
+        不会有消息进入队列，所以需要主动定期请求快照。
+        """
+        # 由于 WebSocket 未实现，我们直接定期请求快照，而不是等待消息队列
+        # 间隔时间设置为 5 秒，这样 orderbook 可以及时更新
+        REST_SNAPSHOT_INTERVAL = 5.0
+        
+        # 首先立即请求一次快照，确保 orderbook 尽快填充（在初始化之后）
+        # 注意：初始化时已经通过 _init_order_books 获取了一次快照，这里再次获取可以确保数据是最新的
+        try:
+            await self._request_order_book_snapshots(output=output)
+        except Exception as e:
+            self.logger().warning(f"Error fetching initial order book snapshots: {e}")
+        
+        # 然后定期请求快照更新
+        while True:
+            try:
+                await self._sleep(REST_SNAPSHOT_INTERVAL)
+                await self._request_order_book_snapshots(output=output)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                # 如果请求快照失败，记录错误但继续循环，不要因为一次失败就停止更新
+                self.logger().warning(f"Error requesting order book snapshots: {e}. Will retry in {REST_SNAPSHOT_INTERVAL} seconds.")
+                # 继续循环，等待下次重试
+
     def _channel_originating_message(self, event_message: Dict[str, Any]) -> str:
         channel = ""
         if "result" not in event_message:

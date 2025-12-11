@@ -54,12 +54,18 @@ async def start(self):
         maker_data = [self.markets[exchange], trading_pair] + list(maker_assets)
         self.market_trading_pair_tuples = [MarketTradingPairTuple(*maker_data)]
         asset_price_delegate = None
+        ext_market = None
         if price_source == "external_market":
             asset_trading_pair: str = price_source_market
             ext_market = create_paper_trade_market(
                 price_source_exchange, [asset_trading_pair]
             )
+            # Add external market to connector_manager so it gets added to clock
+            self.connector_manager.connectors[price_source_exchange] = ext_market
             self.markets[price_source_exchange]: ExchangeBase = ext_market
+            # Add external market to clock if it's already running
+            if self.clock is not None:
+                self.clock.add_iterator(ext_market)
             asset_price_delegate = OrderBookAssetPriceDelegate(ext_market, asset_trading_pair)
         elif price_source == "custom_api":
             ext_market = create_paper_trade_market(
@@ -71,6 +77,9 @@ async def start(self):
         strategy_logging_options = PerpetualMarketMakingStrategy.OPTION_LOG_ALL
 
         self.strategy = PerpetualMarketMakingStrategy()
+        # Add external market to strategy's active markets after strategy is created
+        if ext_market is not None:
+            self.strategy.add_markets([ext_market])
         self.strategy.init_params(
             market_info=MarketTradingPairTuple(*maker_data),
             leverage=leverage,

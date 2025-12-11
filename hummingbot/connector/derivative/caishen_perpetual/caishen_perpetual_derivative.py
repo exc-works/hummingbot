@@ -278,25 +278,25 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         )
 
     async def _update_trading_rules(self):
-        self.logger().info(f"开始更新交易规则，请求路径: {self.trading_rules_request_path}")
+        self.logger().debug(f"开始更新交易规则，请求路径: {self.trading_rules_request_path}")
         exchange_info = await self._api_get(path_url=self.trading_rules_request_path)
         self.logger().debug(f"获取到交易规则响应: code={exchange_info.get('code')}, symbols数量={len(exchange_info.get('data', {}).get('symbols', []))}")
         trading_rules_list = await self._format_trading_rules(exchange_info)
         self._trading_rules.clear()
         for trading_rule in trading_rules_list:
             self._trading_rules[trading_rule.trading_pair] = trading_rule
-        self.logger().info(f"已加载 {len(self._trading_rules)} 个交易规则")
+        self.logger().debug(f"已加载 {len(self._trading_rules)} 个交易规则")
         self._initialize_trading_pair_symbols_from_exchange_info(exchange_info=exchange_info)
-        self.logger().info(f"交易规则更新完成，已加载 {len(self._base_token_ids)} 个交易对的 token IDs")
+        self.logger().debug(f"交易规则更新完成，已加载 {len(self._base_token_ids)} 个交易对的 token IDs")
 
     # 初始化获取交易对信息
     async def _initialize_trading_pair_symbol_map(self):
         try:
-            self.logger().info(f"开始初始化交易对符号映射，请求路径: {CONSTANTS.EXCHANGE_INFO_URL}")
+            self.logger().debug(f"开始初始化交易对符号映射，请求路径: {CONSTANTS.EXCHANGE_INFO_URL}")
             exchange_info = await self._api_get(path_url=CONSTANTS.EXCHANGE_INFO_URL)
             self.logger().debug(f"获取到交易对信息响应: code={exchange_info.get('code')}, symbols数量={len(exchange_info.get('data', {}).get('symbols', []))}")
             self._initialize_trading_pair_symbols_from_exchange_info(exchange_info=exchange_info)
-            self.logger().info(f"交易对符号映射初始化完成，已加载 {len(self._base_token_ids)} 个交易对")
+            self.logger().debug(f"交易对符号映射初始化完成，已加载 {len(self._base_token_ids)} 个交易对")
         except Exception:
             self.logger().exception("There was an error requesting symbols info.")
 
@@ -484,7 +484,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                 try:
                     block_num = int(block_number)
                     if block_num > 0:
-                        self.logger().info(
+                        self.logger().debug(
                             f"撤单成功 - Order ID: {order_id}, Block Number: {block_number}"
                         )
                         return True
@@ -576,7 +576,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         order_result = await self.submit_tx(encoded_message)
         
         # 打印 API 返回结果
-        self.logger().info(f"下单 API 响应 - Order ID: {order_id}, Response: {order_result}")
+        self.logger().debug(f"下单 API 响应 - Order ID: {order_id}, Response: {order_result}")
 
         # Safe response parsing with proper error handling
         try:
@@ -623,7 +623,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                             pos_key = self._perpetual_trading.position_key(trading_pair, position_side)
                             removed_position = self._perpetual_trading.remove_position(pos_key)
                             if removed_position:
-                                self.logger().info(
+                                self.logger().debug(
                                     f"已移除追踪的仓位 - Trading Pair: {trading_pair}, "
                                     f"Position Side: {position_side}, Position Key: {pos_key}"
                                 )
@@ -680,7 +680,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                         pos_key = self._perpetual_trading.position_key(trading_pair, position_side)
                         removed_position = self._perpetual_trading.remove_position(pos_key)
                         if removed_position:
-                            self.logger().info(
+                            self.logger().debug(
                                 f"已移除追踪的仓位 - Trading Pair: {trading_pair}, "
                                 f"Position Side: {position_side}, Position Key: {pos_key}"
                             )
@@ -733,7 +733,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                     client_order_id = place_order_result.client_order_id if hasattr(place_order_result, "client_order_id") else None
                     status = place_order_result.status if hasattr(place_order_result, "status") else None
                     
-                    self.logger().info(
+                    self.logger().debug(
                         f"下单成功 - Order ID: {order_id}, "
                         f"Result Order ID: {order_id_from_result}, "
                         f"Size: {size}, Filled: {filled}, "
@@ -742,7 +742,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                     )
                 except Exception as e:
                     self.logger().warning(f"提取 PlaceOrderResult 字段时出错: {e}")
-                    self.logger().info(f"下单成功 - Order ID: {order_id}, Result Order ID: {order_id_from_result}")
+                    self.logger().debug(f"下单成功 - Order ID: {order_id}, Result Order ID: {order_id_from_result}")
                 
                 # 返回订单ID和时间戳（参考 hyperliquid 的实现）
                 return (str(order_id_from_result), time.time())
@@ -753,7 +753,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                 block_number = block_result.number if block_result.HasField("number") else 0
                 
                 if block_number > 0:
-                    self.logger().info(
+                    self.logger().debug(
                         f"下单成功 - Order ID: {order_id}, Block Number: {block_number}"
                     )
                     # 如果没有 place_order_result，使用传入的 order_id 作为返回值
@@ -945,7 +945,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         except asyncio.CancelledError:
             raise
         except Exception as request_error:
-            self.logger().warning(
+            self.logger().debug(
                 f"Error fetching status update for the active order {order.client_order_id}: {request_error}.",
             )
             self.logger().debug(
@@ -1280,7 +1280,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         
         data = exchange_info.get("data", {})
         symbols = data.get("symbols", [])
-        self.logger().info(f"开始初始化交易对符号映射，共 {len(symbols)} 个交易对")
+        self.logger().debug(f"开始初始化交易对符号映射，共 {len(symbols)} 个交易对")
         
         loaded_count = 0
         skipped_count = 0
@@ -1343,7 +1343,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                 )
         
         self._set_trading_pair_symbol_map(mapping)
-        self.logger().info(
+        self.logger().debug(
             f"交易对符号映射初始化完成: 成功加载 {loaded_count} 个, "
             f"跳过 {skipped_count} 个, 错误 {error_count} 个. "
             f"已存储的 token IDs: base_token_ids={self._base_token_ids}, "
@@ -1571,7 +1571,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         
         使用存储的 base_token 和 quote_token ID 来构建请求
         """
-        self.logger().info(f"开始设置杠杆: trading_pair={trading_pair}, leverage={leverage}")
+        self.logger().debug(f"开始设置杠杆: trading_pair={trading_pair}, leverage={leverage}")
         self.logger().debug(
             f"当前已加载的交易对数量: base_token_ids={len(self._base_token_ids)}, "
             f"quote_token_ids={len(self._quote_token_ids)}, "
@@ -1601,7 +1601,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             block_hash_bytes = await self.get_latest()
             encoded_message = await self.authenticator.make_tx(self.api_key,block_hash_bytes, action_type, form_data)
             set_result = await self.submit_tx(encoded_message)
-            self.logger().info(f"设置杠杆 API 响应: {set_result}")
+            self.logger().debug(f"设置杠杆 API 响应: {set_result}")
             
             # 解析 API 响应结构: {'code': 0, 'msg': '', 'data': {'result': {'block_result': {...}}}}
             # 首先检查顶层 code 字段
@@ -1636,7 +1636,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                 try:
                     block_num = int(block_number)
                     if block_num > 0:
-                        self.logger().info(
+                        self.logger().debug(
                             f"设置杠杆成功 - Trading Pair: {trading_pair}, Leverage: {leverage}, Block Number: {block_number}"
                         )
                         return True, ""
