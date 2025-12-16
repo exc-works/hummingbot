@@ -47,6 +47,7 @@ portfolio_value.csv
 /notebooks
 /data
 debug.log
+/instances
 /installation/docker-commands/hummingbot_files
 
 # Distribution files

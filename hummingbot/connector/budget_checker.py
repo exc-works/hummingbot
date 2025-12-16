@@ -1,7 +1,7 @@
+import decimal
 import typing
 from collections import defaultdict
 from copy import copy
-import decimal
 from decimal import Decimal
 from typing import Dict, List
 

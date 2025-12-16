@@ -482,35 +482,36 @@ class PerpetualMarketMakingStrategy(StrategyPyBase):
                     self.logger().warning("WARNING: Some markets are not connected or are down at the moment. Market "
                                           "making may be dangerous when markets or networks are unstable.")
 
+            # 如果没有持仓，清空退出订单记录
             if len(session_positions) == 0:
                 self._exit_orders = dict()  # Empty list of exit order at this point to reduce size
-                proposal = None
-                if self._create_timestamp <= self.current_timestamp:
-                    # 1. Create base order proposals
-                    proposal = self.create_base_proposal()
-                    self.logger().debug(f"Initial proposals: {proposal}")
-                    # 2. Apply functions that limit numbers of buys and sells proposal
-                    self.apply_order_levels_modifiers(proposal)
-                    self.logger().debug(f"Proposals after order level modifier: {proposal}")
-                    # 3. Apply functions that modify orders price
-                    self.apply_order_price_modifiers(proposal)
-                    self.logger().debug(f"Proposals after order price modifiers: {proposal}")
-                    # 4. Apply budget constraint, i.e. can't buy/sell more than what you have.
-                    self.apply_budget_constraint(proposal)
-                    self.logger().debug(f"Proposals after budget constraints: {proposal}")
+            
+            # 无论是否有持仓，都执行正常的挂单逻辑
+            proposal = None
+            if self._create_timestamp <= self.current_timestamp:
+                # 1. Create base order proposals
+                proposal = self.create_base_proposal()
+                self.logger().debug(f"Initial proposals: {proposal}")
+                # 2. Apply functions that limit numbers of buys and sells proposal
+                self.apply_order_levels_modifiers(proposal)
+                self.logger().debug(f"Proposals after order level modifier: {proposal}")
+                # 3. Apply functions that modify orders price
+                self.apply_order_price_modifiers(proposal)
+                self.logger().debug(f"Proposals after order price modifiers: {proposal}")
+                # 4. Apply budget constraint, i.e. can't buy/sell more than what you have.
+                self.apply_budget_constraint(proposal)
+                self.logger().debug(f"Proposals after budget constraints: {proposal}")
 
-                    self.filter_out_takers(proposal)
-                    self.logger().debug(f"Proposals after takers filter: {proposal}")
+                self.filter_out_takers(proposal)
+                self.logger().debug(f"Proposals after takers filter: {proposal}")
 
-                self.cancel_active_orders(proposal)
-                self.cancel_orders_below_min_spread()
-                if self.to_create_orders(proposal):
-                    self.execute_orders_proposal(proposal, PositionAction.OPEN)
-                # Reset peak ask and bid prices
-                self._ts_peak_ask_price = market.get_price(self.trading_pair, False)
-                self._ts_peak_bid_price = market.get_price(self.trading_pair, True)
-            else:
-                self.manage_positions(session_positions)
+            self.cancel_active_orders(proposal)
+            self.cancel_orders_below_min_spread()
+            if self.to_create_orders(proposal):
+                self.execute_orders_proposal(proposal, PositionAction.OPEN)
+            # Reset peak ask and bid prices
+            self._ts_peak_ask_price = market.get_price(self.trading_pair, False)
+            self._ts_peak_bid_price = market.get_price(self.trading_pair, True)
         finally:
             self._last_timestamp = timestamp
 
@@ -558,12 +559,12 @@ class PerpetualMarketMakingStrategy(StrategyPyBase):
                 profit_spread = self._long_profit_taking_spread if position.amount > 0 else self._short_profit_taking_spread
                 take_profit_price = position.entry_price * (Decimal("1") + profit_spread) if position.amount > 0 \
                     else position.entry_price * (Decimal("1") - profit_spread)
-                
+
                 # 量化价格
                 quantized_price = market.quantize_order_price(self.trading_pair, take_profit_price)
                 price_quantum = market.get_order_price_quantum(self.trading_pair, quantized_price)
                 entry_price_quantized = market.quantize_order_price(self.trading_pair, position.entry_price)
-                
+
                 # 如果 profit_spread 为 0 或接近 0，确保平仓价格能够精确匹配或超过 entry_price
                 # 对于做空持仓（amount < 0），平仓需要买入，价格应该 >= entry_price（向上取整）
                 # 对于做多持仓（amount > 0），平仓需要卖出，价格应该 <= entry_price（向下取整）
