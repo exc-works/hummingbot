@@ -1,4 +1,5 @@
 import logging
+import time
 from decimal import Decimal
 from itertools import chain
 from math import ceil, floor
@@ -78,6 +79,7 @@ class PerpetualMarketMakingStrategy(StrategyPyBase):
                     status_report_interval: float = 900,
                     minimum_spread: Decimal = Decimal(0),
                     hb_app_notification: bool = False,
+                    place_orders_without_position: bool = False,
                     order_override: Dict[str, List[str]] = {},
                     ):
 
@@ -112,6 +114,7 @@ class PerpetualMarketMakingStrategy(StrategyPyBase):
         self._price_floor = price_floor
         self._hb_app_notification = hb_app_notification
         self._order_override = order_override
+        self._place_orders_without_position = place_orders_without_position
 
         self._cancel_timestamp = 0
         self._create_timestamp = 0
@@ -482,36 +485,63 @@ class PerpetualMarketMakingStrategy(StrategyPyBase):
                     self.logger().warning("WARNING: Some markets are not connected or are down at the moment. Market "
                                           "making may be dangerous when markets or networks are unstable.")
 
-            # 如果没有持仓，清空退出订单记录
             if len(session_positions) == 0:
                 self._exit_orders = dict()  # Empty list of exit order at this point to reduce size
-            
-            # 无论是否有持仓，都执行正常的挂单逻辑
-            proposal = None
-            if self._create_timestamp <= self.current_timestamp:
-                # 1. Create base order proposals
-                proposal = self.create_base_proposal()
-                self.logger().debug(f"Initial proposals: {proposal}")
-                # 2. Apply functions that limit numbers of buys and sells proposal
-                self.apply_order_levels_modifiers(proposal)
-                self.logger().debug(f"Proposals after order level modifier: {proposal}")
-                # 3. Apply functions that modify orders price
-                self.apply_order_price_modifiers(proposal)
-                self.logger().debug(f"Proposals after order price modifiers: {proposal}")
-                # 4. Apply budget constraint, i.e. can't buy/sell more than what you have.
-                self.apply_budget_constraint(proposal)
-                self.logger().debug(f"Proposals after budget constraints: {proposal}")
+                proposal = None
+                if self._create_timestamp <= self.current_timestamp:
+                    # 1. Create base order proposals
+                    proposal = self.create_base_proposal()
+                    self.logger().debug(f"Initial proposals: {proposal}")
+                    # 2. Apply functions that limit numbers of buys and sells proposal
+                    self.apply_order_levels_modifiers(proposal)
+                    self.logger().debug(f"Proposals after order level modifier: {proposal}")
+                    # 3. Apply functions that modify orders price
+                    self.apply_order_price_modifiers(proposal)
+                    self.logger().debug(f"Proposals after order price modifiers: {proposal}")
+                    # 4. Apply budget constraint, i.e. can't buy/sell more than what you have.
+                    self.apply_budget_constraint(proposal)
+                    self.logger().debug(f"Proposals after budget constraints: {proposal}")
 
-                self.filter_out_takers(proposal)
-                self.logger().debug(f"Proposals after takers filter: {proposal}")
+                    self.filter_out_takers(proposal)
+                    self.logger().debug(f"Proposals after takers filter: {proposal}")
 
-            self.cancel_active_orders(proposal)
-            self.cancel_orders_below_min_spread()
-            if self.to_create_orders(proposal):
-                self.execute_orders_proposal(proposal, PositionAction.OPEN)
-            # Reset peak ask and bid prices
-            self._ts_peak_ask_price = market.get_price(self.trading_pair, False)
-            self._ts_peak_bid_price = market.get_price(self.trading_pair, True)
+                self.cancel_active_orders(proposal)
+                self.cancel_orders_below_min_spread()
+                if self.to_create_orders(proposal):
+                    self.execute_orders_proposal(proposal, PositionAction.OPEN)
+                # Reset peak ask and bid prices
+                self._ts_peak_ask_price = market.get_price(self.trading_pair, False)
+                self._ts_peak_bid_price = market.get_price(self.trading_pair, True)
+            else:
+                if self._place_orders_without_position:
+                    self._exit_orders = dict()  # Empty list of exit order at this point to reduce size
+                    proposal = None
+                    if self._create_timestamp <= self.current_timestamp:
+                        # 1. Create base order proposals
+                        proposal = self.create_base_proposal()
+                        self.logger().debug(f"Initial proposals: {proposal}")
+                        # 2. Apply functions that limit numbers of buys and sells proposal
+                        self.apply_order_levels_modifiers(proposal)
+                        self.logger().debug(f"Proposals after order level modifier: {proposal}")
+                        # 3. Apply functions that modify orders price
+                        self.apply_order_price_modifiers(proposal)
+                        self.logger().debug(f"Proposals after order price modifiers: {proposal}")
+                        # 4. Apply budget constraint, i.e. can't buy/sell more than what you have.
+                        self.apply_budget_constraint(proposal)
+                        self.logger().debug(f"Proposals after budget constraints: {proposal}")
+
+                        self.filter_out_takers(proposal)
+                        self.logger().debug(f"Proposals after takers filter: {proposal}")
+
+                    self.cancel_active_orders(proposal)
+                    self.cancel_orders_below_min_spread()
+                    if self.to_create_orders(proposal):
+                        self.execute_orders_proposal(proposal, PositionAction.OPEN)
+                    # Reset peak ask and bid prices
+                    self._ts_peak_ask_price = market.get_price(self.trading_pair, False)
+                    self._ts_peak_bid_price = market.get_price(self.trading_pair, True)
+                else:
+                    self.manage_positions(session_positions)
         finally:
             self._last_timestamp = timestamp
 
@@ -536,6 +566,11 @@ class PerpetualMarketMakingStrategy(StrategyPyBase):
         bid_price = market.get_price(self.trading_pair, False)
         buys = []
         sells = []
+        
+        # 如果价格为 NaN（订单簿为空），无法计算止盈价格，直接返回空提案
+        if ask_price.is_nan() or bid_price.is_nan():
+            self.logger().warning(f"Price is NaN, cannot calculate profit taking price. Returning empty proposal.")
+            return Proposal(buys, sells)
 
         if mode == PositionMode.ONEWAY:
             # in one-way mode, only one active position is expected per time
@@ -629,6 +664,11 @@ class PerpetualMarketMakingStrategy(StrategyPyBase):
         top_bid = market.get_price(self.trading_pair, True)
         buys = []
         sells = []
+        
+        # 如果价格为 NaN（订单簿为空），无法计算止损价格，直接返回空提案
+        if top_ask.is_nan() or top_bid.is_nan():
+            self.logger().warning(f"Price is NaN, cannot calculate stop loss price. Returning empty proposal.")
+            return Proposal(buys, sells)
 
         for position in active_positions:
             # check if stop loss order needs to be placed
@@ -969,14 +1009,16 @@ class PerpetualMarketMakingStrategy(StrategyPyBase):
 
     def cancel_orders_below_min_spread(self):
         price = self.get_price()
+        # 如果价格为 NaN（订单簿为空），无法计算价差，直接返回，不取消订单
+        if price.is_nan():
+            self.logger().warning(f"Price is NaN, cannot calculate minimum spread. Skipping cancel_orders_below_min_spread.")
+            return
         for order in self.active_orders:
             negation = -1 if order.is_buy else 1
-            if (negation * (order.price - price) / price) < self._minimum_spread:
-                self.logger().info(f"Order is below minimum spread ({self._minimum_spread})."
-                                   f" Canceling Order: ({'Buy' if order.is_buy else 'Sell'}) "
-                                   f"ID - {order.client_order_id}")
+            spread_diff = (negation * (order.price - price) / price)
+            if spread_diff < self._minimum_spread:
                 self.cancel_order(self._market_info, order.client_order_id)
-                self.logger().info(f"Canceling order {order.client_order_id} below min spread.")
+
 
     def to_create_orders(self, proposal: Proposal) -> bool:
         return (self._create_timestamp < self.current_timestamp and

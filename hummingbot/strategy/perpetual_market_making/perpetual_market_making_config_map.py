@@ -321,4 +321,11 @@ perpetual_market_making_config_map = {
                   required_if=lambda: False,
                   default=None,
                   type_str="json"),
+    "place_orders_without_position":
+        ConfigVar(key="place_orders_without_position",
+                  prompt="Do you want to place orders even when there is a position? (Yes/No) >>> ",
+                  type_str="bool",
+                  required_if=lambda: False,
+                  default=False,
+                  validator=validate_bool),
 }

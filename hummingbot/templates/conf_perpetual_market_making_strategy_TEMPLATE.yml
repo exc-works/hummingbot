@@ -104,6 +104,9 @@ price_source_custom_api: null
 # An interval time in second to update the price from custom api (for custom_api pricing source).
 custom_api_update_interval: null
 
+# Whether to place orders even when there is a position (true/false).
+place_orders_without_position: null
+
 # Use user provided orders to directly override the orders placed by order_amount and order_level_parameter
 # This is an advanced feature and user is expected to directly edit this field in config file
 # Below is an sample input, the format is a dictionary, the key is user-defined order name, the value is a list which includes buy/sell, order spread, and order amount
