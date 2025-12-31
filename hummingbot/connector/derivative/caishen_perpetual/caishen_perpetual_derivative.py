@@ -446,7 +446,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                     # 对于1139错误码，不抛出异常，直接返回True，避免记录error日志
                     return True
                 
-                return False, msg
+                return False
             
             # 情况2: API 返回成功（code == 0），解析 data.result
             data = cancel_result.get("data", {})

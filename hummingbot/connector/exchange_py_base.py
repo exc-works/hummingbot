@@ -545,6 +545,7 @@ class ExchangePyBase(ExchangeBase, ABC):
         return None
 
     async def _execute_order_cancel_and_process_update(self, order: InFlightOrder) -> bool:
+        self.logger().info("开始撤单")
         cancelled = await self._place_cancel(order.client_order_id, order)
         if cancelled:
             update_timestamp = self.current_timestamp
