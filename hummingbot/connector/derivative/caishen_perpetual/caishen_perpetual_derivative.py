@@ -387,7 +387,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
 
     async def _place_cancel(self, order_id: str, tracked_order: InFlightOrder):
         action_type = "CANCEL_ORDER"
-        self.logger().info(f"开始撤单 - Order ID: {order_id}, Exchange Order ID: {tracked_order.exchange_order_id}")
+        self.logger().info("撤单开始")
         # 获取 exchange_order_id（整数类型），caishen 撤单 API 需要使用 exchange_order_id 而不是 client_order_id
         exchange_order_id = tracked_order.exchange_order_id
         if not exchange_order_id:
@@ -547,7 +547,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         elif order_type is OrderType.LIMIT_MAKER:
             order_type_int = 1  
         else:
-            order_type_int = 1  # 默认值
+            order_type_int = 0  # 默认值
         
         # 设置 time_in_force（根据订单类型）
         # 需要根据实际 API 文档确认
