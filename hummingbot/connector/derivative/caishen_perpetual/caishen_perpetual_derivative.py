@@ -563,6 +563,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             "base_token": base_token_id,
             "quote_token": quote_token_id,
             "side": side,
+            "mode": 1,
             "type": order_type_int,
             "time_in_force": time_in_force,
             "size": str(amount),
@@ -817,14 +818,20 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             return
         
         try:
-            # 调用 REST API 获取交易历史
-            # 注意：根据实际 API 文档调整参数和端点
+            # 调用 REST API 获取交易历史（symbol 使用交易所格式）
+            hb_trading_pair = self.trading_pairs[0]
+            exchange_symbol = await self.exchange_symbol_associated_to_pair(trading_pair=hb_trading_pair)
+            to_ts_ms = int(time.time() * 1000)
+            from_ts_ms = to_ts_ms - 24 * 3600 * 1000
             response = await self._api_get(
                 path_url=CONSTANTS.ACCOUNT_TRADE_LIST_URL,
                 params={
                     "account": self.api_key,
-                    "cursor": 0,  # 分页游标，可以根据需要调整
-                    "limit": 100  # 每次获取的交易数量
+                    "symbol": exchange_symbol,
+                    "cursor": "",  # 分页游标，传空字符串
+                    "limit": 100,
+                    "from": from_ts_ms,
+                    "to": to_ts_ms,
                 },
                 is_auth_required=True
             )

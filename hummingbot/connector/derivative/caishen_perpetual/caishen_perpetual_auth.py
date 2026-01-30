@@ -88,7 +88,7 @@ class CaishenPerpetualAuth(AuthBase):
             "domain": {
                 "name": "Caishen",
                 "version": "1",
-                "chainId": 42161,  # 固定为 Arbitrum One
+                "chainId": 421614,  # 固定为 Arbitrum One
                 "verifyingContract": "0x0000000000000000000000000000000000000000",
             },
             "message": {
@@ -158,6 +158,7 @@ class CaishenPerpetualAuth(AuthBase):
         msg = PlaceOrderMessage()
         msg.base_token = form_data["base_token"]
         msg.quote_token = form_data["quote_token"]
+        msg.mode = form_data["mode"]  # 1 = ISOLATED, 0 = CROSS
         msg.side = form_data["side"]  # 0 = LONG, 1 = SHORT
         msg.type = form_data["type"]  # 0 = LIMIT, 1 = MARKET, etc.
         msg.time_in_force = form_data["time_in_force"]  # 1 = GTC, etc.

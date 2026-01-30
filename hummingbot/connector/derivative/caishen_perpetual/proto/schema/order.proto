@@ -132,6 +132,7 @@ message PlaceOrderMessage {
   uint32 base_token = 1;
   uint32 quote_token = 2;
   PositionSide side = 3;
+  PositionMode mode = 15;
   OrderType type = 4;
   OrderTimeInForce time_in_force = 5;
   optional string price = 6 [(schema.decimal) = true];
@@ -171,4 +172,24 @@ message CancelLiquidationOrdersMessage {
 
 message TriggerOrderMessage {
   uint64 order_id = 1;
+}
+
+message AmendOrderMessage {
+  // The order ID. If not set, client_order_id will be used to locate the order.
+  optional uint64 order_id = 1;
+  // The client order ID. If not set, id will be used to locate the order.
+  optional bytes client_order_id = 2;
+  // The amended order price. Effective only for limit orders.
+  optional string price = 4 [(schema.decimal) = true];
+  // The amended order size. Effective only for limit orders.
+  optional string size = 5 [(schema.decimal) = true];
+
+  // The amended trigger parameters. Effective only for trigger orders.
+  optional TriggerParamsMessage trigger = 8;
+  // The amended take-profit trigger parameters. Effective only for limit orders
+  // or TP/SL trigger orders.
+  optional TriggerParamsMessage tp = 9;
+  // The amended stop-loss trigger parameters. Effective only for limit orders
+  // or TP/SL trigger orders.
+  optional TriggerParamsMessage sl = 10;
 }
