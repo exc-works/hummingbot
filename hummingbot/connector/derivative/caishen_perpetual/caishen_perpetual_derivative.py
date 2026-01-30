@@ -563,7 +563,6 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             "base_token": base_token_id,
             "quote_token": quote_token_id,
             "side": side,
-            "mode": 1,
             "type": order_type_int,
             "time_in_force": time_in_force,
             "size": str(amount),

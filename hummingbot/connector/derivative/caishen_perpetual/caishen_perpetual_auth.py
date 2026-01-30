@@ -158,7 +158,6 @@ class CaishenPerpetualAuth(AuthBase):
         msg = PlaceOrderMessage()
         msg.base_token = form_data["base_token"]
         msg.quote_token = form_data["quote_token"]
-        msg.mode = form_data["mode"]  # 1 = ISOLATED, 0 = CROSS
         msg.side = form_data["side"]  # 0 = LONG, 1 = SHORT
         msg.type = form_data["type"]  # 0 = LIMIT, 1 = MARKET, etc.
         msg.time_in_force = form_data["time_in_force"]  # 1 = GTC, etc.
