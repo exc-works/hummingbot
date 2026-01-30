@@ -21,7 +21,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_options=b'Z)github.com/exc-works/caishen/share/schema',
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\x12schema/order.proto\x12\x0cshare.schema\x1a\x17schema/extensions.proto\"\xee\x02\n\x14TriggerParamsMessage\x12\x39\n\x11trigger_direction\x18\x01 \x01(\x0e\x32\x1e.share.schema.TriggerDirection\x12\x1b\n\rtrigger_price\x18\x02 \x01(\tB\x04\x88\xb5\x18\x01\x12\x33\n\x12trigger_order_type\x18\x03 \x01(\x0e\x32\x17.share.schema.OrderType\x12\x18\n\x05price\x18\x04 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x17\n\x04size\x18\x05 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x35\n\rtime_in_force\x18\x06 \x01(\x0e\x32\x1e.share.schema.OrderTimeInForce\x12\x13\n\x0breduce_only\x18\x07 \x01(\x08\x12\x37\n\x08stp_mode\x18\x08 \x01(\x0e\x32%.share.schema.SelfTradePreventionModeB\x08\n\x06_priceB\x07\n\x05_size\"\xd8\x03\n\x15TrailingParamsMessage\x12)\n\tstop_type\x18\x01 \x01(\x0e\x32\x16.share.schema.StopType\x12<\n\x13trailing_delta_type\x18\x02 \x01(\x0e\x32\x1f.share.schema.TrailingDeltaType\x12\x1c\n\x0etrailing_delta\x18\x03 \x01(\tB\x04\x88\xb5\x18\x01\x12#\n\x10\x61\x63tivation_price\x18\x04 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x33\n\x12trigger_order_type\x18\x05 \x01(\x0e\x32\x17.share.schema.OrderType\x12\x18\n\x05price\x18\x06 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x17\n\x04size\x18\x07 \x01(\tB\x04\x88\xb5\x18\x01H\x02\x88\x01\x01\x12\x35\n\rtime_in_force\x18\x08 \x01(\x0e\x32\x1e.share.schema.OrderTimeInForce\x12\x13\n\x0breduce_only\x18\t \x01(\x08\x12\x37\n\x08stp_mode\x18\n \x01(\x0e\x32%.share.schema.SelfTradePreventionModeB\x13\n\x11_activation_priceB\x08\n\x06_priceB\x07\n\x05_size\"\xe5\x05\n\x11PlaceOrderMessage\x12\x12\n\nbase_token\x18\x01 \x01(\r\x12\x13\n\x0bquote_token\x18\x02 \x01(\r\x12(\n\x04side\x18\x03 \x01(\x0e\x32\x1a.share.schema.PositionSide\x12(\n\x04mode\x18\x0f \x01(\x0e\x32\x1a.share.schema.PositionMode\x12%\n\x04type\x18\x04 \x01(\x0e\x32\x17.share.schema.OrderType\x12\x35\n\rtime_in_force\x18\x05 \x01(\x0e\x32\x1e.share.schema.OrderTimeInForce\x12\x18\n\x05price\x18\x06 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x17\n\x04size\x18\x07 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x13\n\x0breduce_only\x18\x08 \x01(\x08\x12\x18\n\x0bposition_id\x18\t \x01(\x04H\x02\x88\x01\x01\x12\x38\n\x07trigger\x18\n \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x03\x88\x01\x01\x12\x33\n\x02tp\x18\x0b \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x04\x88\x01\x01\x12\x33\n\x02sl\x18\x0c \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x05\x88\x01\x01\x12:\n\x08trailing\x18\r \x01(\x0b\x32#.share.schema.TrailingParamsMessageH\x06\x88\x01\x01\x12\x37\n\x08stp_mode\x18\x0e \x01(\x0e\x32%.share.schema.SelfTradePreventionMode\x12\x1c\n\x0f\x63lient_order_id\x18\x10 \x01(\x0cH\x07\x88\x01\x01\x42\x08\n\x06_priceB\x07\n\x05_sizeB\x0e\n\x0c_position_idB\n\n\x08_triggerB\x05\n\x03_tpB\x05\n\x03_slB\x0b\n\t_trailingB\x12\n\x10_client_order_id\"j\n\x12\x43\x61ncelOrderMessage\x12\x15\n\x08order_id\x18\x01 \x01(\x04H\x00\x88\x01\x01\x12\x1c\n\x0f\x63lient_order_id\x18\x02 \x01(\x0cH\x01\x88\x01\x01\x42\x0b\n\t_order_idB\x12\n\x10_client_order_id\"K\n\x18\x43\x61ncelBatchOrdersMessage\x12/\n\x05\x62\x61tch\x18\x01 \x03(\x0b\x32 .share.schema.CancelOrderMessage\"\xb3\x01\n\x1e\x43\x61ncelLiquidationOrdersMessage\x12\x15\n\x07\x61\x63\x63ount\x18\x01 \x01(\x0c\x42\x04\x90\xb5\x18\x01\x12(\n\x04mode\x18\x02 \x01(\x0e\x32\x1a.share.schema.PositionMode\x12\x17\n\nbase_token\x18\x03 \x01(\rH\x00\x88\x01\x01\x12\x18\n\x0bquote_token\x18\x04 \x01(\rH\x01\x88\x01\x01\x42\r\n\x0b_base_tokenB\x0e\n\x0c_quote_token\"\'\n\x13TriggerOrderMessage\x12\x10\n\x08order_id\x18\x01 \x01(\x04\"\xed\x02\n\x11\x41mendOrderMessage\x12\x15\n\x08order_id\x18\x01 \x01(\x04H\x00\x88\x01\x01\x12\x1c\n\x0f\x63lient_order_id\x18\x02 \x01(\x0cH\x01\x88\x01\x01\x12\x18\n\x05price\x18\x04 \x01(\tB\x04\x88\xb5\x18\x01H\x02\x88\x01\x01\x12\x17\n\x04size\x18\x05 \x01(\tB\x04\x88\xb5\x18\x01H\x03\x88\x01\x01\x12\x38\n\x07trigger\x18\x08 \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x04\x88\x01\x01\x12\x33\n\x02tp\x18\t \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x05\x88\x01\x01\x12\x33\n\x02sl\x18\n \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x06\x88\x01\x01\x42\x0b\n\t_order_idB\x12\n\x10_client_order_idB\x08\n\x06_priceB\x07\n\x05_sizeB\n\n\x08_triggerB\x05\n\x03_tpB\x05\n\x03_sl*#\n\x0cPositionSide\x12\x08\n\x04LONG\x10\x00\x12\t\n\x05SHORT\x10\x01*\'\n\x0cPositionMode\x12\t\n\x05\x43ROSS\x10\x00\x12\x0c\n\x08ISOLATED\x10\x01*I\n\x0ePositionStatus\x12\n\n\x06NORMAL\x10\x00\x12\x0f\n\x0bLIQUIDATING\x10\x01\x12\n\n\x06\x43LOSED\x10\x02\x12\x0e\n\nLIQUIDATED\x10\x03*X\n\tOrderType\x12\t\n\x05LIMIT\x10\x00\x12\n\n\x06MARKET\x10\x01\x12\x0b\n\x07TRIGGER\x10\x02\x12\x19\n\x15TAKE_PROFIT_STOP_LOSS\x10\x03\x12\x0c\n\x08TRAILING\x10\x04*\x96\x01\n\x0bOrderStatus\x12\x0b\n\x07INVALID\x10\x00\x12\x07\n\x03NEW\x10\x01\x12\x0b\n\x07PENDING\x10\x02\x12\r\n\tCANCELLED\x10\x03\x12\x0b\n\x07\x45XPIRED\x10\x04\x12\x14\n\x10PARTIALLY_FILLED\x10\x05\x12\x17\n\x13PARTIALLY_CANCELLED\x10\x06\x12\n\n\x06\x46ILLED\x10\x07\x12\r\n\tTRIGGERED\x10\x08*W\n\x10OrderTimeInForce\x12\x19\n\x15INVALID_TIME_IN_FORCE\x10\x00\x12\x07\n\x03GTC\x10\x01\x12\x07\n\x03IOC\x10\x02\x12\x07\n\x03\x46OK\x10\x03\x12\r\n\tPOST_ONLY\x10\x04*8\n\x10TriggerDirection\x12\x11\n\rTRIGGER_ABOVE\x10\x00\x12\x11\n\rTRIGGER_BELOW\x10\x01*A\n\x08StopType\x12\x15\n\x11INVALID_STOP_TYPE\x10\x00\x12\r\n\tSTOP_LOSS\x10\x01\x12\x0f\n\x0bTAKE_PROFIT\x10\x02*R\n\x11TrailingDeltaType\x12\x1f\n\x1bINVALID_TRAILING_DELTA_TYPE\x10\x00\x12\x0c\n\x08\x44ISTANCE\x10\x01\x12\x0e\n\nPERCENTAGE\x10\x02*[\n\x17SelfTradePreventionMode\x12\x0b\n\x07NOT_SET\x10\x00\x12\x10\n\x0c\x45XPIRE_MAKER\x10\x01\x12\x10\n\x0c\x45XPIRE_TAKER\x10\x02\x12\x0f\n\x0b\x45XPIRE_BOTH\x10\x03\x42+Z)github.com/exc-works/caishen/share/schemab\x06proto3'
+  serialized_pb=b'\n\x12schema/order.proto\x12\x0cshare.schema\x1a\x17schema/extensions.proto\"\xaa\x03\n\x14TriggerParamsMessage\x12\x39\n\x11trigger_direction\x18\x01 \x01(\x0e\x32\x1e.share.schema.TriggerDirection\x12\x1b\n\rtrigger_price\x18\x02 \x01(\tB\x04\x88\xb5\x18\x01\x12\x33\n\x12trigger_order_type\x18\x03 \x01(\x0e\x32\x17.share.schema.OrderType\x12\x18\n\x05price\x18\x04 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x17\n\x04size\x18\x05 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x35\n\rtime_in_force\x18\x06 \x01(\x0e\x32\x1e.share.schema.OrderTimeInForce\x12\x13\n\x0breduce_only\x18\x07 \x01(\x08\x12\x37\n\x08stp_mode\x18\x08 \x01(\x0e\x32%.share.schema.SelfTradePreventionMode\x12:\n\x12trigger_price_type\x18\t \x01(\x0e\x32\x1e.share.schema.TriggerPriceTypeB\x08\n\x06_priceB\x07\n\x05_size\"\xd8\x03\n\x15TrailingParamsMessage\x12)\n\tstop_type\x18\x01 \x01(\x0e\x32\x16.share.schema.StopType\x12<\n\x13trailing_delta_type\x18\x02 \x01(\x0e\x32\x1f.share.schema.TrailingDeltaType\x12\x1c\n\x0etrailing_delta\x18\x03 \x01(\tB\x04\x88\xb5\x18\x01\x12#\n\x10\x61\x63tivation_price\x18\x04 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x33\n\x12trigger_order_type\x18\x05 \x01(\x0e\x32\x17.share.schema.OrderType\x12\x18\n\x05price\x18\x06 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x17\n\x04size\x18\x07 \x01(\tB\x04\x88\xb5\x18\x01H\x02\x88\x01\x01\x12\x35\n\rtime_in_force\x18\x08 \x01(\x0e\x32\x1e.share.schema.OrderTimeInForce\x12\x13\n\x0breduce_only\x18\t \x01(\x08\x12\x37\n\x08stp_mode\x18\n \x01(\x0e\x32%.share.schema.SelfTradePreventionModeB\x13\n\x11_activation_priceB\x08\n\x06_priceB\x07\n\x05_size\"\xe5\x05\n\x11PlaceOrderMessage\x12\x12\n\nbase_token\x18\x01 \x01(\r\x12\x13\n\x0bquote_token\x18\x02 \x01(\r\x12(\n\x04side\x18\x03 \x01(\x0e\x32\x1a.share.schema.PositionSide\x12(\n\x04mode\x18\x0f \x01(\x0e\x32\x1a.share.schema.PositionMode\x12%\n\x04type\x18\x04 \x01(\x0e\x32\x17.share.schema.OrderType\x12\x35\n\rtime_in_force\x18\x05 \x01(\x0e\x32\x1e.share.schema.OrderTimeInForce\x12\x18\n\x05price\x18\x06 \x01(\tB\x04\x88\xb5\x18\x01H\x00\x88\x01\x01\x12\x17\n\x04size\x18\x07 \x01(\tB\x04\x88\xb5\x18\x01H\x01\x88\x01\x01\x12\x13\n\x0breduce_only\x18\x08 \x01(\x08\x12\x18\n\x0bposition_id\x18\t \x01(\x04H\x02\x88\x01\x01\x12\x38\n\x07trigger\x18\n \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x03\x88\x01\x01\x12\x33\n\x02tp\x18\x0b \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x04\x88\x01\x01\x12\x33\n\x02sl\x18\x0c \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x05\x88\x01\x01\x12:\n\x08trailing\x18\r \x01(\x0b\x32#.share.schema.TrailingParamsMessageH\x06\x88\x01\x01\x12\x37\n\x08stp_mode\x18\x0e \x01(\x0e\x32%.share.schema.SelfTradePreventionMode\x12\x1c\n\x0f\x63lient_order_id\x18\x10 \x01(\x0cH\x07\x88\x01\x01\x42\x08\n\x06_priceB\x07\n\x05_sizeB\x0e\n\x0c_position_idB\n\n\x08_triggerB\x05\n\x03_tpB\x05\n\x03_slB\x0b\n\t_trailingB\x12\n\x10_client_order_id\"j\n\x12\x43\x61ncelOrderMessage\x12\x15\n\x08order_id\x18\x01 \x01(\x04H\x00\x88\x01\x01\x12\x1c\n\x0f\x63lient_order_id\x18\x02 \x01(\x0cH\x01\x88\x01\x01\x42\x0b\n\t_order_idB\x12\n\x10_client_order_id\"K\n\x18\x43\x61ncelBatchOrdersMessage\x12/\n\x05\x62\x61tch\x18\x01 \x03(\x0b\x32 .share.schema.CancelOrderMessage\"\xb3\x01\n\x1e\x43\x61ncelLiquidationOrdersMessage\x12\x15\n\x07\x61\x63\x63ount\x18\x01 \x01(\x0c\x42\x04\x90\xb5\x18\x01\x12(\n\x04mode\x18\x02 \x01(\x0e\x32\x1a.share.schema.PositionMode\x12\x17\n\nbase_token\x18\x03 \x01(\rH\x00\x88\x01\x01\x12\x18\n\x0bquote_token\x18\x04 \x01(\rH\x01\x88\x01\x01\x42\r\n\x0b_base_tokenB\x0e\n\x0c_quote_token\"=\n\x13TriggerOrderMessage\x12\x10\n\x08order_id\x18\x01 \x01(\x04\x12\x14\n\x0ctp_triggered\x18\x02 \x01(\x08\"\xed\x02\n\x11\x41mendOrderMessage\x12\x15\n\x08order_id\x18\x01 \x01(\x04H\x00\x88\x01\x01\x12\x1c\n\x0f\x63lient_order_id\x18\x02 \x01(\x0cH\x01\x88\x01\x01\x12\x18\n\x05price\x18\x04 \x01(\tB\x04\x88\xb5\x18\x01H\x02\x88\x01\x01\x12\x17\n\x04size\x18\x05 \x01(\tB\x04\x88\xb5\x18\x01H\x03\x88\x01\x01\x12\x38\n\x07trigger\x18\x08 \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x04\x88\x01\x01\x12\x33\n\x02tp\x18\t \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x05\x88\x01\x01\x12\x33\n\x02sl\x18\n \x01(\x0b\x32\".share.schema.TriggerParamsMessageH\x06\x88\x01\x01\x42\x0b\n\t_order_idB\x12\n\x10_client_order_idB\x08\n\x06_priceB\x07\n\x05_sizeB\n\n\x08_triggerB\x05\n\x03_tpB\x05\n\x03_sl\"l\n\x1cRiskAccountPlaceOrderMessage\x12\x12\n\nbase_token\x18\x01 \x01(\r\x12\x13\n\x0bquote_token\x18\x02 \x01(\r\x12#\n\x15insurance_fund_covery\x18\x03 \x01(\tB\x04\x88\xb5\x18\x01\"\x9e\x01\n\x15\x41utoDeleverageMessage\x12\x12\n\nbase_token\x18\x01 \x01(\r\x12\x13\n\x0bquote_token\x18\x02 \x01(\r\x12(\n\x04side\x18\x03 \x01(\x0e\x32\x1a.share.schema.PositionSide\x12\x32\n\x07\x65ntries\x18\x04 \x03(\x0b\x32!.share.schema.AutoDeleverageEntry\"V\n\x13\x41utoDeleverageEntry\x12\x15\n\x07\x61\x63\x63ount\x18\x01 \x01(\x0c\x42\x04\x90\xb5\x18\x01\x12(\n\x04mode\x18\x02 \x01(\x0e\x32\x1a.share.schema.PositionMode*#\n\x0cPositionSide\x12\x08\n\x04LONG\x10\x00\x12\t\n\x05SHORT\x10\x01*\'\n\x0cPositionMode\x12\t\n\x05\x43ROSS\x10\x00\x12\x0c\n\x08ISOLATED\x10\x01*I\n\x0ePositionStatus\x12\n\n\x06NORMAL\x10\x00\x12\x0f\n\x0bLIQUIDATING\x10\x01\x12\n\n\x06\x43LOSED\x10\x02\x12\x0e\n\nLIQUIDATED\x10\x03*X\n\tOrderType\x12\t\n\x05LIMIT\x10\x00\x12\n\n\x06MARKET\x10\x01\x12\x0b\n\x07TRIGGER\x10\x02\x12\x19\n\x15TAKE_PROFIT_STOP_LOSS\x10\x03\x12\x0c\n\x08TRAILING\x10\x04*1\n\x10TriggerPriceType\x12\x08\n\x04LAST\x10\x00\x12\t\n\x05INDEX\x10\x01\x12\x08\n\x04MARK\x10\x02*\x89\x01\n\x0bOrderStatus\x12\x0b\n\x07INVALID\x10\x00\x12\x07\n\x03NEW\x10\x01\x12\r\n\tCANCELLED\x10\x02\x12\x0b\n\x07\x45XPIRED\x10\x03\x12\x14\n\x10PARTIALLY_FILLED\x10\x04\x12\x17\n\x13PARTIALLY_CANCELLED\x10\x05\x12\n\n\x06\x46ILLED\x10\x06\x12\r\n\tTRIGGERED\x10\x07*W\n\x10OrderTimeInForce\x12\x19\n\x15INVALID_TIME_IN_FORCE\x10\x00\x12\x07\n\x03GTC\x10\x01\x12\x07\n\x03IOC\x10\x02\x12\x07\n\x03\x46OK\x10\x03\x12\r\n\tPOST_ONLY\x10\x04*8\n\x10TriggerDirection\x12\x11\n\rTRIGGER_ABOVE\x10\x00\x12\x11\n\rTRIGGER_BELOW\x10\x01*A\n\x08StopType\x12\x15\n\x11INVALID_STOP_TYPE\x10\x00\x12\r\n\tSTOP_LOSS\x10\x01\x12\x0f\n\x0bTAKE_PROFIT\x10\x02*R\n\x11TrailingDeltaType\x12\x1f\n\x1bINVALID_TRAILING_DELTA_TYPE\x10\x00\x12\x0c\n\x08\x44ISTANCE\x10\x01\x12\x0e\n\nPERCENTAGE\x10\x02*[\n\x17SelfTradePreventionMode\x12\x0b\n\x07NOT_SET\x10\x00\x12\x10\n\x0c\x45XPIRE_MAKER\x10\x01\x12\x10\n\x0c\x45XPIRE_TAKER\x10\x02\x12\x0f\n\x0b\x45XPIRE_BOTH\x10\x03\x42+Z)github.com/exc-works/caishen/share/schemab\x06proto3'
   ,
   dependencies=[schema_dot_extensions__pb2.DESCRIPTOR,])
 
@@ -45,8 +45,8 @@ _POSITIONSIDE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2425,
-  serialized_end=2460,
+  serialized_start=2866,
+  serialized_end=2901,
 )
 _sym_db.RegisterEnumDescriptor(_POSITIONSIDE)
 
@@ -71,8 +71,8 @@ _POSITIONMODE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2462,
-  serialized_end=2501,
+  serialized_start=2903,
+  serialized_end=2942,
 )
 _sym_db.RegisterEnumDescriptor(_POSITIONMODE)
 
@@ -107,8 +107,8 @@ _POSITIONSTATUS = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2503,
-  serialized_end=2576,
+  serialized_start=2944,
+  serialized_end=3017,
 )
 _sym_db.RegisterEnumDescriptor(_POSITIONSTATUS)
 
@@ -148,12 +148,43 @@ _ORDERTYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2578,
-  serialized_end=2666,
+  serialized_start=3019,
+  serialized_end=3107,
 )
 _sym_db.RegisterEnumDescriptor(_ORDERTYPE)
 
 OrderType = enum_type_wrapper.EnumTypeWrapper(_ORDERTYPE)
+_TRIGGERPRICETYPE = _descriptor.EnumDescriptor(
+  name='TriggerPriceType',
+  full_name='share.schema.TriggerPriceType',
+  filename=None,
+  file=DESCRIPTOR,
+  create_key=_descriptor._internal_create_key,
+  values=[
+    _descriptor.EnumValueDescriptor(
+      name='LAST', index=0, number=0,
+      serialized_options=None,
+      type=None,
+      create_key=_descriptor._internal_create_key),
+    _descriptor.EnumValueDescriptor(
+      name='INDEX', index=1, number=1,
+      serialized_options=None,
+      type=None,
+      create_key=_descriptor._internal_create_key),
+    _descriptor.EnumValueDescriptor(
+      name='MARK', index=2, number=2,
+      serialized_options=None,
+      type=None,
+      create_key=_descriptor._internal_create_key),
+  ],
+  containing_type=None,
+  serialized_options=None,
+  serialized_start=3109,
+  serialized_end=3158,
+)
+_sym_db.RegisterEnumDescriptor(_TRIGGERPRICETYPE)
+
+TriggerPriceType = enum_type_wrapper.EnumTypeWrapper(_TRIGGERPRICETYPE)
 _ORDERSTATUS = _descriptor.EnumDescriptor(
   name='OrderStatus',
   full_name='share.schema.OrderStatus',
@@ -172,45 +203,40 @@ _ORDERSTATUS = _descriptor.EnumDescriptor(
       type=None,
       create_key=_descriptor._internal_create_key),
     _descriptor.EnumValueDescriptor(
-      name='PENDING', index=2, number=2,
+      name='CANCELLED', index=2, number=2,
       serialized_options=None,
       type=None,
       create_key=_descriptor._internal_create_key),
     _descriptor.EnumValueDescriptor(
-      name='CANCELLED', index=3, number=3,
+      name='EXPIRED', index=3, number=3,
       serialized_options=None,
       type=None,
       create_key=_descriptor._internal_create_key),
     _descriptor.EnumValueDescriptor(
-      name='EXPIRED', index=4, number=4,
+      name='PARTIALLY_FILLED', index=4, number=4,
       serialized_options=None,
       type=None,
       create_key=_descriptor._internal_create_key),
     _descriptor.EnumValueDescriptor(
-      name='PARTIALLY_FILLED', index=5, number=5,
+      name='PARTIALLY_CANCELLED', index=5, number=5,
       serialized_options=None,
       type=None,
       create_key=_descriptor._internal_create_key),
     _descriptor.EnumValueDescriptor(
-      name='PARTIALLY_CANCELLED', index=6, number=6,
+      name='FILLED', index=6, number=6,
       serialized_options=None,
       type=None,
       create_key=_descriptor._internal_create_key),
     _descriptor.EnumValueDescriptor(
-      name='FILLED', index=7, number=7,
-      serialized_options=None,
-      type=None,
-      create_key=_descriptor._internal_create_key),
-    _descriptor.EnumValueDescriptor(
-      name='TRIGGERED', index=8, number=8,
+      name='TRIGGERED', index=7, number=7,
       serialized_options=None,
       type=None,
       create_key=_descriptor._internal_create_key),
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2669,
-  serialized_end=2819,
+  serialized_start=3161,
+  serialized_end=3298,
 )
 _sym_db.RegisterEnumDescriptor(_ORDERSTATUS)
 
@@ -250,8 +276,8 @@ _ORDERTIMEINFORCE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2821,
-  serialized_end=2908,
+  serialized_start=3300,
+  serialized_end=3387,
 )
 _sym_db.RegisterEnumDescriptor(_ORDERTIMEINFORCE)
 
@@ -276,8 +302,8 @@ _TRIGGERDIRECTION = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2910,
-  serialized_end=2966,
+  serialized_start=3389,
+  serialized_end=3445,
 )
 _sym_db.RegisterEnumDescriptor(_TRIGGERDIRECTION)
 
@@ -307,8 +333,8 @@ _STOPTYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2968,
-  serialized_end=3033,
+  serialized_start=3447,
+  serialized_end=3512,
 )
 _sym_db.RegisterEnumDescriptor(_STOPTYPE)
 
@@ -338,8 +364,8 @@ _TRAILINGDELTATYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=3035,
-  serialized_end=3117,
+  serialized_start=3514,
+  serialized_end=3596,
 )
 _sym_db.RegisterEnumDescriptor(_TRAILINGDELTATYPE)
 
@@ -374,8 +400,8 @@ _SELFTRADEPREVENTIONMODE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=3119,
-  serialized_end=3210,
+  serialized_start=3598,
+  serialized_end=3689,
 )
 _sym_db.RegisterEnumDescriptor(_SELFTRADEPREVENTIONMODE)
 
@@ -393,15 +419,17 @@ MARKET = 1
 TRIGGER = 2
 TAKE_PROFIT_STOP_LOSS = 3
 TRAILING = 4
+LAST = 0
+INDEX = 1
+MARK = 2
 INVALID = 0
 NEW = 1
-PENDING = 2
-CANCELLED = 3
-EXPIRED = 4
-PARTIALLY_FILLED = 5
-PARTIALLY_CANCELLED = 6
-FILLED = 7
-TRIGGERED = 8
+CANCELLED = 2
+EXPIRED = 3
+PARTIALLY_FILLED = 4
+PARTIALLY_CANCELLED = 5
+FILLED = 6
+TRIGGERED = 7
 INVALID_TIME_IN_FORCE = 0
 GTC = 1
 IOC = 2
@@ -486,6 +514,13 @@ _TRIGGERPARAMSMESSAGE = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='trigger_price_type', full_name='share.schema.TriggerParamsMessage.trigger_price_type', index=8,
+      number=9, type=14, cpp_type=8, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -509,7 +544,7 @@ _TRIGGERPARAMSMESSAGE = _descriptor.Descriptor(
     fields=[]),
   ],
   serialized_start=62,
-  serialized_end=428,
+  serialized_end=488,
 )
 
 
@@ -618,8 +653,8 @@ _TRAILINGPARAMSMESSAGE = _descriptor.Descriptor(
       create_key=_descriptor._internal_create_key,
     fields=[]),
   ],
-  serialized_start=431,
-  serialized_end=903,
+  serialized_start=491,
+  serialized_end=963,
 )
 
 
@@ -795,8 +830,8 @@ _PLACEORDERMESSAGE = _descriptor.Descriptor(
       create_key=_descriptor._internal_create_key,
     fields=[]),
   ],
-  serialized_start=906,
-  serialized_end=1647,
+  serialized_start=966,
+  serialized_end=1707,
 )
 
 
@@ -844,8 +879,8 @@ _CANCELORDERMESSAGE = _descriptor.Descriptor(
       create_key=_descriptor._internal_create_key,
     fields=[]),
   ],
-  serialized_start=1649,
-  serialized_end=1755,
+  serialized_start=1709,
+  serialized_end=1815,
 )
 
 
@@ -876,8 +911,8 @@ _CANCELBATCHORDERSMESSAGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1757,
-  serialized_end=1832,
+  serialized_start=1817,
+  serialized_end=1892,
 )
 
 
@@ -939,8 +974,8 @@ _CANCELLIQUIDATIONORDERSMESSAGE = _descriptor.Descriptor(
       create_key=_descriptor._internal_create_key,
     fields=[]),
   ],
-  serialized_start=1835,
-  serialized_end=2014,
+  serialized_start=1895,
+  serialized_end=2074,
 )
 
 
@@ -959,6 +994,13 @@ _TRIGGERORDERMESSAGE = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='tp_triggered', full_name='share.schema.TriggerOrderMessage.tp_triggered', index=1,
+      number=2, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -971,8 +1013,8 @@ _TRIGGERORDERMESSAGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2016,
-  serialized_end=2055,
+  serialized_start=2076,
+  serialized_end=2137,
 )
 
 
@@ -1080,14 +1122,153 @@ _AMENDORDERMESSAGE = _descriptor.Descriptor(
       create_key=_descriptor._internal_create_key,
     fields=[]),
   ],
-  serialized_start=2058,
-  serialized_end=2423,
+  serialized_start=2140,
+  serialized_end=2505,
+)
+
+
+_RISKACCOUNTPLACEORDERMESSAGE = _descriptor.Descriptor(
+  name='RiskAccountPlaceOrderMessage',
+  full_name='share.schema.RiskAccountPlaceOrderMessage',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  create_key=_descriptor._internal_create_key,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='base_token', full_name='share.schema.RiskAccountPlaceOrderMessage.base_token', index=0,
+      number=1, type=13, cpp_type=3, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='quote_token', full_name='share.schema.RiskAccountPlaceOrderMessage.quote_token', index=1,
+      number=2, type=13, cpp_type=3, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='insurance_fund_covery', full_name='share.schema.RiskAccountPlaceOrderMessage.insurance_fund_covery', index=2,
+      number=3, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=b'\210\265\030\001', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=2507,
+  serialized_end=2615,
+)
+
+
+_AUTODELEVERAGEMESSAGE = _descriptor.Descriptor(
+  name='AutoDeleverageMessage',
+  full_name='share.schema.AutoDeleverageMessage',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  create_key=_descriptor._internal_create_key,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='base_token', full_name='share.schema.AutoDeleverageMessage.base_token', index=0,
+      number=1, type=13, cpp_type=3, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='quote_token', full_name='share.schema.AutoDeleverageMessage.quote_token', index=1,
+      number=2, type=13, cpp_type=3, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='side', full_name='share.schema.AutoDeleverageMessage.side', index=2,
+      number=3, type=14, cpp_type=8, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='entries', full_name='share.schema.AutoDeleverageMessage.entries', index=3,
+      number=4, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=2618,
+  serialized_end=2776,
+)
+
+
+_AUTODELEVERAGEENTRY = _descriptor.Descriptor(
+  name='AutoDeleverageEntry',
+  full_name='share.schema.AutoDeleverageEntry',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  create_key=_descriptor._internal_create_key,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='account', full_name='share.schema.AutoDeleverageEntry.account', index=0,
+      number=1, type=12, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"",
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=b'\220\265\030\001', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='mode', full_name='share.schema.AutoDeleverageEntry.mode', index=1,
+      number=2, type=14, cpp_type=8, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=2778,
+  serialized_end=2864,
 )
 
 _TRIGGERPARAMSMESSAGE.fields_by_name['trigger_direction'].enum_type = _TRIGGERDIRECTION
 _TRIGGERPARAMSMESSAGE.fields_by_name['trigger_order_type'].enum_type = _ORDERTYPE
 _TRIGGERPARAMSMESSAGE.fields_by_name['time_in_force'].enum_type = _ORDERTIMEINFORCE
 _TRIGGERPARAMSMESSAGE.fields_by_name['stp_mode'].enum_type = _SELFTRADEPREVENTIONMODE
+_TRIGGERPARAMSMESSAGE.fields_by_name['trigger_price_type'].enum_type = _TRIGGERPRICETYPE
 _TRIGGERPARAMSMESSAGE.oneofs_by_name['_price'].fields.append(
   _TRIGGERPARAMSMESSAGE.fields_by_name['price'])
 _TRIGGERPARAMSMESSAGE.fields_by_name['price'].containing_oneof = _TRIGGERPARAMSMESSAGE.oneofs_by_name['_price']
@@ -1179,6 +1360,9 @@ _AMENDORDERMESSAGE.fields_by_name['tp'].containing_oneof = _AMENDORDERMESSAGE.on
 _AMENDORDERMESSAGE.oneofs_by_name['_sl'].fields.append(
   _AMENDORDERMESSAGE.fields_by_name['sl'])
 _AMENDORDERMESSAGE.fields_by_name['sl'].containing_oneof = _AMENDORDERMESSAGE.oneofs_by_name['_sl']
+_AUTODELEVERAGEMESSAGE.fields_by_name['side'].enum_type = _POSITIONSIDE
+_AUTODELEVERAGEMESSAGE.fields_by_name['entries'].message_type = _AUTODELEVERAGEENTRY
+_AUTODELEVERAGEENTRY.fields_by_name['mode'].enum_type = _POSITIONMODE
 DESCRIPTOR.message_types_by_name['TriggerParamsMessage'] = _TRIGGERPARAMSMESSAGE
 DESCRIPTOR.message_types_by_name['TrailingParamsMessage'] = _TRAILINGPARAMSMESSAGE
 DESCRIPTOR.message_types_by_name['PlaceOrderMessage'] = _PLACEORDERMESSAGE
@@ -1187,10 +1371,14 @@ DESCRIPTOR.message_types_by_name['CancelBatchOrdersMessage'] = _CANCELBATCHORDER
 DESCRIPTOR.message_types_by_name['CancelLiquidationOrdersMessage'] = _CANCELLIQUIDATIONORDERSMESSAGE
 DESCRIPTOR.message_types_by_name['TriggerOrderMessage'] = _TRIGGERORDERMESSAGE
 DESCRIPTOR.message_types_by_name['AmendOrderMessage'] = _AMENDORDERMESSAGE
+DESCRIPTOR.message_types_by_name['RiskAccountPlaceOrderMessage'] = _RISKACCOUNTPLACEORDERMESSAGE
+DESCRIPTOR.message_types_by_name['AutoDeleverageMessage'] = _AUTODELEVERAGEMESSAGE
+DESCRIPTOR.message_types_by_name['AutoDeleverageEntry'] = _AUTODELEVERAGEENTRY
 DESCRIPTOR.enum_types_by_name['PositionSide'] = _POSITIONSIDE
 DESCRIPTOR.enum_types_by_name['PositionMode'] = _POSITIONMODE
 DESCRIPTOR.enum_types_by_name['PositionStatus'] = _POSITIONSTATUS
 DESCRIPTOR.enum_types_by_name['OrderType'] = _ORDERTYPE
+DESCRIPTOR.enum_types_by_name['TriggerPriceType'] = _TRIGGERPRICETYPE
 DESCRIPTOR.enum_types_by_name['OrderStatus'] = _ORDERSTATUS
 DESCRIPTOR.enum_types_by_name['OrderTimeInForce'] = _ORDERTIMEINFORCE
 DESCRIPTOR.enum_types_by_name['TriggerDirection'] = _TRIGGERDIRECTION
@@ -1255,6 +1443,27 @@ AmendOrderMessage = _reflection.GeneratedProtocolMessageType('AmendOrderMessage'
   })
 _sym_db.RegisterMessage(AmendOrderMessage)
 
+RiskAccountPlaceOrderMessage = _reflection.GeneratedProtocolMessageType('RiskAccountPlaceOrderMessage', (_message.Message,), {
+  'DESCRIPTOR' : _RISKACCOUNTPLACEORDERMESSAGE,
+  '__module__' : 'schema.order_pb2'
+  # @@protoc_insertion_point(class_scope:share.schema.RiskAccountPlaceOrderMessage)
+  })
+_sym_db.RegisterMessage(RiskAccountPlaceOrderMessage)
+
+AutoDeleverageMessage = _reflection.GeneratedProtocolMessageType('AutoDeleverageMessage', (_message.Message,), {
+  'DESCRIPTOR' : _AUTODELEVERAGEMESSAGE,
+  '__module__' : 'schema.order_pb2'
+  # @@protoc_insertion_point(class_scope:share.schema.AutoDeleverageMessage)
+  })
+_sym_db.RegisterMessage(AutoDeleverageMessage)
+
+AutoDeleverageEntry = _reflection.GeneratedProtocolMessageType('AutoDeleverageEntry', (_message.Message,), {
+  'DESCRIPTOR' : _AUTODELEVERAGEENTRY,
+  '__module__' : 'schema.order_pb2'
+  # @@protoc_insertion_point(class_scope:share.schema.AutoDeleverageEntry)
+  })
+_sym_db.RegisterMessage(AutoDeleverageEntry)
+
 
 DESCRIPTOR._options = None
 _TRIGGERPARAMSMESSAGE.fields_by_name['trigger_price']._options = None
@@ -1269,4 +1478,6 @@ _PLACEORDERMESSAGE.fields_by_name['size']._options = None
 _CANCELLIQUIDATIONORDERSMESSAGE.fields_by_name['account']._options = None
 _AMENDORDERMESSAGE.fields_by_name['price']._options = None
 _AMENDORDERMESSAGE.fields_by_name['size']._options = None
+_RISKACCOUNTPLACEORDERMESSAGE.fields_by_name['insurance_fund_covery']._options = None
+_AUTODELEVERAGEENTRY.fields_by_name['account']._options = None
 # @@protoc_insertion_point(module_scope)
