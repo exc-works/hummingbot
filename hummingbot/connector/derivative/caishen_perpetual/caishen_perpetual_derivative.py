@@ -1691,7 +1691,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         # 1. 获取账户资金费率支付历史
         account_funding_info_response = await self._api_get(
             path_url=CONSTANTS.ACCOUNT_FUNDING_HISTORY_URL,
-            params={"account": self.api_key, "cursor": 0, "limit": 100}
+            params={"account": self.api_key, "cursor": "", "limit": 100, "symbol": exchange_symbol, "from": start_ms, "to": end_ms}
         )
         
         if account_funding_info_response.get("code") != 0:
