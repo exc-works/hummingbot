@@ -113,16 +113,14 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
         self.initialize_rate_sources()
 
     def initialize_rate_sources(self):
-        maker_base, maker_quote = self.config.maker_trading_pair.split("-")
-        taker_base, taker_quote = self.config.taker_trading_pair.split("-")
+        # Only subscribe trading pairs that exist on each connector.
+        # Do NOT register synthetic pairs (UETH-ETH, USDC-USDT on OKX) here — update_rates_task
+        # would poll the connector and error. Fixed base_conversion_rate needs no extra pair;
+        # oracle base conversion uses RateOracle.get_pair_rate() directly in _taker_to_maker_base_rate().
         pairs = [
             ConnectorPair(connector_name=self.config.maker_connector, trading_pair=self.config.maker_trading_pair),
             ConnectorPair(connector_name=self.config.taker_connector, trading_pair=self.config.taker_trading_pair),
         ]
-        if maker_quote != taker_quote:
-            pairs.append(ConnectorPair(connector_name=self.config.maker_connector, trading_pair=f"{taker_quote}-{maker_quote}"))
-        if maker_base != taker_base:
-            pairs.append(ConnectorPair(connector_name=self.config.maker_connector, trading_pair=f"{taker_base}-{maker_base}"))
         self.market_data_provider.initialize_rate_sources(pairs)
 
     async def update_processed_data(self):
