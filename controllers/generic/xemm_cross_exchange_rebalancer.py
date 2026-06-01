@@ -116,13 +116,13 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
         maker_base, maker_quote = self.config.maker_trading_pair.split("-")
         taker_base, taker_quote = self.config.taker_trading_pair.split("-")
         pairs = [
-            ConnectorPair(self.config.maker_connector, self.config.maker_trading_pair),
-            ConnectorPair(self.config.taker_connector, self.config.taker_trading_pair),
+            ConnectorPair(connector_name=self.config.maker_connector, trading_pair=self.config.maker_trading_pair),
+            ConnectorPair(connector_name=self.config.taker_connector, trading_pair=self.config.taker_trading_pair),
         ]
         if maker_quote != taker_quote:
-            pairs.append(ConnectorPair(self.config.maker_connector, f"{taker_quote}-{maker_quote}"))
+            pairs.append(ConnectorPair(connector_name=self.config.maker_connector, trading_pair=f"{taker_quote}-{maker_quote}"))
         if maker_base != taker_base:
-            pairs.append(ConnectorPair(self.config.maker_connector, f"{taker_base}-{maker_base}"))
+            pairs.append(ConnectorPair(connector_name=self.config.maker_connector, trading_pair=f"{taker_base}-{maker_base}"))
         self.market_data_provider.initialize_rate_sources(pairs)
 
     async def update_processed_data(self):
