@@ -1,0 +1,50 @@
+# 单容器多币种 XEMM（OKX + Hyperliquid）
+#
+# 前置:
+#   1. conf/scripts/conf_v2_multi_xemm_okx_hl.yml 及 conf/controllers/*.yml 已就位
+#   2. 本地镜像: TAG=:dev make build-dev
+#   3. 首次: ./init_password.sh 或手动设置 CONFIG_PASSWORD
+#
+# 启动:
+#   docker compose -f docker-compose.multi-xemm.yml up -d
+#
+# 交互配置 API（推荐，勿 attach 主进程）:
+#   docker exec -it hummingbot_multi /bin/bash
+#   conda activate hummingbot && ./bin/hummingbot.py
+#
+# 日志:
+#   docker logs -f hummingbot_multi
+
+services:
+  hummingbot_multi:
+    container_name: hummingbot_multi
+    image: hummingbot/hummingbot:dev
+    # 本地编译时二选一: 注释 image、启用 build，然后 up --build
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    volumes:
+      - ./conf:/home/hummingbot/conf
+      - ./conf/connectors:/home/hummingbot/conf/connectors
+      - ./conf/strategies:/home/hummingbot/conf/strategies
+      - ./conf/controllers:/home/hummingbot/conf/controllers
+      - ./conf/scripts:/home/hummingbot/conf/scripts
+      - ./logs:/home/hummingbot/logs
+      - ./data:/home/hummingbot/data
+      - ./certs:/home/hummingbot/certs
+      - ./scripts:/home/hummingbot/scripts
+      - ./controllers:/home/hummingbot/controllers
+    environment:
+      - CONFIG_PASSWORD=${CONFIG_PASSWORD:-admin}
+      - HEADLESS_MODE=true
+      - CONFIG_FILE_NAME=v2_with_controllers.py
+      - SCRIPT_CONFIG=conf_v2_multi_xemm_okx_hl.yml
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "5"
+    tty: true
+    stdin_open: true
+    network_mode: host
+    restart: unless-stopped

@@ -32,6 +32,9 @@ development-diff-cover:
 build:
 	git clean -xdf && make clean && docker build -t hummingbot/hummingbot${TAG} -f Dockerfile .
 
+build-dev:
+	make clean && docker build -t hummingbot/hummingbot${TAG} -f Dockerfile .
+
 
 uninstall:
 	conda env remove -n hummingbot -y
