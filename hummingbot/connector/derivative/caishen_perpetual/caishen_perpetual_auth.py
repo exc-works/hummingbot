@@ -37,9 +37,17 @@ class CaishenPerpetualAuth(AuthBase):
     Perp and spot use separate TxActionType values (e.g. PERP_PLACE_ORDER vs SPOT_PLACE_ORDER).
     """
 
-    def __init__(self, api_key: str, api_secret: str):
+    def __init__(
+        self,
+        api_key: str,
+        api_secret: str,
+        eip712_domain_name: str = CONSTANTS.EIP712_DOMAIN_NAME,
+        upstream_chain_id: int = CONSTANTS.UPSTREAM_CHAIN_ID,
+    ):
         self._api_key = api_key
         self._api_secret = api_secret
+        self._eip712_domain_name = eip712_domain_name
+        self._upstream_chain_id = upstream_chain_id
         self.wallet = eth_account.Account.from_key(api_secret)
 
     def sign_inner(self, wallet, data):
@@ -81,9 +89,9 @@ class CaishenPerpetualAuth(AuthBase):
             },
             "primaryType": primary_type,
             "domain": {
-                "name": "Caishen",
+                "name": self._eip712_domain_name,
                 "version": "1",
-                "chainId": 421614,
+                "chainId": self._upstream_chain_id,
                 "verifyingContract": "0x0000000000000000000000000000000000000000",
             },
             "message": {
@@ -194,7 +202,12 @@ class CaishenPerpetualAuth(AuthBase):
         chain_id = CONSTANTS.CHAIN_ID
         data_bytes = self.prepare_action_data(action_type, form_data)
         target_address_bytes = to_bytes(hexstr=address)
-        _logger.info("[CaishenTx] targetAddress=%s", to_checksum_address(address))
+        _logger.info(
+            "[CaishenTx] targetAddress=%s walletAddress=%s eip712Domain=%s",
+            to_checksum_address(address),
+            to_checksum_address(self.wallet.address),
+            self._eip712_domain_name,
+        )
         action_value = self.get_tx_action_type(action_type)
 
         tx_message = {
