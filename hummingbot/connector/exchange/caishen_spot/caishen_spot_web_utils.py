@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, List, Optional
 
 import hummingbot.connector.exchange.caishen_spot.caishen_spot_constants as CONSTANTS
 from hummingbot.core.api_throttler.async_throttler import AsyncThrottler
@@ -47,6 +47,25 @@ def build_api_factory(
 
 def create_throttler() -> AsyncThrottler:
     return AsyncThrottler(CONSTANTS.RATE_LIMITS)
+
+
+async def get_current_server_time(
+    throttler: Optional[AsyncThrottler] = None,
+    domain: str = CONSTANTS.DOMAIN,
+) -> float:
+    import time
+
+    return time.time()
+
+
+def parse_l2book_levels(levels: List[Any]) -> List[List[float]]:
+    parsed: List[List[float]] = []
+    for level in levels:
+        if isinstance(level, dict):
+            parsed.append([float(level["price"]), float(level["size"])])
+        elif isinstance(level, (list, tuple)) and len(level) >= 2:
+            parsed.append([float(level[0]), float(level[1])])
+    return parsed
 
 
 def is_exchange_information_valid(symbol_info: dict) -> bool:

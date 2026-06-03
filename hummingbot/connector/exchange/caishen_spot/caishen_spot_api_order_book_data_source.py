@@ -75,8 +75,8 @@ class CaishenSpotAPIOrderBookDataSource(OrderBookTrackerDataSource):
             ts_ms = data.get("ts")
             timestamp = int(ts_ms / 1000) if ts_ms else int(time.time())
 
-        bids = [[float(item["price"]), float(item["size"])] for item in data.get("bids", [])]
-        asks = [[float(item["price"]), float(item["size"])] for item in data.get("asks", [])]
+        bids = web_utils.parse_l2book_levels(data.get("bids", []))
+        asks = web_utils.parse_l2book_levels(data.get("asks", []))
         sequence = data.get("sequence", timestamp)
         update_id = int(sequence) if str(sequence).isdigit() else timestamp
 
@@ -179,8 +179,8 @@ class CaishenSpotAPIOrderBookDataSource(OrderBookTrackerDataSource):
             sequence_range = update.get("sequence_range", {})
             update_id = update.get("sequence", sequence_range.get("end", ts_ms))
             update_id = int(update_id) if str(update_id).isdigit() else int(ts_ms)
-            bids = [[float(price), float(size)] for price, size in update.get("bids", [])]
-            asks = [[float(price), float(size)] for price, size in update.get("asks", [])]
+            bids = web_utils.parse_l2book_levels(update.get("bids", []))
+            asks = web_utils.parse_l2book_levels(update.get("asks", []))
             if not bids and not asks:
                 continue
             message_queue.put_nowait(
