@@ -1,10 +1,13 @@
 # caishen_perpetual_auth.py
+import logging
 import time
 from typing import Dict
 
 import eth_account
 from eth_account.messages import encode_typed_data
 from eth_utils import to_bytes, to_checksum_address, to_hex
+
+_logger = logging.getLogger(__name__)
 
 # IMPORTANT: Import deepproto.__init__ first to set up sys.path
 from hummingbot.connector.derivative.caishen_perpetual.deepproto import __init__ as _deepproto_init  # noqa: F401
@@ -191,6 +194,7 @@ class CaishenPerpetualAuth(AuthBase):
         chain_id = CONSTANTS.CHAIN_ID
         data_bytes = self.prepare_action_data(action_type, form_data)
         target_address_bytes = to_bytes(hexstr=address)
+        _logger.info("[CaishenTx] targetAddress=%s", to_checksum_address(address))
         action_value = self.get_tx_action_type(action_type)
 
         tx_message = {
