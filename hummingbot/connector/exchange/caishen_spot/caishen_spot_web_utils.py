@@ -21,6 +21,14 @@ def rest_url(path_url: str, domain: str = CONSTANTS.DOMAIN) -> str:
     return base_url + path_url
 
 
+def public_rest_url(path_url: str, domain: str = CONSTANTS.DOMAIN) -> str:
+    return rest_url(path_url, domain)
+
+
+def private_rest_url(path_url: str, domain: str = CONSTANTS.DOMAIN) -> str:
+    return rest_url(path_url, domain)
+
+
 def wss_url(domain: str = CONSTANTS.DOMAIN) -> str:
     return CONSTANTS.MAINNET_WS_URL if domain == CONSTANTS.DOMAIN else CONSTANTS.TESTNET_WS_URL
 
