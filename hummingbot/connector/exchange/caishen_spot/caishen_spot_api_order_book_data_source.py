@@ -96,21 +96,69 @@ class CaishenSpotAPIOrderBookDataSource(OrderBookTrackerDataSource):
         await ws.connect(ws_url=web_utils.wss_url(self._domain), ping_timeout=CONSTANTS.HEARTBEAT_TIME_INTERVAL)
         return ws
 
+    async def _send_l2book_subscribe(self, ws: WSAssistant, trading_pair: str):
+        symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "l2book_subscribe",
+            "params": {
+                "symbol": symbol,
+                "aggregation_level": "1x",
+                "trading_domain": CONSTANTS.TRADING_DOMAIN_SPOT,
+            },
+            "id": self._next_request_id(),
+        }
+        await ws.send(WSJSONRequest(payload=payload))
+        self.logger().info(f"Subscribed to l2book for {trading_pair} ({symbol})")
+
+    async def _send_l2book_unsubscribe(self, ws: WSAssistant, trading_pair: str):
+        symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "l2book_unsubscribe",
+            "params": {
+                "symbol": symbol,
+                "aggregation_level": "1x",
+                "trading_domain": CONSTANTS.TRADING_DOMAIN_SPOT,
+            },
+            "id": self._next_request_id(),
+        }
+        await ws.send(WSJSONRequest(payload=payload))
+        self.logger().info(f"Unsubscribed from l2book for {trading_pair} ({symbol})")
+
     async def _subscribe_channels(self, ws: WSAssistant):
         for trading_pair in self._trading_pairs:
-            symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
-            payload = {
-                "jsonrpc": "2.0",
-                "method": "l2book_subscribe",
-                "params": {
-                    "symbol": symbol,
-                    "aggregation_level": "1x",
-                    "trading_domain": CONSTANTS.TRADING_DOMAIN_SPOT,
-                },
-                "id": self._next_request_id(),
-            }
-            await ws.send(WSJSONRequest(payload=payload))
-            self.logger().info(f"Subscribed to l2book for {trading_pair} ({symbol})")
+            await self._send_l2book_subscribe(ws, trading_pair)
+
+    async def subscribe_to_trading_pair(self, trading_pair: str) -> bool:
+        if self._ws_assistant is None:
+            self.logger().warning(f"Cannot subscribe to {trading_pair}: WebSocket not connected")
+            return False
+
+        try:
+            await self._send_l2book_subscribe(self._ws_assistant, trading_pair)
+            self.add_trading_pair(trading_pair)
+            return True
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self.logger().exception(f"Unexpected error subscribing to {trading_pair} order book")
+            return False
+
+    async def unsubscribe_from_trading_pair(self, trading_pair: str) -> bool:
+        if self._ws_assistant is None:
+            self.logger().warning(f"Cannot unsubscribe from {trading_pair}: WebSocket not connected")
+            return False
+
+        try:
+            await self._send_l2book_unsubscribe(self._ws_assistant, trading_pair)
+            self.remove_trading_pair(trading_pair)
+            return True
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self.logger().exception(f"Unexpected error unsubscribing from {trading_pair} order book")
+            return False
 
     def _channel_originating_message(self, event_message: Dict[str, Any]) -> str:
         method = event_message.get("method", "")
