@@ -130,6 +130,8 @@ class XEMMExecutor(ExecutorBase):
     async def control_task(self):
         if self.status == RunnableStatus.RUNNING:
             await self.update_prices_and_tx_costs()
+            if self.status != RunnableStatus.RUNNING:
+                return
             await self.control_maker_order()
         elif self.status == RunnableStatus.SHUTTING_DOWN:
             await self.control_shutdown_process()
@@ -223,12 +225,21 @@ class XEMMExecutor(ExecutorBase):
         self.logger().info(f"Created maker order {order_id} at price {self._maker_target_price}.")
 
     async def control_shutdown_process(self):
-        if self.maker_order.is_done and self.taker_order.is_done:
+        maker_done = self.maker_order is None or self.maker_order.is_done
+        taker_done = self.taker_order is None or self.taker_order.is_done
+        if maker_done and taker_done:
+            if (self.maker_order and self.maker_order.is_done
+                    and self.taker_order and self.taker_order.is_done):
+                self.close_type = CloseType.COMPLETED
             self.logger().info("Both orders are done, executor terminated.")
             self.stop()
 
     async def control_update_maker_order(self):
+        if self.maker_order is None or self.maker_order.is_done:
+            return
         await self.update_current_trade_profitability()
+        if self.maker_order is None or self.maker_order.is_done:
+            return
         if self._current_trade_profitability - self._tx_cost_pct < self.config.min_profitability:
             self.logger().info(f"Order {self.maker_order.order_id} profitability {self._current_trade_profitability - self._tx_cost_pct} is below minimum profitability {self.config.min_profitability}. Cancelling order.")
             self._strategy.cancel(self.maker_connector, self.maker_trading_pair, self.maker_order.order_id)

@@ -223,6 +223,15 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
         self.executor._status = RunnableStatus.SHUTTING_DOWN
         await self.executor.control_task()
         self.assertEqual(self.executor._status, RunnableStatus.TERMINATED)
+        self.assertEqual(self.executor.close_type, CloseType.COMPLETED)
+
+    async def test_control_task_shut_down_process_maker_order_cleared(self):
+        self.executor.maker_order = None
+        self.executor.taker_order = Mock(spec=TrackedOrder)
+        self.executor.taker_order.is_done = True
+        self.executor._status = RunnableStatus.SHUTTING_DOWN
+        await self.executor.control_task()
+        self.assertEqual(self.executor._status, RunnableStatus.TERMINATED)
 
     @patch.object(XEMMExecutor, "get_in_flight_order")
     def test_process_order_created_event(self, in_flight_order_mock):
