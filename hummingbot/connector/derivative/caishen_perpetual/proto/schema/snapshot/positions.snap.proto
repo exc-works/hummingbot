@@ -1,0 +1,75 @@
+// Code generated DO NOT EDIT.
+// source: protoc-gen-snapshot
+
+syntax = "proto3";
+package share.schema.snapshot;
+
+option go_package = "github.com/exc-works/caishen/share/schema/snapshot";
+
+import "schema/order.proto";
+import "schema/prediction.proto";
+import "schema/snapshot/positions_custom.proto";
+
+message FundingStateSnapshot {
+  string long_growth = 1;
+  string short_growth = 2;
+  string average_premium_rate_numerator = 3;
+  string average_premium_rate_denominator = 4;
+  int64 n = 5;
+  string funding_rate = 6;
+  int64 last_settled_time = 7;
+  int64 last_update_time = 8;
+}
+
+message PositionRow {
+  bytes account = 1;
+  share.schema.PositionMode mode = 2;
+  uint64 symbol_id = 3;
+  PositionSnapshot position = 4;
+}
+
+message PositionSnapshot {
+  uint64 id = 1;
+  share.schema.PositionMode mode = 2;
+  share.schema.PositionSide side = 3;
+  bytes account = 4;
+  uint32 base_token = 5;
+  uint32 quote_token = 6;
+  string entry_price = 7;
+  string size = 8;
+  string isolated_margin = 9;
+  string realized_pnl = 10;
+  string taker_fee_rate = 11;
+  string funding_growth = 12;
+  uint32 risk_limits_id = 13;
+  share.schema.PositionStatus status = 14;
+  bool liquidation_order = 15;
+  int64 on_chain_created_at = 16;
+}
+
+message PredictionPositionRow {
+  uint64 symbol_id = 1;
+  share.schema.PredictionOutcome outcome = 2;
+  bytes account = 3;
+  PredictionPositionSnapshot position = 4;
+}
+
+message PredictionPositionSnapshot {
+  uint64 id = 1;
+  bytes account = 2;
+  uint32 yes_token_id = 3;
+  uint32 no_token_id = 4;
+  share.schema.PredictionOutcome outcome = 5;
+  string entry_price = 6;
+  string size = 7;
+  string size_frozen = 8;
+  string realized_pnl = 9;
+}
+
+message SymbolStateFile {
+  string index_price = 1;
+  string mark_price = 2;
+  FundingStateSnapshot funding = 3;
+  BidAskPriceListSnapshot latest_bid_ask_prices = 4;
+  int64 last_update_price_time = 5;
+}

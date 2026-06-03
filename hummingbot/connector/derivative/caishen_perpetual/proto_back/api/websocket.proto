@@ -1,0 +1,401 @@
+syntax = "proto3";
+package websocket;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "l2book.proto";
+import "open_interest.proto";
+import "ticker.proto";
+import "schema/tx.proto";
+import "order.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// see
+// https://www.okx.com/docs-v5/zh/#order-book-trading-market-data-ws-candlesticks-channel
+message CandleSubscribeRequest {
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  string resolution = 2 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message CandleSubscribeBatchNotification {
+  string symbol = 1;
+  string resolution = 2;
+  repeated CandleSubscribeNotification updates = 3
+      [(gogoproto.nullable) = false];
+}
+
+message CandleSubscribeNotification {
+  int64 ts = 1;
+  string open = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string high = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string low = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string close = 5 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string volume = 6 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// see
+// https://www.okx.com/docs-v5/zh/#order-book-trading-market-data-ws-tickers-channel
+message TickerSubscribeRequest {
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message TickerSubscribeBatchNotification {
+  string symbol = 1;
+  repeated ticker.TickerResponse updates = 2 [(gogoproto.nullable) = false];
+}
+
+message IndexPriceSubscribeRequest {
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message IndexPriceSubscribeBatchNotification {
+  string symbol = 1;
+  repeated IndexPriceSubscribeNotification updates = 2
+      [(gogoproto.nullable) = false];
+}
+
+message IndexPriceSubscribeNotification {
+  string index_price = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // Unix milliseconds timestamp
+  int64 ts = 2;
+}
+
+message MarkPriceSubscribeRequest {
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message MarkPriceSubscribeBatchNotification {
+  string symbol = 1;
+  repeated MarkPriceSubscribeNotification updates = 2
+      [(gogoproto.nullable) = false];
+}
+
+message MarkPriceSubscribeNotification {
+  string mark_price = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // Unix milliseconds timestamp
+  int64 ts = 2;
+}
+
+message PriceCandleSubscribeRequest {
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  string resolution = 2 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// see
+// https://www.okx.com/docs-v5/zh/#order-book-trading-market-data-ws-all-trades-channel
+message TradeFullSubscribeRequest {
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message TradeFullSubscribeBatchNotification {
+  string symbol = 1;
+  repeated TradeFullSubscribeNotification updates = 2
+      [(gogoproto.nullable) = false];
+}
+
+message TradeFullSubscribeNotification {
+  uint64 taker_order_id = 1 [(gogoproto.jsontag) = "taker_order_id,string"];
+  uint64 maker_order_id = 2 [(gogoproto.jsontag) = "maker_order_id,string"];
+  string price = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string size = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string taker_side = 5 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.PositionSide",
+    (gogoproto.nullable) = false
+  ];
+  uint64 seq = 6 [(gogoproto.jsontag) = "seq,string"];
+  // Unix milliseconds of sequence time
+  int64 ts = 7;
+}
+
+// see
+// https://www.okx.com/docs-v5/zh/#order-book-trading-market-data-ws-trades-channel
+message TradeSubscribeRequest {
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message TradeSubscribeBatchNotification {
+  string symbol = 1;
+  repeated TradeSubscribeNotification updates = 2
+      [(gogoproto.nullable) = false];
+}
+
+message TradeSubscribeNotification {
+  uint64 taker_order_id = 1 [(gogoproto.jsontag) = "taker_order_id,string"];
+  string price = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string size = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string taker_side = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.PositionSide",
+    (gogoproto.nullable) = false
+  ];
+  int32 count = 5;
+  uint64 seq = 6 [(gogoproto.jsontag) = "seq,string"];
+  // Unix milliseconds of sequence time
+  int64 ts = 7;
+}
+
+message SymbolTradeSubscribeRequest {
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message SymbolTradeSubscribeNotification {
+  string symbol = 1;
+  string side = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.PositionSide",
+    (gogoproto.nullable) = false
+  ];
+  string size = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string price = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // Unix milliseconds timestamp
+  int64 time = 5;
+  bytes tx_hash = 6 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// L2 book subscription
+// Supports up to 400 levels of depth with tick-based price aggregation
+message L2bookSubscribeRequest {
+  // Trading symbol (e.g., "BTC-USDT")
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+
+  // Tick-based aggregation level - determines how prices are grouped relative
+  // to tick size Supported values: "1x", "10x", "100x", "1000x"
+  string aggregation_level = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/repo/types/order.TickBasedAggregationLevel",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message SequenceRange {
+  uint64 start = 1 [(gogoproto.jsontag) = "start,string"];
+  uint64 end = 2 [(gogoproto.jsontag) = "end,string"];
+}
+
+// Depth book notification containing bid/ask levels
+message L2bookSubscribeNotification {
+  // Sequence number for ordering updates
+  SequenceRange sequence_range = 1 [(gogoproto.nullable) = false];
+
+  // Unix milliseconds timestamp
+  int64 ts = 2;
+
+  // Ask levels (sell orders) sorted by price ascending
+  repeated l2book.DepthLevel asks = 3 [(gogoproto.nullable) = false];
+
+  // Bid levels (buy orders) sorted by price descending
+  repeated l2book.DepthLevel bids = 4 [(gogoproto.nullable) = false];
+}
+
+// Batch notification for multiple depth updates (if batching is enabled)
+message L2bookSubscribeBatchNotification {
+  // Trading symbol
+  string symbol = 1;
+
+  // Tick-based aggregation level
+  string aggregation_level = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/repo/types/order.TickBasedAggregationLevel",
+    (gogoproto.nullable) = false
+  ];
+
+  // Array of depth updates
+  repeated L2bookSubscribeNotification updates = 3
+      [(gogoproto.nullable) = false];
+}
+
+message OpenInterestSubscribeRequest {
+  // Empty request for subscribing to all-pairs open interest updates
+}
+
+message OpenInterestSubscribeBySymbolRequest {
+  // Text format of the symbol, "BTC-USDT" for example.
+  string symbol = 1;
+}
+
+message OpenInterestSubscribeNotification {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  string amount = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // Text format of the symbol, "BTC-USDT" for example.
+  string symbol = 4;
+  int32 long_positions = 5 [(gogoproto.jsontag) = "long_positions"];
+  int32 short_positions = 6 [(gogoproto.jsontag) = "short_positions"];
+}
+
+message OpenInterestSubscribeBatchNotification {
+  open_interest.ResultContext context = 1 [(gogoproto.nullable) = false];
+  repeated OpenInterestSubscribeNotification updates = 2
+      [(gogoproto.nullable) = false];
+}
+
+message BlockSubscribeRequest {}
+message BlockSubscribeNotification {
+  uint64 number = 1;
+  // unix millisecs
+  int64 time = 2;
+  uint64 num_tx = 3 [(gogoproto.jsontag) = "num_tx"];
+  bytes proposer = 4 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  bytes hash = 5 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message TxSubscribeRequest {}
+message TxSubscribeNotification {
+  bytes hash = 1 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  uint64 number = 2;
+  int64 time = 3;
+  bytes account = 4 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  share.schema.TxActionType action = 5;
+}
+
+message FundingRateSubscribeRequest {}
+
+message FundingRateSubscribeBySymbolRequest {
+  // Text format of the symbol, "BTC-USDT" for example.
+  string symbol = 1;
+}
+
+message FundingRateSubscribeNotification {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  string symbol = 3;
+  uint32 funding_interval_hours = 4;
+  string funding_rate_lower_bound = 5 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string funding_rate_upper_bound = 6 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string funding_rate = 7 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  uint64 sequence_id = 8;
+  // 更新时间
+  int64 ts = 9;
+}
+
+message OrderExecutedSubscribeRequest {
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message OrderExecutedSubscribeNotification {
+  bytes account = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  uint32 base_token = 2;
+  uint32 quote_token = 3;
+  string symbol = 4;
+  uint64 order_id = 5 [(gogoproto.jsontag) = "order_id,string"];
+  string price = 6 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string size = 7 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string fee = 8 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  bool is_maker = 9;
+  // Unix milliseconds timestamp
+  int64 time = 10;
+  // Transaction hash
+  bytes tx_hash = 11 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message OrderChangedSubscribeRequest {
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message OrderChangedSubscribeNotification {
+  order.OrderResponse order = 1 [(gogoproto.nullable) = false];
+}

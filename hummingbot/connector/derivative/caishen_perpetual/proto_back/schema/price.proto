@@ -1,0 +1,17 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+message UpdateIndexPriceMessage {
+  repeated SymbolPriceMessage prices = 1;
+  int64 timestamp = 4;
+}
+
+message SymbolPriceMessage {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  string index_price = 3 [(schema.decimal) = true];
+}

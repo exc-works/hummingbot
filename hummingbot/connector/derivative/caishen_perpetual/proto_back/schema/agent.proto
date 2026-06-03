@@ -1,0 +1,12 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+message ApproveAgentMessage {
+  string name = 1;                            // agent 名称
+  bytes agent = 2 [(schema.address) = true];  // agent 地址
+  int64 expired_time = 3;                     // 过期时间
+}

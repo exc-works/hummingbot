@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package l2book;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// L2 订单簿。提供按价格档位聚合的盘口深度数据。
+service L2book {
+  // 获取指定交易对的 L2 订单簿快照，包含买卖双方的价格档位深度。
+  rpc GetL2book(GetL2bookRequest) returns (GetL2bookResponse) {
+    option (google.api.http) = {
+      get: "/v1/l2book"
+    };
+  }
+}
+
+// 获取 L2 订单簿请求
+message GetL2bookRequest {
+  // 交易对符号，例如 BTC-USDC。必填。
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+  // 交易域。取值 0=Perp, 1=Spot, 2=Prediction。不传或空时默认为 Perp。
+  string trading_domain = 4 [(gogoproto.moretags) = "form:\"trading_domain\""];
+  // 价格聚合精度，按最小报价单位（tick）的倍数聚合相邻档位。
+  // 取值 1x, 10x, 100x, 1000x，分别表示 1/10/100/1000 倍 tick
+  // 聚合。不传时默认为 1x。 Prediction 域仅支持 1x。
+  string aggregation_level = 2
+      [(gogoproto.moretags) = "form:\"aggregation_level,default=1x\""];
+  // 单侧返回的深度档数上限，取值范围 1 到 400，默认为 1。
+  int32 limit = 3
+      [(gogoproto.moretags) =
+           "form:\"limit,default=1\" binding:\"omitempty,min=1,max=400\""];
+}
+
+// 获取 L2 订单簿响应
+message GetL2bookResponse {
+  // 本次深度快照的序列号，随订单簿更新单调递增，用于判定数据新旧。
+  uint64 sequence = 1;
+  // 订单簿最后更新时间。已弃用：请改用 `ts`（Unix
+  // 毫秒），待客户端适配完成后移除。
+  google.protobuf.Timestamp timestamp = 2 [
+    deprecated = true,
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.moretags) = "json:\"timestamp,omitzero\""
+  ];
+  // 时间戳（Unix 毫秒）。
+  int64 ts = 5;
+  // 卖单档位列表，按价格升序排列。
+  repeated L2bookLevel asks = 3;
+  // 买单档位列表，按价格降序排列。
+  repeated L2bookLevel bids = 4;
+}
+
+// 单个深度档位，表示某一价格上的聚合挂单。
+message L2bookLevel {
+  // 该档位价格。
+  string price = 1 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 该档位的挂单数量。
+  string size = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}

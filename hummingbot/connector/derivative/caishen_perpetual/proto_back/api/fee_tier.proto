@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package fee_tier;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service FeeTier {
+  rpc GetFeeTierProfile(GetFeeTierProfileRequest)
+      returns (GetFeeTierProfileResponse) {
+    option (google.api.http).get = "/v1/fee-tiers";
+  }
+}
+
+message GetFeeTierProfileRequest {}
+
+message GetFeeTierProfileResponse {
+  repeated FeeTierResponse fee_tiers = 1;
+}
+
+message FeeTierResponse {
+  uint32 tier = 1;
+  string taker = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string maker = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}

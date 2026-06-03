@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package token;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 代币
+service Token {
+  // 获取全部代币列表，每个代币包含其在各条链上的充提配置。
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {
+    option (google.api.http).get = "/v1/tokens";
+  }
+}
+
+// 获取代币列表请求。
+message ListTokensRequest {}
+
+// 获取代币列表响应。
+message ListTokensResponse {
+  // 代币信息列表。
+  repeated TokenInfo tokens = 1;
+}
+
+// 代币基本信息。
+message TokenInfo {
+  // 代币 ID，全局唯一。
+  uint32 id = 1 [(gogoproto.jsontag) = "id"];
+  // 代币名称，例如 "USD Coin"。
+  string name = 2 [(gogoproto.jsontag) = "name"];
+  // 代币符号，例如 "USDC"。
+  string symbol = 3 [(gogoproto.jsontag) = "symbol"];
+  // 代币精度位数，取值范围 [0, 18]；金额字段的小数位数不得超过该值。
+  uint32 decimals = 4 [(gogoproto.jsontag) = "decimals"];
+  // 代币图标 URL。
+  string avatar = 5 [(gogoproto.jsontag) = "avatar"];
+  // 该代币在各条链上的充值与提现配置列表。
+  repeated TokenChainConfig chain_configs = 6
+      [(gogoproto.jsontag) = "chain_configs"];
+}
+
+// 代币在单条链上的充值与提现配置。
+message TokenChainConfig {
+  // 链 ID。
+  uint64 chain_id = 1 [(gogoproto.jsontag) = "chain_id"];
+  // 链名称。
+  string chain_name = 2 [(gogoproto.jsontag) = "chain_name"];
+  // 代币在该链上的合约地址，按对应链的地址编码格式表示。
+  string contract = 3 [(gogoproto.jsontag) = "contract"];
+  // 最小充值数量，以该代币计价；小数位数不超过代币精度。
+  string min_deposit = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "min_deposit"
+  ];
+  // 充值入账所需的区块确认数；含义随链而定，0 表示不要求确认。
+  uint32 block_confirmations = 5 [(gogoproto.jsontag) = "block_confirmations"];
+  // 充值启用时间（Unix 毫秒）；0 表示立即启用。
+  int64 deposit_enabled_at = 6 [(gogoproto.jsontag) = "deposit_enabled_at"];
+  // 最小提现数量，以该代币计价；小数位数不超过代币精度。
+  string min_withdraw = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "min_withdraw"
+  ];
+  // 提现手续费（固定额），以该代币计价；小数位数不超过代币精度。
+  string withdraw_fee = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "withdraw_fee"
+  ];
+  // 提现启用时间（Unix 毫秒）；0 表示立即启用。
+  int64 withdraw_enabled_at = 9 [(gogoproto.jsontag) = "withdraw_enabled_at"];
+}

@@ -1,0 +1,25 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+message FeeTierMessage {
+  uint32 tier = 1;
+  string taker = 2 [(schema.decimal) = true];
+  string maker = 3 [(schema.decimal) = true];
+}
+
+message RegisterFeeTierMessage {
+  repeated FeeTierMessage fee_tiers = 1;
+}
+
+message AccountFeeTierMessage {
+  bytes account = 1 [(schema.address) = true];
+  uint32 tier = 2;
+}
+
+message RegisterAccountFeeTierMessage {
+  repeated AccountFeeTierMessage account_fee_tiers = 2;
+}

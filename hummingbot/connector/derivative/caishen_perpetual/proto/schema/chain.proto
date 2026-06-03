@@ -1,0 +1,87 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+// EnableChainMessage enables an upstream chain so it can be referenced by
+// deposit/withdraw configs.
+message EnableChainMessage {
+  // Upstream chain ID (for example, 1 for Ethereum, 42161 for Arbitrum One).
+  // The ID must not already be enabled.
+  uint64 chain_id = 1;
+  // Human-readable chain label emitted in metadata changes.
+  // Example: "ethereum-mainnet".
+  string chain_name = 2;
+}
+
+// DisableChainMessage disables a previously enabled upstream chain by ID.
+message DisableChainMessage {
+  // Upstream chain ID to disable. The chain must already be enabled.
+  uint64 chain_id = 1;
+}
+
+// ProposerSetConfig defines weighted signers and threshold for one permission
+// domain.
+message ProposerSetConfig {
+  // Proposer addresses encoded as bytes.
+  // The list must be non-empty, unique, and aligned with weights by index.
+  // Recommended: use canonical 20-byte EVM addresses.
+  repeated bytes proposers = 1;
+  // Positive decimal weights aligned with proposers by index.
+  // Length must equal proposers length. Example: "1", "2.5".
+  repeated string weights = 2;
+  // Minimum total signer weight required for authorization.
+  // Must be positive and <= sum(weights).
+  string threshold = 3 [(schema.decimal) = true];
+}
+
+// PermissionDomain identifies which governance capability a proposer set
+// controls.
+enum PermissionDomain {
+  // Block proposer permissions.
+  PROPOSER = 0;
+  // Chain-level configuration, including chain, token, symbol, fee tiers, etc.
+  CHAIN = 1;
+  // Account-level fee tier configuration.
+  ACCOUNT_FEE_TIER = 2;
+  // Index price and mark price configuration.
+  INDEX_PRICE = 3;
+  // Funding rate configuration.
+  FUNDING_RATE = 4;
+  // Deposit and withdrawal operations.
+  DEPOSIT_WITHDRAW = 5;
+  // Auto-deleveraging (ADL) operations.
+  AUTO_DELEVERAGING = 6;
+  // Conditional order operations, including trigger, take profit, stop loss,
+  // trailing, etc.
+  CONDITIONAL_ORDER = 7;
+  // Strategy-order privileged operations.
+  STRATEGY_ORDER = 8;
+  // Insurance-fund operations.
+  INSURANCE_FUND = 9;
+  // Fee operations, including withdrawal fees, trading fees, etc.
+  FEE = 10;
+  // Prediction operations.
+  PREDICTION = 11;
+  // Placeholder for future operations.
+  PLACEHOLDER4 = 12;
+  // Placeholder for future operations.
+  PLACEHOLDER5 = 13;
+  // Placeholder for future operations.
+  PLACEHOLDER6 = 14;
+  // Placeholder for future operations.
+  PLACEHOLDER7 = 15;
+}
+
+// UpdateDomainProposerSetMessage replaces the proposer-set config for one
+// permission domain.
+message UpdateDomainProposerSetMessage {
+  // Permission domain to update.
+  // Must be a valid enum value.
+  PermissionDomain domain = 1;
+  // New weighted proposer config for the domain.
+  // Must satisfy proposer/weight/threshold constraints above.
+  ProposerSetConfig config = 2;
+}

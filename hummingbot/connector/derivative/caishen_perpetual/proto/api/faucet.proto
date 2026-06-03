@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package faucet;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 水龙头
+service Faucet {
+  // 领取测试网代币，向指定账户发放测试代币
+  rpc Claim(FaucetClaimRequest) returns (FaucetClaimResponse) {
+    option (google.api.http) = {
+      post: "/v1/faucet/claim"
+      body: "*"
+    };
+  }
+
+  // 查询指定账户的测试网代币领取状态
+  rpc GetStatus(FaucetStatusRequest) returns (FaucetStatusResponse) {
+    option (google.api.http) = {
+      get: "/v1/faucet/status"
+    };
+  }
+}
+
+// 领取测试网代币请求
+message FaucetClaimRequest {
+  // 领取代币的账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+}
+
+// 领取测试网代币响应
+message FaucetClaimResponse {
+  // 本次发放代币的交易哈希
+  string tx_hash = 1 [(gogoproto.jsontag) = "txHash"];
+}
+
+// 查询领取状态请求
+message FaucetStatusRequest {
+  // 待查询的账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+}
+
+// 查询领取状态响应
+message FaucetStatusResponse {
+  // 该账户是否已成功领取测试网代币
+  bool claimed = 1 [(gogoproto.jsontag) = "claimed"];
+  // 成功领取的交易哈希；未成功领取时为空字符串
+  string tx_hash = 2 [(gogoproto.jsontag) = "txHash"];
+}

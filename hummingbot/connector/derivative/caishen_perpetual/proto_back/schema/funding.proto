@@ -1,0 +1,28 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+import "schema/order.proto";
+
+message UpdateFundingRateMessage {
+  repeated BaseQuoteMessage base_quotes = 1;
+}
+
+message BaseQuoteMessage {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+}
+
+message SettleFundingFeeMessage {
+  PositionMode mode = 1;
+  bytes account = 2 [(schema.address) = true];
+}
+
+message SettleBatchFundingFeesMessage {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  // 每次最多结算10个仓位
+  repeated SettleFundingFeeMessage batch = 3;
+}

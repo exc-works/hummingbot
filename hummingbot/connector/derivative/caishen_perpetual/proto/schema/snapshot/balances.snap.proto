@@ -1,0 +1,17 @@
+// Code generated DO NOT EDIT.
+// source: protoc-gen-snapshot
+
+syntax = "proto3";
+package share.schema.snapshot;
+
+option go_package = "github.com/exc-works/caishen/share/schema/snapshot";
+
+message BalancesRow {
+  bytes account_id = 1;
+  string wallet = 2;
+  string isolated_position_frozen = 3;
+  string isolated_order_frozen = 4;
+  string cross_order_frozen = 5;
+  string entry_price = 6;
+  string realized_pnl = 7;
+}

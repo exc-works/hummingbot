@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package platodocs;
+
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+// This doc-only file (no message/service) exists so protoc-gen-openapiv2
+// (allow_merge=true) emits a proper info.title/version/description instead of
+// defaulting to the first merged file name and "version not set". The Chinese
+// info.description below is picked up by extract_api_doc_i18n (it scans
+// openapiv2_swagger title/description literals too) and translated per locale
+// by gen_i18n_doc, exactly like other api_docs strings. Excluded from Go
+// codegen (gen-struct filter-out) and the public proto module (build.sh skip),
+// so go_package is never materialized.
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// clang-format off
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Plato API"
+    version: "v1"
+    description: "Plato 交易所 HTTP API：交易、行情、账户与链上查询接口。\n\n## 错误消息本地化\n\n在请求中携带 `Accept-Language` 头即可选择错误 `msg` 字段的语言（按 BCP-47 协商）。\n\n- **支持的语言**：en、zh、zh-Hant、ja、ko、fr、es、de\n- **回退**：未携带、无法匹配或该错误码暂无译文时回退英文（en）\n- **范围**：仅影响错误 `msg` 文案，`code` 与业务 `data` 不随语言变化\n\n示例：`Accept-Language: zh-CN`\n\nWebSocket 连接的语言在握手时根据 `Accept-Language` 协商一次并在整条连接生命周期内固定。"
+  }
+};
+// clang-format on

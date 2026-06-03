@@ -1,0 +1,184 @@
+syntax = "proto3";
+
+package explorer;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "schema/tx.proto";
+import "schema/error.proto";
+import "tx.proto";
+import "websocket.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 区块浏览器
+service Explorer {
+  // 获取最新区块
+  rpc LatestBlock(LatestBlockRequest) returns (LatestBlockResponse) {
+    option (google.api.http) = {
+      get: "/v1/explorer/block/latest"
+    };
+  }
+
+  // 根据区块高度获取区块详情，包含该区块的交易列表
+  rpc GetBlock(GetBlockRequest) returns (GetBlockResponse) {
+    option (google.api.http) = {
+      get: "/v1/explorer/block/{number}"
+    };
+  }
+  // 根据交易哈希获取交易详情
+  rpc GetTx(GetTxRequest) returns (GetTxResponse) {
+    option (google.api.http) = {
+      get: "/v1/explorer/tx/{hash}"
+    };
+  }
+  // 根据账户地址获取该账户的交易列表，按时间倒序返回最近的交易
+  rpc ListAccountTxs(ListAccountTxsRequest) returns (ListAccountTxsResponse) {
+    option (google.api.http) = {
+      get: "/v1/explorer/account/{account}"
+    };
+  }
+
+  // 获取区块预览列表，每个区块附带一条代表交易
+  rpc ListBlocksWithTx(ListBlocksWithTxRequest)
+      returns (ListBlocksWithTxResponse) {
+    option (google.api.http) = {
+      get: "/v1/explorer/preview/{number}"
+    };
+  }
+}
+
+// 获取区块预览列表请求
+message ListBlocksWithTxRequest {
+  // 区块高度上界，返回该高度（不含）之前的区块
+  uint64 number = 1
+      [(gogoproto.moretags) = "uri:\"number\" binding:\"required\""];
+}
+
+// 获取区块预览列表响应
+message ListBlocksWithTxResponse {
+  // 区块预览列表
+  repeated websocket.BlockSubscribeNotification blocks = 1;
+  // 交易预览列表
+  repeated websocket.TxSubscribeNotification txs = 2;
+}
+
+// 最新区块请求
+message LatestBlockRequest {}
+
+// 最新区块响应
+message LatestBlockResponse {
+  // 最新区块信息
+  BlockResponse block = 1;
+}
+
+// 区块基本信息
+message BlockResponse {
+  // 区块高度
+  uint64 number = 1;
+  // 提议者地址
+  bytes proposer = 2 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  // 区块哈希
+  bytes hash = 3 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  // 区块出块时间，Unix 毫秒
+  int64 time = 4;
+  // 区块内交易数量
+  uint64 num_tx = 5 [(gogoproto.jsontag) = "num_tx"];
+}
+
+// 获取区块详情请求
+message GetBlockRequest {
+  // 区块高度
+  uint64 number = 1 [(gogoproto.moretags) = "uri:\"number\""];
+}
+
+// 获取区块详情响应
+message GetBlockResponse {
+  // 区块高度
+  uint64 number = 1;
+  // 区块出块时间，Unix 毫秒
+  int64 time = 2;
+  // 区块内交易数量
+  uint64 num_tx = 3 [(gogoproto.jsontag) = "num_tx"];
+  // 提议者地址
+  bytes proposer = 4 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  // 区块哈希
+  bytes hash = 5 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  // 交易列表
+  repeated BlockTx txs = 6 [(gogoproto.jsontag) = "txs"];
+}
+
+// 交易摘要信息
+message BlockTx {
+  // 交易哈希
+  bytes hash = 1 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  // 交易所在区块高度
+  uint64 number = 2;
+  // 交易所在区块的出块时间，Unix 毫秒
+  int64 time = 3;
+  // 交易所属账户地址
+  bytes account = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 交易类型
+  share.schema.TxActionType action = 5;
+}
+
+// 获取交易详情请求
+message GetTxRequest {
+  // 交易哈希，十六进制字符串
+  string hash = 1 [(gogoproto.moretags) = "uri:\"hash\""];
+}
+
+// 获取交易详情响应
+message GetTxResponse {
+  // 交易哈希
+  bytes hash = 1 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  // 交易所在区块高度
+  uint64 number = 2;
+  // 交易所在区块的出块时间，Unix 毫秒
+  int64 time = 3;
+  // 交易所属账户地址
+  bytes account = 4 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  // 交易类型
+  share.schema.TxActionType action = 5;
+  // 原始交易数据，protobuf 编码的字节序列
+  bytes data = 6;
+  // 交易执行错误信息，执行成功时为 null
+  tx.TxError error = 7 [(gogoproto.jsontag) = "error"];
+}
+
+// 查询账户交易列表请求
+message ListAccountTxsRequest {
+  // 账户地址，十六进制字符串
+  string account = 1 [(gogoproto.moretags) = "uri:\"account\""];
+}
+
+// 查询账户交易列表响应
+message ListAccountTxsResponse {
+  // 交易列表
+  repeated BlockTx txs = 1 [(gogoproto.jsontag) = "txs"];
+}

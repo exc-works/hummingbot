@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package funding;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "schema/extensions.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 资金费率
+service Funding {
+  // 查询永续合约的历史资金费率
+  rpc ListFundingHistories(ListFundingHistoriesRequest)
+      returns (ListFundingHistoriesResponse) {
+    option (google.api.http) = {
+      get: "/v1/funding/history"
+    };
+  }
+
+  // 查询永续合约的实时资金费率
+  rpc ListRealTimeFundingRates(ListRealTimeFundingRatesRequest)
+      returns (ListRealTimeFundingRatesResponse) {
+    option (google.api.http) = {
+      get: "/v1/funding/realtime"
+    };
+  }
+
+  // 查询所有可用的资金费率结算周期
+  rpc ListFundingIntervals(ListFundingIntervalsRequest)
+      returns (ListFundingIntervalsResponse) {
+    option (google.api.http) = {
+      get: "/v1/funding/intervals"
+    };
+  }
+}
+
+// 历史资金费率查询请求
+message ListFundingHistoriesRequest {
+  // 交易对符号，例如 "BTC-USDC"，必填
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+  // 查询起始时间，Unix 毫秒，必填
+  int64 start_time = 3
+      [(gogoproto.moretags) = "form:\"start_time\" binding:\"required\""];
+  // 查询结束时间，Unix 毫秒，必填；与起始时间的时间跨度不得超过 31 天
+  int64 end_time = 4
+      [(gogoproto.moretags) = "form:\"end_time\" binding:\"required\""];
+}
+
+// 历史资金费率查询响应
+message ListFundingHistoriesResponse {
+  // 历史资金费率列表
+  repeated FundingHistory funding_histories = 1;
+}
+
+// 单条历史资金费率记录
+message FundingHistory {
+  // 资金费率结算时间，Unix 毫秒
+  int64 time = 1 [(gogoproto.jsontag) = "time"];
+  // 该次结算的资金费率；符号约定：正数表示多头向空头支付，负数反之；与手续费无关
+  string funding_rate = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 资金费率结算间隔，单位为小时
+  uint32 funding_interval_hours = 3;
+}
+
+// 实时资金费率查询请求
+message ListRealTimeFundingRatesRequest {
+  // 交易对符号，可选；为空时返回全部交易对
+  string symbol = 1 [(gogoproto.moretags) = "form:\"symbol\""];
+  // 结算间隔过滤，单位为小时，可选；为 0 时不按结算间隔过滤
+  uint32 funding_interval_hours = 2
+      [(gogoproto.moretags) = "form:\"funding_interval_hours\""];
+}
+
+// 实时资金费率查询响应
+message ListRealTimeFundingRatesResponse {
+  // 实时资金费率列表
+  repeated RealTimeFundingRate real_time_funding_rates = 1;
+}
+
+// 单个交易对的实时资金费率
+message RealTimeFundingRate {
+  // 交易对符号
+  string symbol = 1;
+  // 资金费率结算间隔，单位为小时
+  uint32 funding_interval_hours = 2;
+  // 资金费率下限，与上限互为相反数
+  string funding_rate_lower_bound = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 资金费率上限，与下限互为相反数
+  string funding_rate_upper_bound = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 当前时刻的资金费率（非下次预测或最近已结算的费率）；符号约定：正数表示多头向空头
+  // 支付，负数反之；与手续费无关
+  string funding_rate = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// 资金费率结算间隔查询请求
+message ListFundingIntervalsRequest {}
+
+// 资金费率结算间隔查询响应
+message ListFundingIntervalsResponse {
+  // 全部可用的资金费率结算间隔列表，单位为小时
+  repeated uint32 funding_interval_hours = 1;
+}

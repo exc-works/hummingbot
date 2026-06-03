@@ -1,0 +1,32 @@
+// Hand-written +pb:custom wire shapes:
+//   - BidAskPriceSnapshot: corresponds to runtime BidAskPrice. Hand-written
+//     to avoid a cross-file circular import with BidAskPriceListSnapshot (the
+//     generator's positions.snap.proto references BidAskPriceListSnapshot,
+//     which references BidAskPriceSnapshot; both live in this file so that
+//     only the .snap.proto imports _custom.proto, one-directionally).
+//   - BidAskPriceListSnapshot: the dense 1:1 shape of a ring buffer
+//     (data[i] <-> slot i, with unfilled slots held by a zero-value message),
+//     which differs from the generator's default behavior of skipping nil
+//     elements in []X, so convert is hand-written.
+syntax = "proto3";
+
+package share.schema.snapshot;
+
+option go_package = "github.com/exc-works/caishen/share/schema/snapshot";
+
+// === Custom messages ===
+
+message BidAskPriceSnapshot {
+  string bid = 1;
+  string ask = 2;
+  int64 time = 3;
+}
+
+message BidAskPriceListSnapshot {
+  // data[i] corresponds to ring slot i; unfilled slots are held by a
+  // zero-value message (proto3 repeated message does not support nil
+  // elements; on decode, time==0 <-> nil slot). len(data) is the ring
+  // capacity, so no separate length field is needed.
+  repeated BidAskPriceSnapshot data = 1;
+  int32 current_index = 2;
+}

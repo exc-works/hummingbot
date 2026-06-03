@@ -1,0 +1,50 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/chain.proto";
+import "schema/token.proto";
+import "schema/symbol.proto";
+import "schema/fee_tier.proto";
+import "schema/prediction.proto";
+import "schema/vault.proto";
+
+// GenesisMessage defines one-time bootstrap state applied by GENESIS action.
+message GenesisMessage {
+  // Local chain ID. Must be > 0.
+  uint64 chain_id = 1;
+  // Human-readable local chain name. Example: "caishen-mainnet".
+  string chain_name = 2;
+  // Initial permission-domain proposer sets.
+  // Include PROPOSER config to enable normal START_BLOCK/END_BLOCK
+  // authorization after genesis.
+  repeated UpdateDomainProposerSetMessage permission_configs = 3;
+  // Upstream chains enabled at bootstrap for deposit/withdraw features.
+  // Do not repeat the same chain_id.
+  repeated EnableChainMessage enabled_chains = 4;
+  // Tokens registered during genesis.
+  // Token IDs must be unique; each token must satisfy RegisterToken
+  // constraints.
+  repeated RegisterTokenMessage registered_tokens = 5;
+  // Per-token per-chain deposit/withdraw settings registered during genesis.
+  // Each entry must reference an enabled chain and a registered token.
+  repeated UpdateDepositWithdrawConfigMessage
+      registered_deposit_withdraw_configs = 6;
+  // Risk-limit profiles registered during genesis.
+  repeated RegisterRiskLimitsMessage registered_risk_limits = 7;
+  // Perpetual symbols registered during genesis.
+  repeated RegisterSymbolMessage registered_symbols = 8;
+  // Fee-tier rules registered during genesis.
+  // Genesis requires full coverage for Perp, Spot, and Prediction, with
+  // matching tier level layout across domains.
+  repeated RegisterFeeTierMessage registered_fee_tiers = 9;
+  // Spot symbols registered during genesis.
+  repeated RegisterSpotSymbolMessage registered_spot_symbols = 10;
+  // Prediction module global config applied during genesis.
+  // This field is required by GENESIS.
+  PredictionUpdateConfigMessage prediction_config = 11;
+  // Vault module global config applied during genesis.
+  // This field is required by GENESIS.
+  VaultConfigMessage vault_config = 12;
+}

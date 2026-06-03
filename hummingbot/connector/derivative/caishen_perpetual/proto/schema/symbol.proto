@@ -1,0 +1,265 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+// SymbolStatus is the lifecycle state of a trading symbol.
+enum SymbolStatus {
+  // Sentinel default.
+  SYMBOL_STATUS_UNKNOWN = 0;
+  // Symbol is tradable.
+  ACTIVE = 1;
+  // Delist flow is in progress (batch cancellation/settlement ongoing).
+  CLOSING = 2;
+  // Symbol is fully delisted.
+  DELISTED = 3;
+}
+
+// RangeMessage describes one notional range segment for risk limits.
+message RangeMessage {
+  // Lower boundary of notional value.
+  // Must be >= 0.
+  // For the first risk-limit row, this must be "0".
+  // Example: "0".
+  string lower = 1 [(schema.decimal) = true];
+  // Upper boundary of notional value.
+  // Must be > lower.
+  // Example: "100000".
+  string upper = 2 [(schema.decimal) = true];
+}
+
+// RiskLimitMessage defines leverage/MMR constraints for one notional range.
+message RiskLimitMessage {
+  // Notional range where this rule applies.
+  RangeMessage range = 1;
+  // Maintenance margin rate for this range.
+  // Must be in (0, 1].
+  // Example: "0.005" (0.5%).
+  string mmr = 2 [(schema.decimal) = true];
+  // Maximum allowed leverage within this range.
+  // Must be in [1, 65535].
+  uint32 max_leverage = 3;
+}
+
+// RegisterRiskLimitsMessage registers a reusable risk-limit profile.
+message RegisterRiskLimitsMessage {
+  // Risk-limit profile id (must be > 0).
+  uint32 id = 1;
+  // Ordered and continuous range rules.
+  // The first lower bound must be 0, and each next lower bound must equal the
+  // previous upper bound.
+  repeated RiskLimitMessage risk_limits = 2;
+}
+
+// RegisterSymbolMessage registers one perp symbol.
+message RegisterSymbolMessage {
+  // Base token id.
+  // Must be different from quote_token.
+  uint32 base_token = 1;
+  // Quote token id.
+  // Must be different from base_token.
+  uint32 quote_token = 2;
+  // Symbol open time in Unix milliseconds.
+  // Example: 1713355200000.
+  int64 open_time = 3;
+  // Symbol close time in Unix milliseconds.
+  // Zero means not scheduled to close.
+  // A value later than open_time is recommended.
+  int64 close_time = 4;
+  // Minimum price increment.
+  // Must be > 0.
+  // Must be a power-of-ten step (for example: 1, 0.1, 0.01, 0.001).
+  // Example: "0.1".
+  string tick_size = 5 [(schema.decimal) = true];
+  // Minimum size increment.
+  // Must be > 0.
+  // Example: "0.001".
+  string lot_size = 6 [(schema.decimal) = true];
+  // Minimum order size.
+  // Must be > 0 and an integer multiple of lot_size.
+  // Example: "0.01".
+  string min_size = 7 [(schema.decimal) = true];
+  // Max orders matched per taker execution. 0 means no limit.
+  uint32 max_number_of_order_each_match = 8;
+  // Max open orders per account on this symbol. 0 means no limit.
+  uint32 max_number_of_order_each_account = 9;
+  // Funding interval in hours. Must be > 0.
+  // Example: 8.
+  uint32 funding_interval_hours = 10;
+  // Absolute funding-rate cap ratio. Must be in (0, 1).
+  // Example: "0.00375".
+  string funding_rate_bound = 11 [(schema.decimal) = true];
+  // Limit-order price-band ratio. Must be in (0, 1).
+  // Example: "0.1" means +/-10%.
+  string price_limit_bound = 12 [(schema.decimal) = true];
+  // Default leverage for new positions on this symbol.
+  // Must be in [1, 65535] and must not exceed the linked risk-limit max.
+  uint32 default_leverage = 13;
+  // Linked risk-limit profile id.
+  // Must be > 0 and reference an existing profile.
+  uint32 risk_limits_id = 14;
+  // Minimum order notional in quote asset.
+  // Must be >= 0. "0" disables the minimum check.
+  string min_notional = 15 [(schema.decimal) = true];
+  // Maximum order notional in quote asset.
+  // Must be >= 0. "0" disables the maximum check.
+  // If > 0, must be >= min_notional.
+  string max_notional = 16 [(schema.decimal) = true];
+  // Conditional-order price-band ratio.
+  // Must be in (0, 1), and must be >= price_limit_bound.
+  string conditional_price_limit_bound = 17 [(schema.decimal) = true];
+}
+
+// UpdateSymbolMessage updates mutable fields of a perp symbol.
+message UpdateSymbolMessage {
+  // Base token id.
+  // Must be different from quote_token.
+  uint32 base_token = 1;
+  // Quote token id.
+  // Must be different from base_token.
+  uint32 quote_token = 2;
+
+  // Symbol open time in Unix milliseconds.
+  // Can be updated before open or after close (not while symbol is open).
+  optional int64 open_time = 3;
+  // Symbol close time in Unix milliseconds.
+  // If set and non-zero, must be later than the effective open_time.
+  optional int64 close_time = 4;
+  // New tick size.
+  // Must be > 0, must keep power-of-ten step semantics, and cannot be larger
+  // than current tick_size (only equal or finer).
+  optional string tick_size = 5 [(schema.decimal) = true];
+  // New per-match max-order cap. 0 means no limit.
+  optional uint32 max_number_of_order_each_match = 8;
+  // New per-account max-open-order cap. 0 means no limit.
+  optional uint32 max_number_of_order_each_account = 9;
+  // New funding interval in hours. Must be > 0.
+  optional uint32 funding_interval_hours = 10;
+  // New absolute funding-rate cap ratio. Must be in (0, 1).
+  optional string funding_rate_bound = 11 [(schema.decimal) = true];
+  // New limit-order price-band ratio. Must be in (0, 1).
+  optional string price_limit_bound = 12 [(schema.decimal) = true];
+  // New default leverage.
+  // Must be in [1, 65535] and must not exceed linked risk-limit max.
+  optional uint32 default_leverage = 13;
+  // New risk-limit profile id.
+  // Must be > 0 and reference an existing profile.
+  optional uint32 risk_limits_id = 14;
+  // New minimum notional in quote asset. Must be >= 0.
+  optional string min_notional = 15 [(schema.decimal) = true];
+  // New maximum notional in quote asset.
+  // Must be >= 0, and if > 0 must be >= effective min_notional.
+  optional string max_notional = 16 [(schema.decimal) = true];
+  // New conditional-order price-band ratio.
+  // Must be in (0, 1), and must be >= effective price_limit_bound.
+  optional string conditional_price_limit_bound = 17 [(schema.decimal) = true];
+}
+
+// RegisterSpotSymbolMessage is used to register a spot trading pair.
+message RegisterSpotSymbolMessage {
+  // Base token id.
+  // Must be different from quote_token.
+  uint32 base_token = 1;
+  // Quote token id.
+  // Must be different from base_token.
+  uint32 quote_token = 2;
+  // Symbol open time in Unix milliseconds.
+  // Example: 1713355200000.
+  int64 open_time = 3;
+  // Symbol close time in Unix milliseconds.
+  // Zero means not scheduled to close.
+  // A value later than open_time is recommended.
+  int64 close_time = 4;
+  // Minimum price increment.
+  // Must be > 0.
+  // Must be a power-of-ten step (for example: 1, 0.1, 0.01, 0.001).
+  // Example: "0.01".
+  string tick_size = 5 [(schema.decimal) = true];
+  // Minimum size increment.
+  // Must be > 0.
+  // Example: "0.001".
+  string lot_size = 6 [(schema.decimal) = true];
+  // Minimum order size.
+  // Must be > 0 and an integer multiple of lot_size.
+  // Example: "0.01".
+  string min_size = 7 [(schema.decimal) = true];
+  // Max orders matched per taker execution. 0 means no limit.
+  uint32 max_number_of_order_each_match = 8;
+  // Max open orders per account on this symbol. 0 means no limit.
+  uint32 max_number_of_order_each_account = 9;
+  // Limit-order price-band ratio. Must be in (0, 1).
+  // Example: "0.1" means +/-10%.
+  string price_limit_bound = 10 [(schema.decimal) = true];
+  // Minimum order notional in quote asset.
+  // Must be >= 0. "0" disables the minimum check.
+  string min_notional = 11 [(schema.decimal) = true];
+  // Maximum order notional in quote asset.
+  // Must be >= 0. "0" disables the maximum check.
+  // If > 0, must be >= min_notional.
+  string max_notional = 12 [(schema.decimal) = true];
+  // Conditional-order price-band ratio.
+  // Must be in (0, 1), and must be >= price_limit_bound.
+  string conditional_price_limit_bound = 13 [(schema.decimal) = true];
+}
+
+// UpdateSpotSymbolMessage updates mutable fields of a spot symbol.
+message UpdateSpotSymbolMessage {
+  // Base token id.
+  // Must be different from quote_token.
+  uint32 base_token = 1;
+  // Quote token id.
+  // Must be different from base_token.
+  uint32 quote_token = 2;
+
+  // Symbol open time in Unix milliseconds.
+  // Can be updated before open or after close (not while symbol is open).
+  optional int64 open_time = 3;
+  // Symbol close time in Unix milliseconds.
+  // If set and non-zero, must be later than the effective open_time.
+  optional int64 close_time = 4;
+  // New tick size.
+  // Must be > 0, must keep power-of-ten step semantics, and cannot be larger
+  // than current tick_size (only equal or finer).
+  optional string tick_size = 5 [(schema.decimal) = true];
+  // New per-match max-order cap. 0 means no limit.
+  optional uint32 max_number_of_order_each_match = 8;
+  // New per-account max-open-order cap. 0 means no limit.
+  optional uint32 max_number_of_order_each_account = 9;
+  // New limit-order price-band ratio. Must be in (0, 1).
+  optional string price_limit_bound = 10 [(schema.decimal) = true];
+  // New minimum notional in quote asset. Must be >= 0.
+  optional string min_notional = 11 [(schema.decimal) = true];
+  // New maximum notional in quote asset.
+  // Must be >= 0, and if > 0 must be >= effective min_notional.
+  optional string max_notional = 12 [(schema.decimal) = true];
+  // New conditional-order price-band ratio.
+  // Must be in (0, 1), and must be >= effective price_limit_bound.
+  optional string conditional_price_limit_bound = 13 [(schema.decimal) = true];
+}
+
+// SpotBatchDelistSymbolMessage performs spot delist work in bounded batches.
+message SpotBatchDelistSymbolMessage {
+  // Base token id.
+  uint32 base_token = 1;
+  // Quote token id.
+  uint32 quote_token = 2;
+  // Max number of orders processed in this batch step. Must be > 0.
+  uint32 batch_size = 3;
+}
+
+// BatchDelistSymbolMessage performs perp delist work in bounded batches.
+message BatchDelistSymbolMessage {
+  // Base token id.
+  uint32 base_token = 1;
+  // Quote token id.
+  uint32 quote_token = 2;
+  // Settlement price used for delist position closing.
+  // Must be >= 0.
+  // "0" is only allowed when no positions remain.
+  // Example: "2500".
+  string settlement_price = 3 [(schema.decimal) = true];
+  // Max number of orders/positions processed in this batch step. Must be > 0.
+  uint32 batch_size = 4;
+}

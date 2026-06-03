@@ -1,0 +1,939 @@
+syntax = "proto3";
+
+package prediction;
+
+import "google/api/annotations.proto";
+import "google/protobuf/wrappers.proto";
+import "gogoproto/gogo.proto";
+import "schema/order.proto";
+import "schema/prediction.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 预测市场
+service Prediction {
+  // 获取预测分类列表
+  rpc ListCategories(ListCategoriesRequest) returns (ListCategoriesResponse) {
+    option (google.api.http).get = "/v1/prediction/categories";
+  }
+  // 根据账户查询预测市场持仓列表
+  rpc ListOpenPositionsByAccount(ListPredictionOpenPositionsByAccountRequest)
+      returns (ListPredictionOpenPositionsByAccountResponse) {
+    option (google.api.http).get = "/v1/prediction/positions/open";
+  }
+  // 根据账户查询预测市场当前挂单列表
+  rpc ListPredictionOpenOrders(ListPredictionOpenOrdersRequest)
+      returns (ListPredictionOpenOrdersResponse) {
+    option (google.api.http).get = "/v1/prediction/orders/open";
+  }
+  // 根据账户查询预测市场订单历史
+  rpc ListPredictionOrderHistory(ListPredictionOrderHistoryRequest)
+      returns (ListPredictionOrderHistoryResponse) {
+    option (google.api.http).get = "/v1/prediction/orders/history";
+  }
+  // 根据账户查询预测市场资金流水，可按类型过滤；不传类型时返回全部流水
+  rpc ListPredictionTransactions(ListPredictionTransactionsRequest)
+      returns (ListPredictionTransactionsResponse) {
+    option (google.api.http).get = "/v1/prediction/transactions";
+  }
+  // 获取预测市场 YES 中间价历史
+  rpc GetMidpointHistory(GetPredictionMidpointHistoryRequest)
+      returns (GetPredictionMidpointHistoryResponse) {
+    option (google.api.http).get = "/v1/prediction/midpoint-history";
+  }
+  // 创建预测事件草稿
+  rpc CreateEventDraft(CreateEventDraftRequest)
+      returns (CreateEventDraftResponse) {
+    option (google.api.http) = {
+      post: "/v1/prediction/event-drafts"
+      body: "*"
+    };
+  }
+  // 预测事件列表，按游标分页，支持关键词全文检索、状态与分类过滤及排序
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse) {
+    option (google.api.http).get = "/v1/prediction/events";
+  }
+  // 按事件 ID 获取单个预测事件详情
+  rpc GetEvent(GetEventRequest) returns (GetEventResponse) {
+    option (google.api.http).get = "/v1/prediction/events/by-event-id";
+  }
+  // 按 slug 获取单个预测事件详情
+  rpc GetEventBySlug(GetEventBySlugRequest) returns (GetEventResponse) {
+    option (google.api.http).get = "/v1/prediction/events/by-slug";
+  }
+  // 按预测事件 ID 与 YES Token ID 查询争议提案
+  rpc GetDisputeProposal(GetDisputeProposalRequest)
+      returns (GetDisputeProposalResponse) {
+    option (google.api.http).get = "/v1/prediction/disputes";
+  }
+  // 获取预测市场全局配置
+  rpc GetPredictionConfig(GetPredictionConfigRequest)
+      returns (GetPredictionConfigResponse) {
+    option (google.api.http).get = "/v1/prediction/config";
+  }
+}
+
+// 获取预测分类列表请求
+message ListCategoriesRequest {}
+
+// 获取预测分类列表响应
+message ListCategoriesResponse {
+  // 分类列表
+  repeated PredictionCategory categories = 1;
+}
+
+// 预测分类
+message PredictionCategory {
+  // 分类 ID
+  uint64 id = 1 [(gogoproto.jsontag) = "id"];
+  // 分类名称
+  string name = 2 [(gogoproto.jsontag) = "name"];
+}
+
+// 获取预测市场中间价历史请求
+message GetPredictionMidpointHistoryRequest {
+  // YES Token ID
+  uint32 yes_token = 1
+      [(gogoproto.moretags) = "form:\"yes_token\" binding:\"required\""];
+  // NO Token ID
+  uint32 no_token = 2
+      [(gogoproto.moretags) = "form:\"no_token\" binding:\"required\""];
+  // 起始时间，Unix 毫秒；为 0 表示不限制下界
+  int64 from = 3 [(gogoproto.moretags) = "form:\"from\""];
+  // 结束时间，Unix 毫秒
+  int64 to = 4 [(gogoproto.moretags) = "form:\"to\""];
+  // 返回条数，默认 100，上限 1000
+  int64 limit = 5 [(gogoproto.moretags) =
+                       "form:\"limit,default=100\" binding:\"required\""];
+  // K 线周期粒度
+  string resolution = 6
+      [(gogoproto.moretags) = "form:\"resolution\" binding:\"required\""];
+  // 事件 ID
+  uint64 event_id = 7 [(gogoproto.moretags) = "form:\"event_id\""];
+}
+
+// 获取预测市场中间价历史响应
+message GetPredictionMidpointHistoryResponse {
+  // 中间价历史列表，按时间升序返回（有排序）
+  repeated PredictionMidpointHistoryItem history = 1;
+}
+
+// 中间价历史单点
+message PredictionMidpointHistoryItem {
+  // 时间，Unix 毫秒
+  int64 time = 1;
+  // YES 中间价
+  string midpoint = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// 预创建预测事件草稿请求
+message CreateEventDraftRequest {
+  // 事件标题，不能为空
+  string title = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  // 事件类型：1=二元，2=多元
+  uint32 type = 2 [(gogoproto.moretags) = "binding:\"required\""];
+  // 截止时间，Unix 毫秒；须晚于当前时间至少 5 分钟
+  int64 deadline = 3 [(gogoproto.moretags) = "binding:\"required\""];
+  // 分类 ID 列表，至少一项；数量上限由服务端配置限制
+  repeated uint64 categories = 4
+      [(gogoproto.moretags) = "binding:\"required,min=1\""];
+  // 图标文件名，可选
+  string icon_filename = 5;
+  // 选项文案列表，仅多元市场使用
+  repeated string outcomes = 6;
+  // 规则描述
+  string rule_description = 7;
+
+  // 规则来源
+  repeated string rule_sources = 8;
+  // 链上交易哈希
+  string tx_hash = 9 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// 预创建预测事件响应
+message CreateEventDraftResponse {}
+
+// 账户基础信息，当前至少包含账户地址
+message AccountInfo {
+  // 账户地址
+  bytes account = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "account"
+  ];
+}
+
+// 获取单个预测事件请求
+message GetEventRequest {
+  uint64 event_id = 1
+      [(gogoproto.moretags) = "form:\"event_id\" binding:\"required\""];
+}
+
+// 按 slug 获取单个预测事件请求
+message GetEventBySlugRequest {
+  string slug = 1 [(gogoproto.moretags) = "form:\"slug\" binding:\"required\""];
+}
+
+// 获取单个预测事件响应
+message GetEventResponse {
+  EventResponse event = 1 [(gogoproto.jsontag) = "event"];
+}
+
+// 预测事件列表排序（默认 New）
+enum ListEventsSort {
+  LIST_EVENTS_SORT_NEW = 0;
+  LIST_EVENTS_SORT_CLOSING_SOON = 1;
+  LIST_EVENTS_SORT_VOLUME_24H_ASC = 2;
+  LIST_EVENTS_SORT_VOLUME_24H_DESC = 3;
+}
+
+// 预测事件游标分页请求
+message ListEventsRequest {
+  // 游标：第一页传空字符串；后续传上一页返回的 cursor
+  string cursor = 1 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 每页数量，默认与上限均为 100
+  uint64 limit = 2 [(gogoproto.moretags) = "form:\"limit\""];
+  // 关键词，可选；按全文检索过滤
+  string keyword = 3 [(gogoproto.moretags) = "form:\"keyword\""];
+  // 状态过滤，可选；可传多个值，不传或为空则不过滤。
+  // 取值：0=Active, 1=Ended, 2=Resolving, 3=Disputed, 4=Settling,
+  // 5=SettlingPositions, 6=Settled
+  repeated uint32 status = 4 [
+    (gogoproto.moretags) = "form:\"status\"",
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/engine/runtime/types.MarketStatus",
+    (gogoproto.nullable) = false
+  ];
+  // 分类 ID 列表，可选；命中关联任一分类的事件，不传或为空则不过滤
+  repeated uint64 category_ids = 5
+      [(gogoproto.moretags) = "form:\"category_ids\""];
+  // 排序：0=最新, 1=即将截止, 2=24 小时成交量升序, 3=24 小时成交量降序；默认 0
+  int32 sort = 6 [(gogoproto.moretags) = "form:\"sort\""];
+}
+
+// 预测事件游标分页响应
+message ListEventsResponse {
+  // 事件列表
+  repeated EventResponse events = 1;
+  // 下一页游标，为 null 时表示无更多数据
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+// 预测事件详情
+message EventResponse {
+  // 事件 ID
+  uint64 event_id = 1 [(gogoproto.jsontag) = "event_id"];
+  // 创建者账户地址
+  bytes created_by = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 事件类型：1=二元，2=多元
+  uint32 type = 3 [(gogoproto.jsontag) = "type"];
+  // 事件状态：0=Active, 1=Ended, 2=Resolving, 3=Disputed, 4=Settling,
+  // 5=SettlingPositions, 6=Settled
+  uint32 status = 4 [(gogoproto.jsontag) = "status"];
+  // 事件标题
+  string title = 5 [(gogoproto.jsontag) = "title"];
+  // 事件 slug
+  string slug = 6 [(gogoproto.jsontag) = "slug"];
+  // 截止时间，Unix 毫秒
+  int64 end_at = 7 [(gogoproto.jsontag) = "end_at,string"];
+
+  // 事件图标 URL
+  string icon = 8 [(gogoproto.jsontag) = "icon"];
+
+  // 事件总成交量，以 USD 计；无成交量数据时为 null
+  string volume = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true
+  ];
+  // 链上交易哈希
+  string tx_hash = 10 [(gogoproto.jsontag) = "tx_hash"];
+  // 规则描述
+  string rule_description = 11 [(gogoproto.jsontag) = "rule_description"];
+  // 规则来源
+  repeated string rule_sources = 12 [(gogoproto.jsontag) = "rule_sources"];
+  // 事件下的预测市场列表
+  repeated SymbolResponse symbols = 13 [(gogoproto.jsontag) = "symbols"];
+  // 事件关联的分类列表
+  repeated PredictionCategory categories = 14
+      [(gogoproto.jsontag) = "categories"];
+}
+
+// 预测市场
+message SymbolResponse {
+  // YES Token ID
+  uint32 yes_token = 1 [(gogoproto.jsontag) = "yes_token"];
+  // NO Token ID
+  uint32 no_token = 2 [(gogoproto.jsontag) = "no_token"];
+  // 所属事件 ID
+  uint64 event_id = 3 [(gogoproto.jsontag) = "event_id"];
+  // 市场标题
+  string title = 4 [(gogoproto.jsontag) = "title"];
+  // 成交量，以 USD 计；无成交量数据时为 null
+  string volume = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "volume"
+  ];
+  // YES 当前概率，取值区间 [0, 1]；无最新报价时默认 0.5
+  string chance = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "chance"
+  ];
+  // 市场状态
+  uint32 status = 7 [(gogoproto.jsontag) = "status"];
+}
+
+// 预测市场持仓
+message PredictionOpenPositionResponse {
+  // 仓位 ID
+  uint64 id = 1 [(gogoproto.jsontag) = "id"];
+  // 事件 ID
+  uint64 event_id = 2 [(gogoproto.jsontag) = "event_id"];
+  // 事件类型：1=二元，2=多元
+  uint32 event_type = 3 [(gogoproto.jsontag) = "event_type"];
+  // YES Token ID
+  uint32 yes_token_id = 4 [(gogoproto.jsontag) = "yes_token_id"];
+  // NO Token ID
+  uint32 no_token_id = 5 [(gogoproto.jsontag) = "no_token_id"];
+  // 持仓的 outcome：0=YES，1=NO
+  share.schema.PredictionOutcome outcome = 6 [(gogoproto.jsontag) = "outcome"];
+  // 开仓均价
+  string entry_price = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "entry_price"
+  ];
+  // 持仓数量，以 outcome token 份额计
+  string size = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "size"
+  ];
+  // 冻结的持仓数量，以 outcome token 份额计
+  string size_frozen = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "size_frozen"
+  ];
+  // 已实现盈亏，含手续费；计价币种 USDC
+  string realized_pnl = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "realized_pnl"
+  ];
+  // 持仓成本，等于开仓均价乘以持仓数量；计价币种 USDC
+  string initial_value = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "initial_value"
+  ];
+  // 当前价格；无最新报价时为 null
+  string current_price = 12 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "current_price"
+  ];
+  // 当前持仓价值，等于持仓数量乘以当前价格；计价币种 USDC；无当前价格时为 null
+  string current_value = 13 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "current_value"
+  ];
+  // 持仓全部获胜时可得的金额
+  string to_win = 14 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "to_win"
+  ];
+  // 事件标题
+  string event_title = 15 [(gogoproto.jsontag) = "event_title"];
+  // 事件 slug
+  string slug = 16 [(gogoproto.jsontag) = "slug"];
+  // 事件图标 URL
+  string icon = 17 [(gogoproto.jsontag) = "icon"];
+  // 选项标题，仅多元事件（event_type=2）有效
+  string outcome_title = 18 [(gogoproto.jsontag) = "outcome_title"];
+  // 未实现盈亏，不含手续费；计价币种 USDC；无当前价格时为 null
+  string unrealized_pnl = 19 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "unrealized_pnl"
+  ];
+  // 未实现盈亏百分比，不含手续费；无当前价格时为 null
+  string unrealized_pnl_percent = 20 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "unrealized_pnl_percent"
+  ];
+  bytes account = 21 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "account"
+  ];
+}
+
+// 查询预测市场持仓请求
+message ListPredictionOpenPositionsByAccountRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 游标：第一页传空字符串；后续传上一页返回的 cursor
+  string cursor = 2 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 每页数量，默认与上限均为 100
+  uint64 limit = 3 [(gogoproto.moretags) = "form:\"limit\""];
+  // YES Token 过滤，空字符串表示不过滤
+  string yes_token = 4 [(gogoproto.moretags) = "form:\"yes_token\""];
+}
+
+// 查询预测市场持仓响应
+message ListPredictionOpenPositionsByAccountResponse {
+  // 持仓列表
+  repeated PredictionOpenPositionResponse open_positions = 1;
+  // 下一页游标，为 null 时表示无更多数据
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+// 查询预测市场挂单列表请求
+message ListPredictionOpenOrdersRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 游标：第一页传空字符串；后续传上一页返回的 cursor
+  string cursor = 2 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 每页数量，默认与上限均为 100
+  uint64 limit = 3 [(gogoproto.moretags) = "form:\"limit\""];
+  // YES Token 过滤，空字符串表示不过滤
+  string yes_token = 4 [(gogoproto.moretags) = "form:\"yes_token\""];
+  // 方向过滤：0=买入，1=卖出；空字符串表示不过滤
+  string side = 5 [(gogoproto.moretags) = "form:\"side\""];
+  // outcome 过滤：0=YES，1=NO；空字符串表示不过滤
+  string outcome = 6 [(gogoproto.moretags) = "form:\"outcome\""];
+}
+
+// 查询预测市场挂单列表响应
+message ListPredictionOpenOrdersResponse {
+  // 挂单列表
+  repeated PredictionOpenOrderResponse open_orders = 1;
+  // 下一页游标，为 null 时表示无更多数据
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+// 预测市场挂单
+message PredictionOpenOrderResponse {
+  // 订单 ID
+  uint64 order_id = 1 [(gogoproto.jsontag) = "order_id"];
+  // 账户地址
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "account"
+  ];
+  // 事件 ID
+  uint64 event_id = 3 [(gogoproto.jsontag) = "event_id"];
+  // 事件类型：1=二元，2=多元
+  uint32 event_type = 4 [(gogoproto.jsontag) = "event_type"];
+  // YES Token ID
+  uint32 yes_token_id = 5 [(gogoproto.jsontag) = "yes_token_id"];
+  // NO Token ID
+  uint32 no_token_id = 6 [(gogoproto.jsontag) = "no_token_id"];
+  // outcome：0=YES，1=NO
+  share.schema.PredictionOutcome outcome = 7 [(gogoproto.jsontag) = "outcome"];
+  // 方向：0=买入，1=卖出
+  share.schema.PositionSide side = 8 [(gogoproto.jsontag) = "side"];
+  // 订单类型：0=限价单，1=市价单
+  share.schema.OrderType type = 9 [(gogoproto.jsontag) = "type"];
+  // 挂单价
+  string price = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "price"
+  ];
+  // 委托数量，以 outcome token 份额计
+  string size = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "size"
+  ];
+  // 已成交数量，以 outcome token 份额计
+  string filled = 12 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "filled"
+  ];
+  // 委托价值，以 USD 计
+  string quote_size = 13 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "quote_size"
+  ];
+  // 已成交价值，以 USD 计
+  string filled_value = 14 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "filled_value"
+  ];
+  // 成交均价；未成交时为 0
+  string filled_price = 15 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "filled_price"
+  ];
+  // taker 费率
+  string taker_fee_rate = 16 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "taker_fee_rate"
+  ];
+  // maker 费率
+  string maker_fee_rate = 17 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "maker_fee_rate"
+  ];
+  // TIF：1=GTC，2=IOC，3=FOK，4=POST_ONLY
+  share.schema.OrderTimeInForce time_in_force = 18 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderTimeInForce",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "time_in_force"
+  ];
+  // 自成交防护模式：0=不启用，1=取消 maker，2=取消 taker，3=两者均取消
+  share.schema.SelfTradePreventionMode stp_mode = 19
+      [(gogoproto.jsontag) = "stp_mode"];
+  // 客户端订单 ID
+  bytes client_order_id = 20 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.ClientOrderId",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "client_order_id"
+  ];
+  // 订单状态：1=新订单，4=部分成交
+  share.schema.OrderStatus status = 21 [(gogoproto.jsontag) = "status"];
+  // 链上创建时间，Unix 毫秒
+  int64 on_chain_created_at = 22
+      [(gogoproto.jsontag) = "on_chain_created_at,string"];
+  // 创建交易哈希
+  bytes tx_hash = 23 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "tx_hash"
+  ];
+  // 事件标题
+  string event_title = 24 [(gogoproto.jsontag) = "event_title"];
+  // 事件 slug
+  string slug = 25 [(gogoproto.jsontag) = "slug"];
+  // 事件图标 URL
+  string icon = 26 [(gogoproto.jsontag) = "icon"];
+  // 选项标题，仅多元事件（event_type=2）有效
+  string outcome_title = 27 [(gogoproto.jsontag) = "outcome_title"];
+}
+
+// 查询预测市场订单历史请求
+message ListPredictionOrderHistoryRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // YES Token 过滤，空字符串表示不过滤
+  string yes_token = 2 [(gogoproto.moretags) = "form:\"yes_token\""];
+  // 游标：第一页传空字符串；后续传上一页返回的 cursor
+  string cursor = 3 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 每页数量，默认与上限均为 100
+  uint64 limit = 4 [(gogoproto.moretags) = "form:\"limit\""];
+  // 方向过滤：0=买入，1=卖出；空字符串表示不过滤
+  string side = 5 [(gogoproto.moretags) = "form:\"side\""];
+  // outcome 过滤：0=YES，1=NO；空字符串表示不过滤
+  string outcome = 6 [(gogoproto.moretags) = "form:\"outcome\""];
+}
+
+// 查询预测市场订单历史响应
+message ListPredictionOrderHistoryResponse {
+  // 订单历史列表
+  repeated PredictionOrderHistoryResponse history = 1;
+  // 下一页游标，为 null 时表示无更多数据
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+// 查询预测市场资金流水请求
+message ListPredictionTransactionsRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 游标：第一页传空字符串；后续传上一页返回的 cursor
+  string cursor = 2 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 每页数量，默认与上限均为 100
+  uint64 limit = 3 [(gogoproto.moretags) = "form:\"limit\""];
+  // 流水类型过滤，可传多个值，不传或为空则不过滤。
+  // 取值：2=拆分, 3=合并, 4=买入, 5=卖出, 15=结算
+  repeated string tx_types = 4 [(gogoproto.moretags) = "form:\"tx_types\""];
+  // outcome 过滤：0=YES，1=NO；空字符串表示不过滤
+  string outcome = 5 [(gogoproto.moretags) = "form:\"outcome\""];
+  // YES Token 过滤，空字符串表示不过滤
+  string yes_token = 6 [(gogoproto.moretags) = "form:\"yes_token\""];
+}
+
+// 查询预测市场资金流水响应
+message ListPredictionTransactionsResponse {
+  // 资金流水列表
+  repeated PredictionAccountLedgerHistoryResponse transactions = 1;
+  // 下一页游标，为 null 时表示无更多数据
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+message PredictionOrderHistoryResponse {
+  // 订单 ID
+  uint64 order_id = 1 [(gogoproto.jsontag) = "order_id"];
+  // 账户地址
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "account"
+  ];
+  // 事件 ID
+  uint64 event_id = 3 [(gogoproto.jsontag) = "event_id"];
+  // 事件类型：1=二元，2=多元
+  uint32 event_type = 4 [(gogoproto.jsontag) = "event_type"];
+  // YES Token ID
+  uint32 yes_token_id = 5 [(gogoproto.jsontag) = "yes_token_id"];
+  // NO Token ID
+  uint32 no_token_id = 6 [(gogoproto.jsontag) = "no_token_id"];
+  // outcome：0=YES，1=NO
+  share.schema.PredictionOutcome outcome = 7 [(gogoproto.jsontag) = "outcome"];
+  // 方向：0=买入，1=卖出
+  share.schema.PositionSide side = 8 [(gogoproto.jsontag) = "side"];
+  // 订单类型：0=限价单，1=市价单
+  share.schema.OrderType type = 9 [(gogoproto.jsontag) = "type"];
+  // 委托价；市价单时为 null
+  string price = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "price"
+  ];
+  // 委托数量，以 outcome token 份额计
+  string size = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "size"
+  ];
+  // 已成交数量，以 outcome token 份额计
+  string filled = 12 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "filled"
+  ];
+  // 委托价值，以 USD 计
+  string quote_size = 13 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "quote_size"
+  ];
+  // 已成交价值，以 USD 计
+  string filled_value = 14 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "filled_value"
+  ];
+  // 成交均价；未成交时为 0
+  string filled_price = 15 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "filled_price"
+  ];
+  // taker 费率
+  string taker_fee_rate = 16 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "taker_fee_rate"
+  ];
+  // maker 费率
+  string maker_fee_rate = 17 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "maker_fee_rate"
+  ];
+  // TIF：1=GTC，2=IOC，3=FOK，4=POST_ONLY
+  share.schema.OrderTimeInForce time_in_force = 18 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderTimeInForce",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "time_in_force"
+  ];
+  // 自成交防护模式：0=不启用，1=取消 maker，2=取消 taker，3=两者均取消
+  share.schema.SelfTradePreventionMode stp_mode = 19
+      [(gogoproto.jsontag) = "stp_mode"];
+  // 客户端订单 ID
+  bytes client_order_id = 20 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.ClientOrderId",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "client_order_id"
+  ];
+  // 订单状态：1=新订单, 2=已取消, 3=已过期, 4=部分成交, 5=部分成交后取消,
+  // 6=全部成交
+  share.schema.OrderStatus status = 21 [(gogoproto.jsontag) = "status"];
+  // 链上创建时间，Unix 毫秒
+  int64 on_chain_created_at = 22
+      [(gogoproto.jsontag) = "on_chain_created_at,string"];
+  // 创建交易哈希
+  bytes tx_hash = 23 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "tx_hash"
+  ];
+  // 事件标题
+  string event_title = 24 [(gogoproto.jsontag) = "event_title"];
+  // 事件 slug
+  string slug = 25 [(gogoproto.jsontag) = "slug"];
+  // 事件图标 URL
+  string icon = 26 [(gogoproto.jsontag) = "icon"];
+  // 选项标题，仅多元事件（event_type=2）有效
+  string outcome_title = 27 [(gogoproto.jsontag) = "outcome_title"];
+  // 链上关闭时间，Unix 毫秒
+  int64 on_chain_closed_at = 29
+      [(gogoproto.jsontag) = "on_chain_closed_at,string"];
+}
+
+// 预测市场账户资金流水（单条）
+message PredictionAccountLedgerHistoryResponse {
+  // 事件 ID
+  uint64 event_id = 1 [(gogoproto.jsontag) = "event_id"];
+  // 所属市场的 YES Token ID
+  uint32 yes_token_id = 2 [(gogoproto.jsontag) = "yes_token_id"];
+  // 所属市场的 NO Token ID
+  uint32 no_token_id = 3 [(gogoproto.jsontag) = "no_token_id"];
+  // outcome：0=YES，1=NO；非成交/结算类流水为 null
+  google.protobuf.Int32Value outcome = 4
+      [(gogoproto.jsontag) = "outcome", (gogoproto.customtype) = "int32"];
+  // 流水类型：1=充值, 2=拆分, 3=合并, 4=买入, 5=卖出, 6=提现, 7=提现手续费,
+  // 8=提现失败, 9=转账接收, 10=转账发送, 11=跨域转账接收, 12=跨域转账发送,
+  // 13=保证金罚没, 14=保证金分发, 15=结算
+  int32 type = 5 [(gogoproto.jsontag) = "type"];
+  // 交易时间，Unix 毫秒
+  int64 traded_at = 6 [(gogoproto.jsontag) = "traded_at"];
+  // 交易数量
+  string size = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 交易价格
+  string price = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // USD 变化金额，可正可负
+  string amount = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 变化后的钱包余额
+  string wallet = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 发生变化的 Token ID
+  uint32 token_id = 11 [(gogoproto.jsontag) = "token_id"];
+  // 交易哈希
+  bytes tx_hash = 12 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  // 事件标题
+  string event_title = 13 [(gogoproto.jsontag) = "event_title"];
+  // 事件 slug
+  string slug = 14 [(gogoproto.jsontag) = "slug"];
+  // 事件图标 URL
+  string icon = 15 [(gogoproto.jsontag) = "icon"];
+  // 选项标题，仅多元事件（event_type=2）有效
+  string outcome_title = 16 [(gogoproto.jsontag) = "outcome_title"];
+  // 额外信息，按流水类型透传的原始 JSON 对象；无额外信息时省略。
+  // 各类型的字段结构不同，仅部分类型（如买入、卖出、充值、提现、结算等）携带内容。
+  // type=1 deposited（充值）示例：
+  // {"chain_id":<uint64>,"deposit_hash":<string>,"idempotency_key":<string>}
+  // chain_id：链 ID。
+  // deposit_hash / idempotency_key：由 []byte 经 JSON 编码，表现为 base64
+  // 字符串。 type=6 withdrew（提现）示例：
+  // {"pending_id":<uint64>,"fee":<string>}
+  // pending_id：提现 pending 记录 ID。fee：手续费（decimal 字符串）。
+  // type=8 withdrew_rejected 示例：
+  // {"pending_id":<uint64>,"reason":<string>}
+  // type=11 transfer_account_in / type=12 transfer_account_out 示例：
+  // {"from_domain":<int32>,"to_domain":<int32>}
+  // type=4 bought / type=5 sold 示例：
+  // {"taker":<bool>,"match_type":<int32>,"quote_amount":<string>,"quote_fee":<string>,"outcome_amount":<string>,"outcome_fee":<string>,"counter_outcome_fee":<string>}
+  // quote_amount：该账户 USD 因本次成交的净变动（不含手续费）。
+  // quote_fee：USD 净手续费；<0 支付，>0 返佣；以 outcome token 结算手续费时为
+  // "0"。 outcome_amount：本方 outcome token (yes/no) 净变动（不含手续费）。
+  // outcome_fee：本方 outcome token 净手续费；以 USD 结算时为 "0"。
+  bytes extra = 17 [
+    (gogoproto.customtype) = "encoding/json.RawMessage",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "extra,omitempty"
+  ];
+  // 账户地址
+  bytes account = 18 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "account"
+  ];
+}
+
+// 查询争议提案请求（event_id 与 yes_token 唯一确定一条争议记录）
+message GetDisputeProposalRequest {
+  // 事件 ID
+  uint64 event_id = 1
+      [(gogoproto.moretags) = "form:\"event_id\" binding:\"required\""];
+  // YES Token ID
+  uint32 yes_token = 2
+      [(gogoproto.moretags) = "form:\"yes_token\" binding:\"required\""];
+}
+
+// 争议提案响应
+message GetDisputeProposalResponse {
+  // 争议提案记录；无记录时为 null
+  DisputeProposalItem proposal = 1 [(gogoproto.jsontag) = "proposal"];
+}
+
+// 单条争议提案记录。
+// 字段按争议生命周期逐步填充；nullable=true 的字段在对应阶段到达前为 null。
+message DisputeProposalItem {
+  // 争议状态：1=待处理, 2=创建提案中, 3=投票中, 4=提交裁决中, 5=分发保证金中,
+  // 6=已结束
+  int32 status = 1 [(gogoproto.jsontag) = "status"];
+  // 关联的预测事件 ID
+  uint64 event_id = 2 [(gogoproto.jsontag) = "event_id"];
+  // 被争议的 YES Token ID
+  uint32 yes_token = 3 [(gogoproto.jsontag) = "yes_token"];
+  // 对应的 NO Token ID
+  uint32 no_token = 4 [(gogoproto.jsontag) = "no_token"];
+
+  // 提案人账户信息，始终有值
+  AccountInfo proposer = 5
+      [(gogoproto.nullable) = false, (gogoproto.jsontag) = "proposer"];
+  // 提案人锁仓保证金金额
+  string proposal_bond_amount = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "proposal_bond_amount"
+  ];
+  // 争议截止时间，Unix 毫秒
+  int64 dispute_deadline = 7 [(gogoproto.jsontag) = "dispute_deadline"];
+
+  // 争议人账户信息；无人发起争议时为 null
+  AccountInfo disputer = 8
+      [(gogoproto.nullable) = true, (gogoproto.jsontag) = "disputer"];
+  // 争议人锁仓保证金金额；无人发起争议时为 "0"
+  string dispute_bond_amount = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "dispute_bond_amount"
+  ];
+
+  // 投票提案 ID，带 0x 前缀的十六进制字符串；未创建提案时为空字符串
+  string proposal_id = 10 [(gogoproto.jsontag) = "proposal_id"];
+  // 投票开始时间，Unix 毫秒；未开始时为 0
+  int64 vote_start_at = 11 [(gogoproto.jsontag) = "vote_start_at"];
+  // 投票结束时间，Unix 毫秒；未结束时为 0
+  int64 vote_end_at = 12 [(gogoproto.jsontag) = "vote_end_at"];
+
+  // 赞成票总票权；未统计时为 "0"
+  string vote_for = 13 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "vote_for"
+  ];
+  // 反对票总票权；未统计时为 "0"
+  string vote_against = 14 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "vote_against"
+  ];
+  // 最终裁决胜出的 Token ID（YES Token 或 NO Token）；未裁决时为 0
+  uint32 final_outcome = 15 [(gogoproto.jsontag) = "final_outcome"];
+
+  // 裁决交易哈希；裁决完成前省略
+  bytes resolve_tx_hash = 16 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "resolve_tx_hash,omitempty"
+  ];
+
+  // 原始提案的 outcome：0=YES，1=NO
+  share.schema.PredictionOutcome proposed_outcome = 17
+      [(gogoproto.jsontag) = "proposed_outcome"];
+}
+
+// 预测市场全局配置
+message GetPredictionConfigRequest {}
+
+// 预测市场全局配置
+message GetPredictionConfigResponse {
+  // 创建预测事件所需的保证金
+  string create_market_bond_amount = 1 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "create_market_bond_amount"
+  ];
+  // 发起结果提案所需的保证金
+  string proposal_bond_amount = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "proposal_bond_amount"
+  ];
+  // 发起争议所需的保证金
+  string dispute_bond_amount = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "dispute_bond_amount"
+  ];
+  // 争议窗口时长，毫秒
+  int64 dispute_duration = 4 [(gogoproto.jsontag) = "dispute_duration"];
+  // 事件截止时间相对当前的最小时长，毫秒
+  int64 min_event_expire_duration = 5
+      [(gogoproto.jsontag) = "min_event_expire_duration"];
+  // 事件截止时间相对当前的最大时长，毫秒
+  int64 max_event_expire_duration = 6
+      [(gogoproto.jsontag) = "max_event_expire_duration"];
+  // 每轮撮合处理的对手方订单数量上限；0 表示不限制
+  uint32 max_number_of_order_each_match = 7
+      [(gogoproto.jsontag) = "max_number_of_order_each_match"];
+  // 单账户每个市场的活跃挂单数量上限；0 表示不限制
+  uint32 max_orders_per_account = 8
+      [(gogoproto.jsontag) = "max_orders_per_account"];
+  // 手续费计算所用的指数
+  uint32 fee_exponent = 9 [(gogoproto.jsontag) = "fee_exponent"];
+  // 原始提案的 outcome：0=YES，1=NO
+  share.schema.PredictionOutcome proposed_outcome = 10
+      [(gogoproto.jsontag) = "proposedOutcome"];
+}

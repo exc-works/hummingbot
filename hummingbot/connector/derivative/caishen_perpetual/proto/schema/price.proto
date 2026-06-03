@@ -1,0 +1,30 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+// UpdateIndexPriceMessage updates perp index prices for the provided symbols.
+message UpdateIndexPriceMessage {
+  // Symbol index-price entries.
+  // Each entry should reference an existing perp symbol.
+  // Empty list is treated as a no-op.
+  repeated SymbolPriceMessage prices = 1;
+  // Price timestamp in Unix milliseconds, shared by all entries in this
+  // message. For each symbol, updates with timestamp <= current last-update
+  // time are ignored. Example: 1713355200000.
+  int64 timestamp = 4;
+}
+
+// SymbolPriceMessage is one symbol index-price point.
+message SymbolPriceMessage {
+  // Base token id.
+  uint32 base_token = 1;
+  // Quote token id.
+  uint32 quote_token = 2;
+  // Index price as decimal string.
+  // Must be a valid decimal string.
+  // Example: "42350.25".
+  string index_price = 3 [(schema.decimal) = true];
+}

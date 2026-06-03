@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+import "schema/changes_collector.proto";
+import "google/protobuf/timestamp.proto";
+
+message SimpleSequenceMessage {
+  uint64 sequence_id = 1;
+  google.protobuf.Timestamp time = 2;
+  uint64 block = 3;
+  bytes tx_hash = 4 [(schema.hash) = true];
+}
+
+message SequenceMessage {
+  SimpleSequenceMessage simple = 1;
+  int32 page = 2;
+  int32 total_page = 3;
+}
+
+// Event is the general data type to transfer proto marshalled data on wire
+message Event {
+  SequenceMessage sequence = 1;
+  bytes data = 2;  // proto marshalled data
+}

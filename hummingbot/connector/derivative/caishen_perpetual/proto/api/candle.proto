@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package candle;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// K线
+service Candle {
+  // 查询服务器时间
+  rpc QueryServerTime(QueryServerTimeRequest)
+      returns (QueryServerTimeResponse) {
+    option (google.api.http) = {
+      get: "/v1/udf/time"
+    };
+  }
+
+  // 查询 K 线数据
+  rpc QueryUDFResult(QueryUDFResultRequest) returns (QueryUDFResultResponse) {
+    option (google.api.http) = {
+      get: "/v1/udf/history"
+    };
+  }
+
+  // 查询指数价格 K 线
+  rpc QueryIndexPriceResult(QueryUDFResultRequest)
+      returns (QueryUDFResultResponse) {
+    option (google.api.http) = {
+      get: "/v1/udf/index-history"
+    };
+  }
+
+  // 查询标记价格 K 线
+  rpc QueryMarkPriceResult(QueryUDFResultRequest)
+      returns (QueryUDFResultResponse) {
+    option (google.api.http) = {
+      get: "/v1/udf/mark-history"
+    };
+  }
+}
+
+// 查询服务器时间请求
+message QueryServerTimeRequest {}
+
+// 查询服务器时间响应
+message QueryServerTimeResponse {
+  // 服务器当前时间，Unix 毫秒
+  int64 server_time_unix_milli = 1;
+}
+
+// 查询 K 线数据请求
+message QueryUDFResultRequest {
+  // 交易对符号，必填
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+  // 起始时间，Unix 毫秒，包含该时刻；0 或不传表示不设下界
+  int64 from = 2 [(gogoproto.moretags) = "form:\"from\""];
+  // 截止时间，Unix 毫秒，不包含该时刻；0 或不传表示不设上界
+  int64 to = 3 [(gogoproto.moretags) = "form:\"to\""];
+  // K 线周期，必填，区分大小写，仅接受小写形式，取值仅限以下集合：
+  // 1s, 1min, 3min, 5min, 15min, 30min, 1h, 2h, 4h, 6h, 12h, 1d, 2d, 3d, 5d,
+  // 1w, 1mon, 3mon
+  string resolution = 4
+      [(gogoproto.moretags) = "form:\"resolution\" binding:\"required\""];
+  // 返回 K 线条数上限，不传时默认 100
+  int64 limit = 5 [(gogoproto.moretags) = "form:\"limit,default=100\""];
+  // 交易域，可选，仅作用于交易 K 线，指数与标记价格 K 线忽略此字段。
+  // 取值：0=Perp, 1=Spot；不传或为空时默认 Perp
+  string trading_domain = 6 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询 K 线数据响应
+message QueryUDFResultResponse {
+  // 响应状态，取值：ok=成功, no_data=无数据, error=查询出错
+  string s = 1;
+  // 错误信息，仅当状态为 error 时有值，其余情况为空串
+  string errmsg = 2;
+  // 各 K 线的时间戳列表，Unix 毫秒，与价格、成交量列表按下标一一对应
+  repeated int64 t = 3;
+  // 各 K 线的收盘价列表
+  repeated string c = 4;
+  // 各 K 线的开盘价列表
+  repeated string o = 5;
+  // 各 K 线的最高价列表
+  repeated string h = 6;
+  // 各 K 线的最低价列表
+  repeated string l = 7;
+  // 各 K 线的成交量列表，以基础币种计；指数与标记价格 K 线不返回此列表
+  repeated string v = 8;
+}

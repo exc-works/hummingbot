@@ -1,0 +1,80 @@
+// Code generated DO NOT EDIT.
+// source: protoc-gen-snapshot
+
+syntax = "proto3";
+package share.schema.snapshot;
+
+option go_package = "github.com/exc-works/caishen/share/schema/snapshot";
+
+import "schema/base.proto";
+import "schema/order.proto";
+
+message OrderSnapshot {
+  int64 time = 1;
+  string price = 2;
+  string filled_price = 3;
+  string size = 4;
+  string filled = 5;
+  string quote_size = 6;
+  string taker_fee_rate = 7;
+  string maker_fee_rate = 8;
+  uint64 id = 9;
+  uint64 seq = 10;
+  bytes account_id = 11;
+  bytes client_order_id = 12;
+  share.schema.PositionSide side = 13;
+  share.schema.OrderType type = 14;
+  share.schema.OrderTimeInForce time_in_force = 15;
+  share.schema.OrderStatus status = 16;
+  share.schema.SelfTradePreventionMode stp_mode = 17;
+  bool hidden = 18;
+  optional string insurance_fund_cover = 19;
+  TriggerParamsSnapshot trigger = 21;
+  TriggerParamsSnapshot tp = 22;
+  TriggerParamsSnapshot sl = 23;
+  TrailingParamsSnapshot trailing = 24;
+  uint64 position_id = 25;
+  uint64 strategy_id = 26;
+  share.schema.TradingDomain trading_domain = 27;
+  uint32 base_token = 28;
+  uint32 quote_token = 29;
+  share.schema.PositionMode mode = 30;
+  bool tp_triggered = 31;
+  bool reduce_only = 32;
+  bool liquidation_order = 33;
+}
+
+message SnapshotOrderBookFile {
+  string last_trade_price = 1;
+  repeated OrderSnapshot asks = 2;
+  repeated OrderSnapshot bids = 3;
+}
+
+message TrailingParamsSnapshot {
+  share.schema.TriggerDirection trigger_direction = 1;
+  string activation_price = 2;
+  string trailing_base_price = 3;
+  share.schema.TrailingDeltaType trailing_delta_type = 4;
+  string trailing_delta = 5;
+  string trigger_price = 6;
+  share.schema.OrderType trigger_order_type = 7;
+  share.schema.OrderTimeInForce time_in_force = 8;
+  string price = 9;
+  string size = 10;
+  string quote_size = 11;
+  bool reduce_only = 12;
+  share.schema.SelfTradePreventionMode stp_mode = 13;
+}
+
+message TriggerParamsSnapshot {
+  share.schema.TriggerDirection trigger_direction = 1;
+  string trigger_price = 2;
+  share.schema.OrderType trigger_order_type = 3;
+  string price = 4;
+  string size = 5;
+  string quote_size = 6;
+  share.schema.OrderTimeInForce time_in_force = 7;
+  bool reduce_only = 8;
+  share.schema.SelfTradePreventionMode stp_mode = 9;
+  share.schema.TriggerPriceType trigger_price_type = 10;
+}

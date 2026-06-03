@@ -1,0 +1,20 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+// Convert a regular account to multisig with given signers and threshold
+message ConvertToMultiSigMessage {
+  uint32 threshold = 1;  // required threshold, must be > 0 and <= len(signers)
+                         // and <= max_signature
+  repeated bytes signers = 2;  // allowed signer addresses
+}
+
+// Update multisig configuration for an existing multisig account
+message UpdateMultiSigConfigMessage {
+  uint32 threshold = 1;        // new threshold
+  repeated bytes signers = 2;  // new allowed signers
+}
+
+// Convert a multisig account back to a regular account
+message ConvertToRegularMessage {}

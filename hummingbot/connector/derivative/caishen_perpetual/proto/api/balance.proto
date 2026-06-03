@@ -1,0 +1,269 @@
+syntax = "proto3";
+
+package balance;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "fee_tier.proto";
+import "google/protobuf/wrappers.proto";
+import "schema/order.proto";
+import "schema/base.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 余额
+service Balance {
+  // 获取账户余额列表
+  rpc ListBalances(ListBalancesRequest) returns (ListBalancesResponse) {
+    option (google.api.http).get = "/v1/balances";
+  }
+
+  // 返回指定账户的 perp token 余额及费率等级信息
+  rpc GetPerpBalance(GetPerpBalanceRequest) returns (GetPerpBalanceResponse) {
+    option (google.api.http).get = "/v1/balances/perp";
+  }
+
+  // 返回指定账户的 spot token 余额及费率等级信息
+  rpc GetSpotBalances(GetSpotBalancesRequest)
+      returns (GetSpotBalancesResponse) {
+    option (google.api.http).get = "/v1/balances/spot";
+  }
+
+  // 查询资金流水
+  rpc ListTransactions(ListTransactionsRequest)
+      returns (ListTransactionsResponse) {
+    option (google.api.http).get = "/v1/balances/transactions";
+  }
+
+  // 查询钱包流水 (充值、提现、转账等)
+  rpc ListWalletTransactions(ListWalletTransactionsRequest)
+      returns (ListWalletTransactionsResponse) {
+    option (google.api.http).get = "/v1/balances/wallet/transactions";
+  }
+}
+
+// 查询钱包流水请求
+message ListWalletTransactionsRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 游标，第一页传 ""，后续传返回值
+  string cursor = 2 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 返回数量限制
+  uint64 limit = 3 [(gogoproto.moretags) = "form:\"limit\""];
+  // 交易域，可选；空或未传表示全部；0=Perp, 1=Spot
+  string trading_domain = 4 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询钱包流水响应
+message ListWalletTransactionsResponse {
+  // 钱包交易流水列表
+  repeated WalletTransactionResponse transactions = 1;
+  // 下页游标，null 表示无更多数据
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+// 钱包流水记录
+message WalletTransactionResponse {
+  // 代币 ID
+  uint32 token_id = 1 [(gogoproto.jsontag) = "token_id"];
+  // 交易类型：1=充值, 2=提现, 3=转账接收, 4=转账发送, 5=账户转入, 6=账户转出,
+  // 7=金库存款人充值, 8=金库存款人提现, 9=金库充值, 10=金库提现
+  int32 type = 2 [(gogoproto.jsontag) = "type"];
+  // 交易状态：1=进行中, 2=提现拒绝, 3=成功
+  int32 status = 3 [(gogoproto.jsontag) = "status"];
+  // 交易金额，带正负号
+  string amount = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 对手方地址，按 chain_id 所属链格式化（EVM 为 0x 十六进制，Solana 为
+  // base58）。充值时为空；提现时为目标接收地址；转账接收时为发送方地址；转账发送时为接收方地址
+  string counter_party_account = 5
+      [(gogoproto.jsontag) = "counter_party_account"];
+  // 手续费：无手续费时为
+  // null（如充值、转账等无手续费的流水）；有手续费时为该笔手续费金额
+  string fee = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true
+  ];
+  // 钱包余额
+  string wallet = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 交易哈希；提现成功时为目标链（chain_id 所属链）上的交易哈希
+  string tx_hash = 8;
+  // 上链时间（Unix 毫秒）
+  int64 time = 9 [(gogoproto.jsontag) = "time,string"];
+  // 提现拒绝原因，仅在提现且状态为已拒绝时有效
+  google.protobuf.StringValue withdraw_reject_reason = 10 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "withdraw_reject_reason"
+  ];
+  share.schema.TradingDomain trading_domain = 11
+      [(gogoproto.jsontag) = "trading_domain"];
+  uint64 chain_id = 12 [(gogoproto.jsontag) = "chain_id"];
+  // tx_hash
+  // 对应的区块浏览器地址，仅在交易类型为提现（type=2）且状态为成功时有值
+  string tx_explorer = 13 [(gogoproto.jsontag) = "explorer"];
+}
+
+// 查询资金流水请求
+message ListTransactionsRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 开始时间 (包含，Unix 毫秒)
+  int64 from = 2 [(gogoproto.moretags) = "form:\"from\""];
+  // 结束时间 (不包含，Unix 毫秒)
+  int64 to = 3 [(gogoproto.moretags) = "form:\"to\""];
+  // 游标，第一页传 ""，后续传返回值
+  string cursor = 4 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 返回数量限制
+  uint64 limit = 5 [(gogoproto.moretags) = "form:\"limit\""];
+  // 交易域，可选；空或未传表示全部；0=Perp, 1=Spot
+  string trading_domain = 6 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询资金流水响应
+message ListTransactionsResponse {
+  // 资金流水列表
+  repeated TransactionResponse transactions = 1;
+  // 下页游标，null 表示无更多数据
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+// 资金流水详情
+message TransactionResponse {
+  // 基础代币 ID，仅在交易对相关场景下有效
+  uint32 base_token = 1 [(gogoproto.jsontag) = "base_token"];
+  // 计价代币 ID，仅在交易对相关场景下有效
+  uint32 quote_token = 2 [(gogoproto.jsontag) = "quote_token"];
+  // 仓位模式，仅在特定变更类型下有效
+  share.schema.PositionMode mode = 3 [(gogoproto.jsontag) = "mode"];
+  // 变更类型：1=充值, 2=提现, 3=手续费, 4=资金费, 8=开仓费, 9=减仓收益,
+  // 10=减仓费, 14=转账接收, 15=转账发送, 17=提现拒绝, 18=穿仓补贴, 24=现货成交,
+  // 25=现货成交手续费, 26=跨域转账接收, 27=跨域转账发送, 28=金库创建手续费,
+  // 29=金库充值(金库视角), 30=金库充值(depositor视角), 31=金库提现(金库视角),
+  // 32=金库提现(depositor视角), 33=金库depositor支付leader手续费,
+  // 34=金库leader接收leader手续费, 35=金库dust转移(关闭或维护时)
+  int32 type = 4 [(gogoproto.jsontag) = "type"];
+  // 上链时间（Unix 毫秒）
+  int64 time = 5 [(gogoproto.jsontag) = "time,string"];
+  // 变更的代币 ID
+  uint32 token_id = 6 [(gogoproto.jsontag) = "token_id"];
+  // 变更数量
+  string amount = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 变更后的钱包余额
+  string wallet = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 交易哈希
+  bytes tx_hash = 9 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  share.schema.TradingDomain trading_domain = 10
+      [(gogoproto.jsontag) = "trading_domain"];
+}
+
+// 查询余额请求
+message ListBalancesRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 交易域，可选；空或未传表示全部；0=Perp, 1=Spot
+  string trading_domain = 2 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询余额响应
+message ListBalancesResponse {
+  // 余额列表
+  repeated BalanceResponse balances = 1;
+}
+
+// 余额详细信息
+message BalanceResponse {
+  // 代币 ID
+  uint32 token_id = 1;
+  // 钱包余额
+  string wallet = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 逐仓持仓冻结
+  string isolated_position_frozen = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 逐仓挂单冻结
+  string isolated_order_frozen = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 全仓挂单冻结
+  string cross_order_frozen = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 交易对符号
+  string symbol = 6;
+
+  // 交易域：0=Perp, 1=Spot（Spot 域下 wallet 表示该代币余额）
+  share.schema.TradingDomain trading_domain = 7
+      [(gogoproto.jsontag) = "trading_domain"];
+  // USDC 计价的平均成本价（仅现货域非 USD token）
+  string entry_price = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 累计已实现盈亏（仅现货域非 USD token）
+  string realized_pnl = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message GetPerpBalanceRequest {
+  // 账户地址（hex 格式，必填）
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 是否为子账户，传 true 时会查询并使用主账户的费率档位，默认 false
+  bool is_subaccount = 2 [(gogoproto.moretags) = "form:\"is_subaccount\""];
+}
+
+message GetPerpBalanceResponse {
+  // Perp 代币余额信息
+  BalanceResponse balance = 1;
+  // 费率档位信息（档位、Taker 费率、Maker 费率）
+  fee_tier.FeeTierResponse fee_tier = 2;
+}
+
+message GetSpotBalancesRequest {
+  // 账户地址（hex 格式，必填）
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 是否为子账户，传 true 时会查询并使用主账户的费率档位，默认 false
+  bool is_subaccount = 2 [(gogoproto.moretags) = "form:\"is_subaccount\""];
+}
+
+message GetSpotBalancesResponse {
+  // Spot 代币余额信息
+  repeated BalanceResponse balances = 1;
+  // 费率档位信息（档位、Taker 费率、Maker 费率）
+  fee_tier.FeeTierResponse fee_tier = 2;
+}

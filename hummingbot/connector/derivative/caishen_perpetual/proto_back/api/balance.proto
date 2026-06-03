@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package balance;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Balance {
+  rpc ListBalances(ListBalancesRequest) returns (ListBalancesResponse) {
+    option (google.api.http).get = "/v1/balances";
+  }
+
+  // GetUSDCBalance returns USDC balance and fee tier information for the
+  // specified account
+  rpc GetUSDCBalance(GetUSDCBalanceRequest) returns (GetUSDCBalanceResponse) {
+    option (google.api.http).get = "/v1/balances/usdc";
+  }
+}
+
+message ListBalancesRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+}
+
+message ListBalancesResponse {
+  repeated BalanceResponse balances = 1;
+}
+
+message BalanceResponse {
+  uint32 token_id = 1;
+  string wallet = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string isolated_position_frozen = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string isolated_order_frozen = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string cross_order_frozen = 5 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string symbol = 6;
+}
+
+message GetUSDCBalanceRequest {
+  // Account address (hex format, required)
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+}
+
+message GetUSDCBalanceResponse {
+  // USDC balance information
+  BalanceResponse balance = 1;
+  // Fee tier information (tier, taker fee rate, maker fee rate)
+  FeeTierInfo fee_tier = 2;
+}
+
+message FeeTierInfo {
+  uint32 tier = 1;
+  string taker = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string maker = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}

@@ -1,0 +1,93 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+// Vault lifecycle status.
+enum VaultStatus {
+  // Vault accepts normal operations.
+  VAULT_STATUS_NORMAL = 0;
+  // Vault is closing and settling depositor withdrawals.
+  VAULT_STATUS_CLOSING = 1;
+  // Vault has been fully closed.
+  VAULT_STATUS_CLOSED = 2;
+  // Vault is under maintenance reset.
+  VAULT_STATUS_MAINTAINING = 3;
+}
+
+// VaultConfigMessage configures global vault behavior from genesis.
+message VaultConfigMessage {
+  // Minimum hold duration before a vault depositor can withdraw, in
+  // milliseconds. Must be greater than 0.
+  int64 withdraw_min_hold_duration = 1;
+}
+
+// CreateVaultMessage creates a new vault and performs the leader's initial
+// deposit.
+message CreateVaultMessage {
+  // Vault display name.
+  // UTF-8 byte length must be in [1, 50].
+  // Name must be unique across vaults.
+  string name = 1;
+  // Vault description shown in metadata.
+  // UTF-8 byte length must be in [10, 250].
+  string description = 2;
+  // Initial leader deposit in USD token (decimal string).
+  // Must be >= "100".
+  // Example: "1000".
+  string deposit_amount = 3 [(schema.decimal) = true];
+}
+
+// VaultDepositMessage deposits additional funds into an existing vault.
+message VaultDepositMessage {
+  // Vault account address (20 bytes).
+  bytes vault_account = 1 [(schema.address) = true];
+  // Deposit amount in USD token (decimal string).
+  // Must be >= "5".
+  // Example: "250.5".
+  string deposit_amount = 2 [(schema.decimal) = true];
+}
+
+// SetVaultDepositMessage toggles whether public deposits are allowed.
+message SetVaultDepositMessage {
+  // Vault account address to update (20 bytes).
+  bytes vault_account = 1 [(schema.address) = true];
+  // True to allow deposits; false to block new deposits.
+  bool deposit_enabled = 2;
+}
+
+// SetVaultAutoCloseOnWithdrawMessage sets the vault's
+// auto_close_on_withdraw flag (it does not close the vault immediately).
+message SetVaultAutoCloseOnWithdrawMessage {
+  // Vault account address to update (20 bytes).
+  bytes vault_account = 1 [(schema.address) = true];
+  // Desired flag value.
+  bool auto_close_on_withdraw = 2;
+}
+
+// PrepareCloseVaultMessage (leader-only) moves a vault from normal to closing
+// state after safety checks (no open positions/orders, non-negative equity).
+message PrepareCloseVaultMessage {
+  // Vault account address to close (20 bytes).
+  bytes vault_account = 1 [(schema.address) = true];
+}
+
+// ExecuteCloseVaultMessage executes one batch of vault-close withdrawals for
+// depositors until the vault is fully closed.
+message ExecuteCloseVaultMessage {
+  // Vault account address being closed (20 bytes).
+  bytes vault_account = 1 [(schema.address) = true];
+}
+
+// MaintainVaultMessage starts or continues a maintenance reset for a vault.
+message MaintainVaultMessage {
+  // Vault account address being maintained (20 bytes).
+  bytes vault_account = 1 [(schema.address) = true];
+}
+
+message VaultWithdrawMessage {
+  bytes vault_account = 1 [(schema.address) = true];
+  string withdraw_amount = 2 [(schema.decimal) = true];
+}

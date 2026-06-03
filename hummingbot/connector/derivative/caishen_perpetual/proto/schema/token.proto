@@ -1,0 +1,187 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/base.proto";
+import "schema/extensions.proto";
+
+// RegisterTokenMessage registers one token profile.
+message RegisterTokenMessage {
+  // Token ID. Must be unique across all registered tokens.
+  uint32 id = 1;
+  // Token display name. Example: "USD Coin".
+  string name = 2;
+  // Token symbol. Example: "USDC".
+  string symbol = 3;
+  // Token decimals in [0, 18]. Example: 6.
+  uint32 decimals = 4;
+  // Positive USD reference price for this token.
+  // Used as a fallback anchor when no usable market/index price is available.
+  // Example: "1", "2500.5".
+  string reference_price = 5 [(schema.decimal) = true];
+}
+
+// UpdateTokenMessage updates mutable token profile fields.
+message UpdateTokenMessage {
+  // Existing token ID to update.
+  uint32 id = 1;
+  // New display name. Omit to keep unchanged.
+  optional string name = 2;
+  // New token symbol. Omit to keep unchanged.
+  optional string symbol = 3;
+  // New positive USD reference price. Omit to keep unchanged.
+  optional string reference_price = 4 [(schema.decimal) = true];
+}
+
+// UpdateDepositWithdrawConfigMessage updates per-chain token bridge config.
+message UpdateDepositWithdrawConfigMessage {
+  // Existing token ID to configure.
+  uint32 token_id = 1;
+  // Enabled upstream chain ID. Example: 1 for Ethereum mainnet.
+  uint64 chain_id = 2;
+  // Token contract bytes on chain (chain-specific encoding).
+  bytes contract = 3;
+  // Minimum deposit amount. Must be > 0.
+  // Decimal precision must not exceed token decimals.
+  string min_deposit = 4 [(schema.decimal) = true];
+  // Required confirmation depth for deposit finalization.
+  // Use chain-specific semantics (0 is allowed when confirmations are not
+  // used).
+  uint32 block_confirmations = 5;
+  // Deposit enable time in Unix milliseconds. 0 means enabled immediately.
+  // Example: 1713355200000.
+  int64 deposit_enabled_at = 6;
+  // Minimum withdrawal amount. Must be >= 0.
+  // Decimal precision must not exceed token decimals.
+  string min_withdraw = 7 [(schema.decimal) = true];
+  // Withdraw enable time in Unix milliseconds. 0 means enabled immediately.
+  // Example: 1713355200000.
+  int64 withdraw_enabled_at = 8;
+  // Flat withdrawal fee amount.
+  // Must be >= 0, precision <= token decimals, and if positive must be <
+  // min_withdraw.
+  string withdraw_fee = 9 [(schema.decimal) = true];
+}
+
+// DepositTokenMessage records an on-chain deposit into platform balance.
+message DepositTokenMessage {
+  // Token ID with deposit enabled on chain_id.
+  uint32 token_id = 1;
+  // Deposit amount.
+  // Must be > 0, precision <= token decimals, and >= configured min_deposit.
+  string amount = 2 [(schema.decimal) = true];
+  // Source chain ID.
+  uint64 chain_id = 3;
+  // Deposit tx hash bytes from upstream chain (format/length is
+  // chain-specific).
+  bytes deposit_hash = 4;
+  // Receiver account address (20-byte platform account address).
+  bytes receiver = 5 [(schema.address) = true];
+  // Idempotency key hash (32 bytes).
+  // Must be unique among processed deposits.
+  bytes idempotency_key = 6 [(schema.hash) = true];
+  // Target trading domain to credit.
+  // Must be a valid enum value: Perp, Spot, or Prediction.
+  TradingDomain trading_domain = 7;
+}
+
+// WithdrawTokenMessage submits a withdrawal request.
+message WithdrawTokenMessage {
+  // Token ID with withdraw enabled on chain_id.
+  uint32 token_id = 1;
+  // Withdraw amount.
+  // Must be > 0, precision <= token decimals, and >= configured min_withdraw.
+  string amount = 2 [(schema.decimal) = true];
+  // Destination chain ID.
+  uint64 chain_id = 3;
+  // Destination address bytes on the upstream chain.
+  // Must be non-empty and pass chain-specific address validation when defined.
+  bytes receiver = 4 [(schema.address) = true];
+  // Source trading domain balance to debit.
+  // Must be a valid enum value: Perp, Spot, or Prediction.
+  TradingDomain trading_domain = 5;
+}
+
+// ConfirmWithdrawTokenMessage confirms a pending withdrawal as succeeded.
+message ConfirmWithdrawTokenMessage {
+  // Existing pending withdrawal task ID.
+  uint64 pending_id = 1;
+  // Upstream success tx hash bytes.
+  // Must be non-empty and pass chain-specific hash validation when defined.
+  bytes hash = 2 [(schema.hash) = true];
+}
+
+// RejectWithdrawTokenMessage rejects a pending withdrawal.
+message RejectWithdrawTokenMessage {
+  // Existing pending withdrawal task ID.
+  uint64 pending_id = 1;
+  // Human-readable rejection reason.
+  string reason = 2;
+}
+
+// TransferTokenMessage transfers token balance to another account in one
+// domain.
+message TransferTokenMessage {
+  // Existing token ID.
+  uint32 token_id = 1;
+  // Transfer amount. Must be > 0 and precision <= token decimals.
+  string amount = 2 [(schema.decimal) = true];
+  // Receiver account address (20-byte platform account address).
+  bytes receiver = 3 [(schema.address) = true];
+  // Trading domain where the transfer is applied.
+  // Must be a valid enum value: Perp, Spot, or Prediction.
+  TradingDomain trading_domain = 4;
+}
+
+// TransferInsuranceFundMessage transfers funds from a symbol insurance fund
+// account.
+message TransferInsuranceFundMessage {
+  // Symbol base token id.
+  uint32 base_token = 1;
+  // Symbol quote token id.
+  uint32 quote_token = 2;
+  // Transfer amount in quote asset.
+  // Must be > 0 and precision <= quote_token decimals.
+  string amount = 3 [(schema.decimal) = true];
+  // Receiver account address (20-byte platform account address).
+  bytes receiver = 4 [(schema.address) = true];
+}
+
+// FeeType identifies which system fee pool is being transferred.
+enum FeeType {
+  // Trading fee pool (domain-specific).
+  TRADING_FEE = 0;
+  // Withdrawal fee pool.
+  WITHDRAWAL_FEE = 1;
+}
+
+// TransferFeeMessage transfers fee funds to a receiver.
+message TransferFeeMessage {
+  // Existing token ID.
+  uint32 token_id = 1;
+  // Fee pool type. Must be a valid enum value.
+  FeeType fee_type = 2;
+  // Transfer amount. Must be > 0 and precision <= token decimals.
+  string amount = 3 [(schema.decimal) = true];
+  // Receiver account address (20-byte platform account address).
+  bytes receiver = 4 [(schema.address) = true];
+  // Trading domain selector for domain-specific fee pools.
+  // Required for TRADING_FEE. Ignored for WITHDRAWAL_FEE.
+  TradingDomain trading_domain = 5;
+}
+
+// TransferAccountMessage moves balance between trading domains of the same
+// account.
+message TransferAccountMessage {
+  // Token ID. Only the platform USD token is supported for this action.
+  uint32 token_id = 1;
+  // Transfer amount. Must be > 0 and precision <= token decimals.
+  string amount = 2 [(schema.decimal) = true];
+  // Destination trading domain.
+  // Must be a valid enum value and different from from_domain.
+  TradingDomain to_domain = 3;
+  // Source trading domain.
+  // Must be a valid enum value and different from to_domain.
+  TradingDomain from_domain = 4;
+}

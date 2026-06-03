@@ -1,0 +1,342 @@
+syntax = "proto3";
+
+package order;
+
+import "google/api/annotations.proto";
+import "google/protobuf/wrappers.proto";
+import "gogoproto/gogo.proto";
+import "schema/base.proto";
+import "schema/order.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 订单
+service Order {
+  // 查询账户当前未成交的挂单列表
+  rpc ListOpenOrders(ListOpenOrdersRequest) returns (ListOpenOrdersResponse) {
+    option (google.api.http).get = "/v1/orders/open";
+  }
+
+  // 分页查询账户的历史订单
+  rpc ListOrderHistory(ListOrderHistoryRequest)
+      returns (ListOrderHistoryResponse) {
+    option (google.api.http).get = "/v1/orders/history";
+  }
+
+  // 按订单 ID 或客户端订单 ID 查询单个订单详情
+  rpc GetOrderById(GetOrderByIdRequest) returns (GetOrderByIdResponse) {
+    option (google.api.http).get = "/v1/orders/by-id";
+  }
+}
+
+// 查询挂单列表请求
+message ListOpenOrdersRequest {
+  // 账户地址，必填
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 交易域，可选；空或未传表示全部；0=Perp, 1=Spot
+  string trading_domain = 2 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询挂单列表响应
+message ListOpenOrdersResponse {
+  // 当前未成交的挂单列表
+  repeated OrderResponse open_orders = 1;
+}
+
+// 订单详情
+message OrderResponse {
+  // 订单 ID
+  uint64 order_id = 1;
+  // 账户地址
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 基础代币 ID
+  uint32 base_token = 3;
+  // 计价代币 ID
+  uint32 quote_token = 4;
+  // 交易对符号，例如 BTC-USDC
+  string symbol = 5;
+  // 订单类型：0=限价单, 1=市价单, 2=条件触发单, 3=止盈止损单, 4=追踪止损单
+  int32 type = 6 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderType",
+    (gogoproto.nullable) = false
+  ];
+  // 持仓模式：0=全仓, 1=逐仓
+  share.schema.PositionMode mode = 7 [(gogoproto.jsontag) = "mode"];
+  // 交易方向：0=做多, 1=做空
+  share.schema.PositionSide side = 8 [(gogoproto.jsontag) = "side"];
+  // 委托价格；市价单为 null
+  string price = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true
+  ];
+  // 成交均价，以计价代币计；非限价单/市价单（如条件单、止盈止损、追踪委托母单）无成交均价，恒为
+  // 0
+  string filled_price = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 委托数量，以基础代币计
+  string size = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 已成交数量，以基础代币计
+  string filled = 12 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // Taker 手续费率
+  string taker_fee_rate = 13 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // Maker 手续费率
+  string maker_fee_rate = 14 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 订单有效方式：0=无效（非市价单按 GTC 处理）, 1=GTC（成交前一直有效）,
+  // 2=IOC（立即成交并取消剩余）, 3=FOK（全部成交否则取消）, 4=POST_ONLY（仅做
+  // Maker）
+  string time_in_force = 15 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderTimeInForce",
+    (gogoproto.nullable) = false
+  ];
+  // 是否只减仓
+  bool reduce_only = 16 [(gogoproto.jsontag) = "reduce_only"];
+  // 自成交预防模式：0=不启用, 1=取消 Maker 剩余, 2=取消 Taker 剩余, 3=同时取消
+  // Maker 与 Taker 剩余
+  share.schema.SelfTradePreventionMode stp_mode = 17
+      [(gogoproto.jsontag) = "stp_mode"];
+  // 持仓 ID
+  uint64 position_id = 18;
+  // 订单状态：0=无效, 1=新订单, 2=已撤销, 3=已过期, 4=部分成交,
+  // 5=部分成交后撤销, 6=完全成交, 7=已触发
+  int32 status = 19 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderStatus",
+    (gogoproto.nullable) = false
+  ];
+  // 订单链上创建时间，Unix 毫秒
+  int64 on_chain_created_at = 20 [(gogoproto.jsontag) = "on_chain_created_at"];
+  // 触发条件参数，仅条件触发单返回
+  TriggerParamsResponse trigger = 21 [(gogoproto.jsontag) = "trigger"];
+  // 止盈触发参数，仅止盈止损单返回
+  TriggerParamsResponse tp = 22
+      [(gogoproto.jsontag) = "tp", (gogoproto.customname) = "TP"];
+  // 止损触发参数，仅止盈止损单返回
+  TriggerParamsResponse sl = 23
+      [(gogoproto.jsontag) = "sl", (gogoproto.customname) = "SL"];
+  // 止盈是否已触发
+  bool tp_triggered = 24 [(gogoproto.jsontag) = "tp_triggered"];
+  // 追踪参数，仅追踪止损单返回
+  TrailingParamsResponse trailing = 25 [(gogoproto.jsontag) = "trailing"];
+  // 订单链上关闭时间，Unix 毫秒
+  int64 on_chain_closed_at = 26 [(gogoproto.jsontag) = "on_chain_closed_at"];
+  // 触发错误码，0 表示无错误；具体错误码由链一侧定义，不在本接口内联枚举
+  int32 trigger_error_code = 27 [(gogoproto.jsontag) = "trigger_error_code"];
+  // 触发本订单的母订单 ID
+  uint64 trigger_order_id = 28 [(gogoproto.jsontag) = "trigger_order_id"];
+  // 是否为强平订单
+  bool liquidation_order = 29 [(gogoproto.jsontag) = "liquidation_order"];
+  // 客户端订单 ID
+  bytes client_order_id = 30 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.ClientOrderId",
+    (gogoproto.nullable) = false
+  ];
+  // 关联的策略实例 ID，0 表示非策略订单
+  uint64 strategy_id = 31 [(gogoproto.jsontag) = "strategy_id"];
+  // 交易域：0=Perp, 1=Spot, 2=Prediction
+  share.schema.TradingDomain trading_domain = 32
+      [(gogoproto.jsontag) = "trading_domain"];
+}
+
+// 触发参数响应
+message TriggerParamsResponse {
+  // 触发方向：0=价格涨至触发价或以上时触发, 1=价格跌至触发价或以下时触发
+  string trigger_direction = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.TriggerDirection",
+    (gogoproto.nullable) = false
+  ];
+  // 触发价格，以计价代币计
+  string trigger_price = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 触发后生成的子订单类型：0=限价单, 1=市价单
+  string trigger_order_type = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderType",
+    (gogoproto.nullable) = false
+  ];
+  // 子订单委托价格，以计价代币计
+  string price = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 子订单委托数量，以基础代币计
+  string size = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 订单有效方式：0=无效（非市价单按 GTC 处理）, 1=GTC（成交前一直有效）,
+  // 2=IOC（立即成交并取消剩余）, 3=FOK（全部成交否则取消）, 4=POST_ONLY（仅做
+  // Maker）
+  string time_in_force = 6 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderTimeInForce",
+    (gogoproto.nullable) = false
+  ];
+  // 是否只减仓
+  bool reduce_only = 7 [(gogoproto.jsontag) = "reduce_only"];
+  // 自成交预防模式：0=不启用, 1=取消 Maker 剩余, 2=取消 Taker 剩余, 3=同时取消
+  // Maker 与 Taker 剩余
+  share.schema.SelfTradePreventionMode stp_mode = 8
+      [(gogoproto.jsontag) = "stp_mode"];
+  // 触发参考价格类型：0=最新成交价, 1=指数价, 2=标记价
+  string trigger_price_type = 9 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.TriggerPriceType",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// 追踪参数响应
+message TrailingParamsResponse {
+  // 触发方向：0=价格涨至触发价或以上时触发, 1=价格跌至触发价或以下时触发
+  string trigger_direction = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.TriggerDirection",
+    (gogoproto.nullable) = false
+  ];
+  // 激活价格，以计价代币计；为 0 时表示立即从当前锚定价开始追踪
+  string activation_price = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 追踪基准价，以计价代币计
+  string trailing_base_price = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 追踪回调类型：0=无效, 1=按绝对价格距离, 2=按百分比
+  string trailing_delta_type = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.TrailingDeltaType",
+    (gogoproto.nullable) = false
+  ];
+  // 追踪回调数值，按 trailing_delta_type
+  // 解释：绝对距离以计价代币计，百分比以小数表示（如 0.01 表示 1%）
+  string trailing_delta = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 触发价格，以计价代币计
+  string trigger_price = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 触发后生成的子订单类型：0=限价单, 1=市价单
+  string trigger_order_type = 7 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderType",
+    (gogoproto.nullable) = false
+  ];
+  // 子订单委托价格，以计价代币计
+  string price = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 子订单委托数量，以基础代币计
+  string size = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 订单有效方式：0=无效（非市价单按 GTC 处理）, 1=GTC（成交前一直有效）,
+  // 2=IOC（立即成交并取消剩余）, 3=FOK（全部成交否则取消）, 4=POST_ONLY（仅做
+  // Maker）
+  string time_in_force = 10 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderTimeInForce",
+    (gogoproto.nullable) = false
+  ];
+  // 是否只减仓
+  bool reduce_only = 11 [(gogoproto.jsontag) = "reduce_only"];
+  // 自成交预防模式：0=不启用, 1=取消 Maker 剩余, 2=取消 Taker 剩余, 3=同时取消
+  // Maker 与 Taker 剩余
+  share.schema.SelfTradePreventionMode stp_mode = 12
+      [(gogoproto.jsontag) = "stp_mode"];
+}
+
+// 查询历史订单请求
+message ListOrderHistoryRequest {
+  // 账户地址，必填
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 交易对符号，可选，例如 BTC-USDC
+  string symbol = 2 [(gogoproto.moretags) = "form:\"symbol\""];
+  // 订单类型，可选；不传表示全部；0=限价单, 1=市价单, 2=条件触发单,
+  // 3=止盈止损单, 4=追踪止损单
+  int32 type = 3 [
+    (gogoproto.moretags) = "form:\"type\"",
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderType",
+    (gogoproto.nullable) = true
+  ];
+  // 起始时间，按订单链上关闭时间过滤，Unix 毫秒
+  int64 from = 4 [(gogoproto.moretags) = "form:\"from\""];
+  // 截止时间，按订单链上关闭时间过滤，Unix 毫秒
+  int64 to = 5 [(gogoproto.moretags) = "form:\"to\""];
+  // 分页游标，首页传空字符串，后续页传上一次响应返回的 cursor
+  string cursor = 6 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 单页返回数量上限
+  uint64 limit = 7 [(gogoproto.moretags) = "form:\"limit\""];
+  // 交易域，可选；空或未传表示全部；0=Perp, 1=Spot
+  string trading_domain = 8 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询历史订单响应
+message ListOrderHistoryResponse {
+  // 历史订单列表
+  repeated OrderResponse history = 1;
+  // 下一页分页游标，无更多数据时为 null
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+// 查询单个订单请求
+message GetOrderByIdRequest {
+  // 账户地址，必填
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 订单 ID；与客户端订单 ID 至少传一个，优先使用订单 ID
+  uint64 order_id = 2 [(gogoproto.moretags) = "form:\"order_id\""];
+  // 客户端订单 ID；与订单 ID 至少传一个
+  string client_order_id = 3
+      [(gogoproto.moretags) = "form:\"client_order_id\""];
+  // 起始时间，按订单链上关闭时间过滤，Unix 毫秒
+  int64 from = 4 [(gogoproto.moretags) = "form:\"from\""];
+  // 截止时间，按订单链上关闭时间过滤，Unix 毫秒
+  int64 to = 5 [(gogoproto.moretags) = "form:\"to\""];
+  // 交易域，必填；0=Perp, 1=Spot
+  string trading_domain = 6
+      [(gogoproto.moretags) = "form:\"trading_domain\" binding:\"required\""];
+}
+
+// 查询单个订单响应
+message GetOrderByIdResponse {
+  // 订单详情；未查到时为 null
+  OrderResponse order = 1;
+}

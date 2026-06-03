@@ -1,0 +1,357 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+// PositionSide is the trade direction relative to base-asset exposure.
+enum PositionSide {
+  // Buy side.
+  LONG = 0;
+  // Sell side.
+  SHORT = 1;
+}
+
+// PositionMode defines how margin is accounted for a position.
+enum PositionMode {
+  // Cross margin: margin is shared across positions in the same quote asset.
+  CROSS = 0;
+  // Isolated margin: margin is scoped to a single symbol position.
+  ISOLATED = 1;
+}
+
+// PositionStatus is the lifecycle state of an existing position.
+enum PositionStatus {
+  // Position is active and not in liquidation flow.
+  NORMAL = 0;
+  // Position has entered liquidation flow.
+  LIQUIDATING = 1;
+  // Position is fully closed by normal trading or delist settlement.
+  CLOSED = 2;
+  // Position is closed by liquidation.
+  LIQUIDATED = 3;
+}
+
+// OrderType is the parent order category.
+enum OrderType {
+  // Immediate or resting limit order.
+  LIMIT = 0;
+  // Market order.
+  MARKET = 1;
+  // Conditional trigger order.
+  TRIGGER = 2;
+  // Standalone TP/SL parent order.
+  TAKE_PROFIT_STOP_LOSS = 3;
+  // Trailing-trigger parent order.
+  TRAILING = 4;
+}
+
+// TriggerPriceType selects the reference price source for trigger evaluation.
+enum TriggerPriceType {
+  // Last traded price.
+  LAST = 0;
+  // Index price.
+  INDEX = 1;
+  // Mark price.
+  MARK = 2;
+}
+
+// OrderStatus is the order lifecycle status.
+enum OrderStatus {
+  // Sentinel default. Real orders are not expected to persist in this status.
+  INVALID = 0;
+  // Order is accepted and active (resting or pending trigger).
+  NEW = 1;
+  // Order is cancelled with no fill.
+  CANCELLED = 2;
+  // Remaining quantity expires (for example IOC remainder or STP-expired side).
+  EXPIRED = 3;
+  // Order is partially filled and still active.
+  PARTIALLY_FILLED = 4;
+  // Order is partially filled and then cancelled.
+  PARTIALLY_CANCELLED = 5;
+  // Order is fully filled.
+  FILLED = 6;
+  // Conditional parent order has been consumed by trigger processing.
+  TRIGGERED = 7;
+}
+
+// OrderTimeInForce defines matching-time persistence rules.
+enum OrderTimeInForce {
+  // Sentinel default.
+  // INVALID_TIME_IN_FORCE is treated as GTC for non-market orders.
+  INVALID_TIME_IN_FORCE = 0;
+  // Good-Til-Cancelled.
+  GTC = 1;
+  // Immediate-Or-Cancel.
+  IOC = 2;
+  // Fill-Or-Kill.
+  FOK = 3;
+  // Post-only maker order.
+  POST_ONLY = 4;
+}
+
+// TriggerDirection is the condition direction versus trigger_price.
+enum TriggerDirection {
+  // Trigger when market/reference price moves to or above trigger_price.
+  TRIGGER_ABOVE = 0;
+  // Trigger when market/reference price moves to or below trigger_price.
+  TRIGGER_BELOW = 1;
+}
+
+// TrailingDeltaType is how trailing_delta is interpreted.
+enum TrailingDeltaType {
+  // Sentinel default.
+  INVALID_TRAILING_DELTA_TYPE = 0;
+  // Absolute quote-price distance. Example: "5" means 5 quote units.
+  DISTANCE = 1;
+  // Relative ratio. Example: "0.01" means 1%.
+  PERCENTAGE = 2;
+}
+
+// SelfTradePreventionMode controls same-master-account self-match handling.
+enum SelfTradePreventionMode {
+  // No STP behavior. Matching proceeds normally.
+  NOT_SET = 0;
+  // Expire maker remainder to prevent self-trade.
+  EXPIRE_MAKER = 1;
+  // Expire taker remainder to prevent self-trade.
+  EXPIRE_TAKER = 2;
+  // Expire both maker and taker remainders to prevent self-trade.
+  EXPIRE_BOTH = 3;
+}
+
+// TriggerParamsMessage defines the post-trigger child-order template.
+message TriggerParamsMessage {
+  // Trigger direction versus trigger_price. Required.
+  TriggerDirection trigger_direction = 1;
+  // Trigger price as decimal string.
+  // Must be > 0 and satisfy symbol price precision/tick-size constraints.
+  // Example: "42000.5".
+  string trigger_price = 2 [(schema.decimal) = true];
+  // Post-trigger order type. Only LIMIT or MARKET is accepted.
+  OrderType trigger_order_type = 3;
+  // Child order limit price.
+  // Required and > 0 when trigger_order_type=LIMIT.
+  // Should be omitted when trigger_order_type=MARKET.
+  optional string price = 4 [(schema.decimal) = true];
+  // Optional child order base size.
+  // Must be >= 0 when provided.
+  // Mutually exclusive with quote_size.
+  // Example: "0.25".
+  optional string size = 5 [(schema.decimal) = true];
+  // Child order time-in-force.
+  // INVALID_TIME_IN_FORCE defaults to GTC.
+  // MARKET child orders are always treated as IOC.
+  OrderTimeInForce time_in_force = 6;
+  // Reduce-only flag for the child order.
+  // Only applicable to perpetual orders; ignored for spot.
+  bool reduce_only = 7;
+  // STP mode for the child order.
+  SelfTradePreventionMode stp_mode = 8;
+  // Trigger reference price source.
+  // Spot supports LAST only.
+  TriggerPriceType trigger_price_type = 9;
+  // Optional quote notional for spot MARKET child orders.
+  // Must be > 0 when provided.
+  // Mutually exclusive with size.
+  // Decimal places must not exceed symbol max market-quote precision.
+  // Example: "100".
+  optional string quote_size = 10 [(schema.decimal) = true];
+}
+
+// TrailingParamsMessage defines a trailing-trigger order template.
+message TrailingParamsMessage {
+  // Trailing delta interpretation mode. Required.
+  TrailingDeltaType trailing_delta_type = 2;
+  // Trailing delta value.
+  // Must be > 0.
+  // For PERCENTAGE: range is [0.0001, 1] with up to 4 decimal places.
+  // Examples: DISTANCE "5", PERCENTAGE "0.01" (1%).
+  string trailing_delta = 3 [(schema.decimal) = true];
+  // Optional activation price.
+  // Must be >= 0 when provided.
+  // Zero/empty means immediate tracking from current anchor price.
+  optional string activation_price = 4 [(schema.decimal) = true];
+  // Post-trigger child order type. Only LIMIT or MARKET is accepted.
+  OrderType trigger_order_type = 5;
+  // Child order limit price.
+  // Required and > 0 when trigger_order_type=LIMIT.
+  optional string price = 6 [(schema.decimal) = true];
+  // Optional child order base size.
+  // Must be >= 0 when provided.
+  // Mutually exclusive with quote_size.
+  // For perpetual trailing orders, size must be provided (>0).
+  optional string size = 7 [(schema.decimal) = true];
+  // Child order time-in-force.
+  // INVALID_TIME_IN_FORCE defaults to GTC.
+  // MARKET child orders are always treated as IOC.
+  OrderTimeInForce time_in_force = 8;
+  // Reduce-only flag for the child order.
+  // Only applicable to perpetual orders; ignored for spot.
+  bool reduce_only = 9;
+  // STP mode for the child order.
+  SelfTradePreventionMode stp_mode = 10;
+  // Optional quote notional for spot MARKET child orders.
+  // Must be > 0 when provided.
+  // Mutually exclusive with size.
+  // Decimal places must not exceed symbol max market-quote precision.
+  // Example: "100".
+  optional string quote_size = 11 [(schema.decimal) = true];
+}
+
+// PlaceOrderMessage is the perp order-placement payload.
+message PlaceOrderMessage {
+  // Base token id.
+  uint32 base_token = 1;
+  // Quote token id.
+  uint32 quote_token = 2;
+  // Order side. Required.
+  PositionSide side = 3;
+  // Position mode. Must be CROSS or ISOLATED.
+  PositionMode mode = 15;
+  // Parent order type. Required.
+  OrderType type = 4;
+  // Time-in-force for the parent order.
+  // INVALID_TIME_IN_FORCE defaults to GTC.
+  // MARKET orders are always treated as IOC.
+  OrderTimeInForce time_in_force = 5;
+  // Parent order limit price.
+  // Required and > 0 for LIMIT.
+  // Should be omitted for MARKET and conditional parent types.
+  optional string price = 6 [(schema.decimal) = true];
+  // Parent order base size.
+  // Must be >= 0 when provided.
+  // For non-reduce-only LIMIT/MARKET orders, this must be > 0 and satisfy
+  // symbol min-size/lot-size constraints.
+  // For reduce-only LIMIT/MARKET orders, "0" means reduce full position size.
+  // Example: "1.5".
+  optional string size = 7 [(schema.decimal) = true];
+  // Reduce-only flag.
+  // For LIMIT/MARKET parent orders, if true then trigger/tp/sl/trailing must
+  // all be omitted.
+  bool reduce_only = 8;
+  // Optional target position id for reduce-only behavior.
+  // If set (>0), reduce_only is forced true.
+  optional uint64 position_id = 9;
+
+  // Trigger-order params.
+  // Required when type=TRIGGER.
+  // Must be omitted for type=LIMIT/MARKET/TAKE_PROFIT_STOP_LOSS/TRAILING.
+  optional TriggerParamsMessage trigger = 10;
+  // Attached take-profit params.
+  // At least one of tp/sl is required when type=TAKE_PROFIT_STOP_LOSS.
+  optional TriggerParamsMessage tp = 11;
+  // Attached stop-loss params.
+  // At least one of tp/sl is required when type=TAKE_PROFIT_STOP_LOSS.
+  optional TriggerParamsMessage sl = 12;
+  // Trailing params.
+  // Required when type=TRAILING.
+  // Must be omitted for other order types.
+  optional TrailingParamsMessage trailing = 13;
+  // STP mode for the parent order.
+  SelfTradePreventionMode stp_mode = 14;
+  // Client-generated id, 1-16 bytes, unique among open orders of the account.
+  // Example: "ord-20260417-001" (as bytes).
+  optional bytes client_order_id = 16;
+}
+
+// CancelOrderMessage cancels one order by id or client_order_id.
+message CancelOrderMessage {
+  // Order id. Optional.
+  // At least one of order_id/client_order_id must be provided.
+  optional uint64 order_id = 1;
+  // Client order id. Optional, max 16 bytes.
+  // At least one of order_id/client_order_id must be provided.
+  optional bytes client_order_id = 2;
+}
+
+// CancelBatchOrdersMessage cancels up to 10 orders in one tx message.
+message CancelBatchOrdersMessage {
+  // Batch cancel list. Maximum 10 entries.
+  repeated CancelOrderMessage batch = 1;
+}
+
+// CancelLiquidationOrdersMessage cancels orders for positions in liquidation
+// mode.
+message CancelLiquidationOrdersMessage {
+  // Target account address (20-byte EVM address).
+  bytes account = 1 [(schema.address) = true];
+  // Liquidation mode scope. Must be CROSS or ISOLATED.
+  PositionMode mode = 2;
+  // Symbol selector.
+  // Required and non-zero when mode=ISOLATED.
+  // Must be omitted (or zero) when mode=CROSS.
+  optional uint32 base_token = 3;
+  // Symbol selector.
+  // Required and non-zero when mode=ISOLATED.
+  // Must be omitted (or zero) when mode=CROSS.
+  optional uint32 quote_token = 4;
+}
+
+// TriggerOrderMessage manually triggers one conditional parent order.
+message TriggerOrderMessage {
+  // Conditional parent order id. Must be > 0.
+  uint64 order_id = 1;
+  // For TAKE_PROFIT_STOP_LOSS parents: true triggers TP, false triggers SL.
+  bool tp_triggered = 2;
+}
+
+// AmendOrderMessage amends an existing perp order.
+message AmendOrderMessage {
+  // Order id. Optional.
+  // At least one of order_id/client_order_id must be provided.
+  optional uint64 order_id = 1;
+  // Client order id. Optional, max 16 bytes.
+  // At least one of order_id/client_order_id must be provided.
+  optional bytes client_order_id = 2;
+  // Amended limit price.
+  // Must be >= 0 when provided.
+  // Effective only for LIMIT orders.
+  optional string price = 4 [(schema.decimal) = true];
+  // Amended size.
+  // Must be >= 0 when provided.
+  // Effective only for LIMIT orders.
+  optional string size = 5 [(schema.decimal) = true];
+
+  // Amended trigger params. Effective only for TRIGGER orders.
+  optional TriggerParamsMessage trigger = 8;
+  // Amended take-profit params. Effective for LIMIT and TP/SL parents.
+  optional TriggerParamsMessage tp = 9;
+  // Amended stop-loss params. Effective for LIMIT and TP/SL parents.
+  optional TriggerParamsMessage sl = 10;
+}
+
+// RiskAccountPlaceOrderMessage places a liquidation order from the risk
+// account.
+message RiskAccountPlaceOrderMessage {
+  // Base token id.
+  uint32 base_token = 1;
+  // Quote token id.
+  uint32 quote_token = 2;
+  // Optional insurance-fund subsidy amount in quote asset.
+  // Must be >= 0.
+  // Example: "25".
+  string insurance_fund_cover = 3 [(schema.decimal) = true];
+}
+
+// AutoDeleverageMessage triggers ADL for selected positions.
+message AutoDeleverageMessage {
+  // Base token id.
+  uint32 base_token = 1;
+  // Quote token id.
+  uint32 quote_token = 2;
+  // Side to ADL against. Required.
+  PositionSide side = 3;
+  // Target positions. Must contain at least one entry.
+  repeated AutoDeleverageEntry entries = 4;
+}
+
+// AutoDeleverageEntry identifies one position target for ADL.
+message AutoDeleverageEntry {
+  // Target account address (20-byte EVM address).
+  bytes account = 1 [(schema.address) = true];
+  // Position mode of the target position.
+  PositionMode mode = 2;
+}

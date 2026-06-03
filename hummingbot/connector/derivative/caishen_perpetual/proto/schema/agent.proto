@@ -1,0 +1,25 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+// ApproveAgentMessage adds/replaces an agent by name, or revokes by name when
+// agent is zero address.
+message ApproveAgentMessage {
+  // Agent alias under the target account.
+  // UTF-8 byte length must be in [1, 20].
+  // Active agents are limited to 5 per account.
+  // Example: "trading-bot-1".
+  string name = 1;
+  // Agent address (20 bytes).
+  // Use zero address to revoke by name.
+  // Non-zero agent address must differ from the target account address.
+  bytes agent = 2 [(schema.address) = true];
+  // Expiration timestamp in Unix milliseconds.
+  // Must not be later than (request_time + 180 days).
+  // Applies to this approval request.
+  // Example: 1710000000000.
+  int64 expired_time = 3;
+}

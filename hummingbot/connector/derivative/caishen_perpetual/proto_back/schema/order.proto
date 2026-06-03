@@ -1,0 +1,195 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+enum PositionSide {
+  LONG = 0;
+  SHORT = 1;
+}
+
+enum PositionMode {
+  CROSS = 0;
+  ISOLATED = 1;
+}
+
+enum PositionStatus {
+  NORMAL = 0;       // 正常持仓
+  LIQUIDATING = 1;  // 正在清算中
+  CLOSED = 2;       // 已平仓
+  LIQUIDATED = 3;   // 已清算
+}
+
+enum OrderType {
+  LIMIT = 0;
+  MARKET = 1;
+  TRIGGER = 2;
+  TAKE_PROFIT_STOP_LOSS = 3;
+  TRAILING = 4;
+}
+
+enum OrderStatus {
+  // 默认值，无实际业务含义。订单永远不会以 INVALID 状态存在于系统中。
+  INVALID = 0;
+  // 普通订单（或条件订单初始记录）已创建，尚未进入撮合或触发。
+  NEW = 1;
+  // 条件订单已经达到触发条件，正在等待触发后生成新的普通订单进入订单簿。
+  PENDING = 2;
+  // 订单被取消。仅适用于未发生任何成交的订单。
+  // 仅从 NEW 和 PENDING 转化而来。
+  CANCELLED = 3;
+  // 订单过期。典型场景：
+  // - IOC 订单无成交而过期
+  // - IOC 订单部分成交后剩余部分过期
+  // 可由 NEW 或 PARTIALLY_FILLED 转化而来。
+  EXPIRED = 4;
+  // 订单已部分成交。可由 NEW 转化而来。
+  PARTIALLY_FILLED = 5;
+  // 订单部分成交后被取消。由 PARTIALLY_FILLED 转化而来。
+  PARTIALLY_CANCELLED = 6;
+  // 订单已完全成交。可由 NEW 或 PARTIALLY_FILLED 转化而来。
+  FILLED = 7;
+  // 订单已经触发。可由 PENDING 转化而来。
+  TRIGGERED = 8;
+}
+
+enum OrderTimeInForce {
+  INVALID_TIME_IN_FORCE = 0;
+  GTC = 1;
+  IOC = 2;
+  FOK = 3;
+  POST_ONLY = 4;
+}
+
+enum TriggerDirection {
+  TRIGGER_ABOVE = 0;
+  TRIGGER_BELOW = 1;
+}
+
+enum StopType {
+  INVALID_STOP_TYPE = 0;
+  STOP_LOSS = 1;
+  TAKE_PROFIT = 2;
+}
+
+enum TrailingDeltaType {
+  INVALID_TRAILING_DELTA_TYPE = 0;
+  DISTANCE = 1;
+  PERCENTAGE = 2;
+}
+
+enum SelfTradePreventionMode {
+  // 订单不受自成交预防机制的影响。系统不会对账户进行对比，也不会使订单失效，交易将正常执行
+  NOT_SET = 0;
+  // 潜在挂单订单的剩余数量将立即失效以防止交易执行
+  EXPIRE_MAKER = 1;
+  // 吃单订单的剩余数量将立即失效以防止交易执行
+  EXPIRE_TAKER = 2;
+  // 吃单订单和潜在挂单订单的剩余数量均将立即失效以防止交易执行
+  EXPIRE_BOTH = 3;
+}
+
+message TriggerParamsMessage {
+  TriggerDirection trigger_direction = 1;
+  string trigger_price = 2 [(schema.decimal) = true];
+  // Order type after the order is triggered, can only be Limit or Market
+  OrderType trigger_order_type = 3;
+  // When TriggerOrderType is Limit, the price of the limit order
+  optional string price = 4 [(schema.decimal) = true];
+  // 当size为0，则强制reduce_only为true（即只能为只减仓）。
+  // 当主订单类型为Limit或Market，则止盈止损的订单数量为成交数量。
+  // 当主订单类型为Trigger，则订单数量为当前的持仓。
+  // 当主订单类型为TakeProfitStopLoss，则订单数量为当前的持仓。
+  // 当主订单类型为Trailing，则订单数量为当前的持仓。
+  optional string size = 5 [(schema.decimal) = true];
+  OrderTimeInForce time_in_force = 6;
+  bool reduce_only = 7;
+  SelfTradePreventionMode stp_mode = 8;
+}
+
+message TrailingParamsMessage {
+  StopType stop_type = 1;
+  TrailingDeltaType trailing_delta_type = 2;
+  string trailing_delta = 3 [(schema.decimal) = true];
+  optional string activation_price = 4 [(schema.decimal) = true];
+  OrderType trigger_order_type = 5;
+  // When TriggerOrderType is Limit, the price of the limit order
+  optional string price = 6 [(schema.decimal) = true];
+  // 当size为0，则强制reduce_only为true（即只能为只减仓）。
+  // 当主订单类型为Limit或Market，则止盈止损的订单数量为成交数量。
+  // 当主订单类型为Trigger，则订单数量为当前的持仓。
+  // 当主订单类型为TakeProfitStopLoss，则订单数量为当前的持仓。
+  // 当主订单类型为Trailing，则订单数量为当前的持仓。
+  optional string size = 7 [(schema.decimal) = true];
+  OrderTimeInForce time_in_force = 8;
+  bool reduce_only = 9;
+  SelfTradePreventionMode stp_mode = 10;
+}
+
+message PlaceOrderMessage {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  PositionSide side = 3;
+  PositionMode mode = 15;
+  OrderType type = 4;
+  OrderTimeInForce time_in_force = 5;
+  optional string price = 6 [(schema.decimal) = true];
+  // 当size为0，则强制reduce_only为true（即只能为只减仓）
+  optional string size = 7 [(schema.decimal) = true];
+  bool reduce_only = 8;
+  // 关联的只减仓仓位id，如果该值大于0，则强制reduce_only为true
+  optional uint64 position_id = 9;
+
+  optional TriggerParamsMessage trigger = 10;
+  optional TriggerParamsMessage tp = 11;
+  optional TriggerParamsMessage sl = 12;
+  optional TrailingParamsMessage trailing = 13;
+  SelfTradePreventionMode stp_mode = 14;
+  // 客户端订单id，最大16字节，需要在未成交的订单内保持唯一
+  optional bytes client_order_id = 16;
+}
+
+message CancelOrderMessage {
+  // 订单id，如果为0，则根据client_order_id取消订单
+  optional uint64 order_id = 1;
+  // 客户端订单id，如果为空，则根据order_id取消订单
+  optional bytes client_order_id = 2;
+}
+
+message CancelBatchOrdersMessage {
+  repeated CancelOrderMessage batch = 1;
+}
+
+// 撤销处于清算模式的仓位的订单
+message CancelLiquidationOrdersMessage {
+  bytes account = 1 [(schema.address) = true];
+  PositionMode mode = 2;
+  optional uint32 base_token = 3;
+  optional uint32 quote_token = 4;
+}
+
+message TriggerOrderMessage {
+  uint64 order_id = 1;
+}
+
+message AmendOrderMessage {
+  // The order ID. If not set, client_order_id will be used to locate the order.
+  optional uint64 order_id = 1;
+  // The client order ID. If not set, id will be used to locate the order.
+  optional bytes client_order_id = 2;
+  // The amended order price. Effective only for limit orders.
+  optional string price = 4 [(schema.decimal) = true];
+  // The amended order size. Effective only for limit orders.
+  optional string size = 5 [(schema.decimal) = true];
+
+  // The amended trigger parameters. Effective only for trigger orders.
+  optional TriggerParamsMessage trigger = 8;
+  // The amended take-profit trigger parameters. Effective only for limit orders
+  // or TP/SL trigger orders.
+  optional TriggerParamsMessage tp = 9;
+  // The amended stop-loss trigger parameters. Effective only for limit orders
+  // or TP/SL trigger orders.
+  optional TriggerParamsMessage sl = 10;
+}

@@ -1,0 +1,36 @@
+syntax = "proto3";
+package schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "google/protobuf/descriptor.proto";
+
+// 自定义类型扩展，用于标记字段应该生成特定类型的辅助方法
+
+// decimal 扩展，用于 decimal.Decimal 类型（string 字段）
+extend google.protobuf.FieldOptions {
+  bool decimal = 50001;
+}
+
+// address 扩展，用于 common.Address 类型（bytes 字段，20字节）
+extend google.protobuf.FieldOptions {
+  bool address = 50002;
+}
+
+// hash 扩展，用于 common.Hash 类型（bytes 字段，32字节）
+extend google.protobuf.FieldOptions {
+  bool hash = 50003;
+}
+
+// signature 扩展，用于 base.Signature 类型（bytes 字段，65字节）
+extend google.protobuf.FieldOptions {
+  bool signature = 50004;
+}
+
+// signatures 扩展，用于 []base.Signature 类型（repeated bytes 字段）
+extend google.protobuf.FieldOptions {
+  bool signatures = 50005;
+  // generate_messages 扩展，用于枚举类型，生成枚举值到注释消息的映射
+  // map[Enum]string
+  bool generate_messages = 50007;
+}

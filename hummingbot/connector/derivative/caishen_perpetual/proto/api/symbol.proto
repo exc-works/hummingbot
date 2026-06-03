@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package symbol;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "risk.proto";
+import "schema/base.proto";
+import "schema/symbol.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 交易对
+service Symbol {
+  // 获取交易对列表。
+  rpc ListSymbols(ListSymbolsRequest) returns (ListSymbolsResponse) {
+    option (google.api.http).get = "/v1/symbols";
+  }
+}
+
+// 查询交易对列表的请求。
+message ListSymbolsRequest {
+  // 交易域过滤，可选；空或省略时返回全部；取值 0=Perp, 1=Spot。
+  string trading_domain = 1 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 交易对列表的响应。
+message ListSymbolsResponse {
+  // 交易对列表。
+  repeated ListSymbolResponse symbols = 1;
+}
+
+// 单个交易对的详细信息。
+message ListSymbolResponse {
+  // 交易域：0=Perp, 1=Spot。
+  share.schema.TradingDomain trading_domain = 20
+      [(gogoproto.jsontag) = "trading_domain"];
+  // 交易对名称，例如 "BTC-USDC"。
+  string symbol = 1;
+  // 基础币种 ID。
+  uint32 base_token = 2;
+  // 基础币种符号。
+  string base_token_symbol = 3;
+  // 计价币种 ID。
+  uint32 quote_token = 4;
+  // 计价币种符号。
+  string quote_token_symbol = 5;
+  // 最小价格变动单位。价格必须为该值的整数倍。
+  string tick_size = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 最小数量变动单位。下单数量必须为该值的整数倍。
+  string lot_size = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 最小下单数量，必须为 lot_size 的整数倍。
+  string min_size = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 单账户在该交易对上的最大挂单数。0 表示不限制。
+  uint32 max_number_of_order_each_account = 9;
+  // 单次吃单撮合中最多处理的订单数。0 表示不限制。
+  uint32 max_number_of_order_each_match = 10;
+  // 资金费结算间隔，单位为小时。仅对 Perp 有效。
+  uint32 funding_interval_hours = 11;
+  // 资金费率上限的绝对值（比率）。仅对 Perp 有效。
+  string funding_rate_bound = 12 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 限价单价格带比率，限定下单价相对参考价的偏离范围。例如 "0.1" 表示 ±10%。
+  string price_limit_bound = 13 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 新建仓位的默认杠杆倍数。仅对 Perp 有效。
+  uint32 default_leverage = 14;
+  // 交易对状态：0=未知, 1=可交易, 2=下架处理中, 3=已下架。
+  share.schema.SymbolStatus status = 15 [(gogoproto.jsontag) = "status"];
+  // 交易对开盘时间，单位为 Unix 毫秒。
+  int64 open_at = 16 [(gogoproto.jsontag) = "open_at"];
+  // 交易对收盘时间，单位为 Unix 毫秒。未设置收盘时间时为 0。
+  int64 close_at = 17 [(gogoproto.jsontag) = "close_at"];
+  // 风险限额档位 ID。仅对 Perp 有效，未关联时为 0。
+  uint32 risk_limits_id = 18;
+  // 风险限额规则列表。仅对 Perp 有效，其他交易域为空。
+  repeated risk.RiskLimit risk_limits = 19;
+  // 最小下单成交额，以计价币种计；现货与永续均适用。"0" 表示不限制。
+  string min_notional = 21 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 最大下单成交额，以计价币种计；现货与永续均适用。"0" 表示不限制。
+  string max_notional = 22 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 条件单价格带比率，限定触发价相对参考价的偏离范围，且不小于
+  // price_limit_bound。
+  string conditional_price_limit_bound = 23 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}

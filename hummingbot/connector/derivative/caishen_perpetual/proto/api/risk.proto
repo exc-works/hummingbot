@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package risk;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 风险限额
+service RiskLimits {
+  // 按 ID 查询一组风险限额阶梯配置。
+  rpc RiskLimit(RiskLimitsRequest) returns (RiskLimitsResponse) {
+    option (google.api.http).get = "/v1/risk-limits";
+  }
+}
+
+// 查询风险限额配置的请求。
+message RiskLimitsRequest {
+  // 风险限额配置 ID，必填。
+  uint32 id = 1 [(gogoproto.moretags) = "form:\"id\" binding:\"required\""];
+}
+
+// 风险限额配置的响应，包含一组按持仓价值划分的风险限额阶梯。
+message RiskLimitsResponse {
+  // 风险限额配置 ID。
+  uint32 id = 1;
+  // 风险限额阶梯列表，按持仓价值区间从低到高排列。
+  repeated RiskLimit risk_limits = 2;
+  // 配置创建时间，Unix 毫秒。
+  int64 created_at = 3 [(gogoproto.jsontag) = "created_at"];
+  // 配置最后更新时间，Unix 毫秒。
+  int64 updated_at = 4 [(gogoproto.jsontag) = "updated_at"];
+}
+
+// 单个风险限额阶梯，按持仓价值区间约束维持保证金率与最大杠杆。
+message RiskLimit {
+  // 持仓价值区间，固定为两个元素 [下界, 上界]，区间为左开右闭 (下界,
+  // 上界]。持仓价值以标记价格计价。
+  repeated string range = 1 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 维持保证金率，以小数表示（例如 0.005 表示 0.5%）。
+  string mmr = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "MMR"
+  ];
+  // 该阶梯允许的最大杠杆倍数。
+  uint32 max_leverage = 3 [(gogoproto.jsontag) = "max_leverage"];
+  // 维持保证金速算扣除数，用于以速算公式计算维持保证金；第一阶梯为 0。
+  string deduction = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}

@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package l2book;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service L2book {
+  rpc GetL2book(GetL2bookRequest) returns (GetL2bookResponse) {
+    option (google.api.http) = {
+      get: "/v1/l2book"
+    };
+  }
+}
+
+message GetL2bookRequest {
+  // The symbol of the depth. e.g. BTC-USDT
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+  // Tick-based aggregation level - determines how prices are grouped relative
+  // to tick size Supported values: "1x", "10x", "100x", "1000x"
+  string aggregation_level = 2
+      [(gogoproto.moretags) = "form:\"aggregation_level,default=1x\""];
+  // The limit of depth levels to return, max 400
+  int32 limit = 3
+      [(gogoproto.moretags) =
+           "form:\"limit,default=1\" binding:\"omitempty,min=1,max=400\""];
+}
+
+message GetL2bookResponse {
+  // The sequence number of the depth
+  uint64 sequence = 1;
+  // The timestamp when the depth was last updated
+  google.protobuf.Timestamp timestamp = 2 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.moretags) = "json:\"timestamp,omitzero\""
+  ];
+  // The ask orders (ascending by price)
+  repeated DepthLevel asks = 3;
+  // The bid orders (descending by price)
+  repeated DepthLevel bids = 4;
+}
+
+message DepthLevel {
+  // The price of the level
+  string price = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // The size of the level
+  string size = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/math/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}

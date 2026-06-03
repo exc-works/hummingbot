@@ -1,0 +1,33 @@
+syntax = "proto3";
+package token;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/admin/types";
+
+service Symbol {
+  // SyncSymbols is used to synchronize the symbols in the engine.
+  rpc SyncSymbols(SyncSymbolsRequest) returns (SyncSymbolsResponse) {
+    option (google.api.http) = {
+      post: "/v1/symbols/sync"
+      body: "*"
+    };
+  }
+
+  // ResyncSymbols is used to update the symbols in the engine.
+  rpc ResyncSymbols(ResyncSymbolsRequest) returns (ResyncSymbolsResponse) {
+    option (google.api.http) = {
+      post: "/v1/symbols/resync"
+      body: "*"
+    };
+  }
+}
+
+message SyncSymbolsRequest {}
+
+message SyncSymbolsResponse {}
+
+message ResyncSymbolsRequest {}
+
+message ResyncSymbolsResponse {}

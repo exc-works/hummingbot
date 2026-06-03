@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package multisig;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 多签账户
+service Multisig {
+  // 查询指定账户的多签配置（签名阈值与签名者列表）
+  rpc GetMultisigConfig(GetMultisigConfigRequest)
+      returns (GetMultisigConfigResponse) {
+    option (google.api.http).get = "/v1/multisig/config";
+  }
+}
+
+// 查询多签配置请求
+message GetMultisigConfigRequest {
+  // 待查询的账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+}
+
+// 查询多签配置响应
+message GetMultisigConfigResponse {
+  // 查询的账户地址
+  bytes account = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 签名阈值（M-of-N 中的 M）；该账户未配置多签时为 0
+  uint32 threshold = 2;
+  // 允许的签名者地址列表；该账户未配置多签时为空
+  repeated bytes signers = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+}

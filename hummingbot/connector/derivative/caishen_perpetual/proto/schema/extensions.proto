@@ -1,0 +1,46 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "google/protobuf/descriptor.proto";
+
+// Custom schema extensions for typed protobuf fields and enums.
+
+// decimal marks a string field as a base-10 decimal text value.
+extend google.protobuf.FieldOptions {
+  // True enables decimal-value semantics for this field.
+  bool decimal = 50001;
+}
+
+// address marks a bytes field as a canonical 20-byte EVM address.
+extend google.protobuf.FieldOptions {
+  // True enables address-value semantics for this field.
+  bool address = 50002;
+}
+
+// hash marks a bytes field as a canonical 32-byte hash.
+extend google.protobuf.FieldOptions {
+  // True enables hash-value semantics for this field.
+  bool hash = 50003;
+}
+
+// signature marks a bytes field as a canonical 65-byte ECDSA signature.
+extend google.protobuf.FieldOptions {
+  // True enables signature-value semantics for this field.
+  bool signature = 50004;
+}
+
+// signatures marks a repeated bytes field as a list of ECDSA signatures.
+extend google.protobuf.FieldOptions {
+  // True enables repeated-signature semantics for this field.
+  bool signatures = 50005;
+}
+
+// Enum-level extensions for text conversion and enum message mapping.
+extend google.protobuf.EnumOptions {
+  // Enables textual representation support for the enum.
+  bool text_marshal = 50006;
+  // Enables enum-to-comment message mapping (map[Enum]string).
+  bool generate_messages = 50007;
+}

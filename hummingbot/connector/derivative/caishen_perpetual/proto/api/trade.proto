@@ -1,0 +1,150 @@
+syntax = "proto3";
+
+package trade;
+
+import "google/api/annotations.proto";
+import "google/protobuf/wrappers.proto";
+import "gogoproto/gogo.proto";
+import "schema/base.proto";
+import "schema/order.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 成交
+service Trade {
+  // 按账户查询该账户的成交历史
+  rpc ListTrades(ListTradesRequest) returns (ListTradesResponse) {
+    option (google.api.http).get = "/v1/trades/by-account";
+  }
+
+  // 按交易对查询全市场公开成交历史
+  rpc ListTradesBySymbol(ListTradesBySymbolRequest)
+      returns (ListTradesBySymbolResponse) {
+    option (google.api.http).get = "/v1/trades/by-symbol";
+  }
+}
+
+// 查询账户成交历史请求
+message ListTradesRequest {
+  // 账户地址，必填
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 按订单 ID 过滤，可选；传 order_id 时必须同时指定 trading_domain
+  uint64 order_id = 2 [(gogoproto.moretags) = "form:\"order_id\""];
+  // 起始时间，包含该端点，Unix 毫秒
+  int64 from = 3 [(gogoproto.moretags) = "form:\"from\""];
+  // 截止时间，不包含该端点，Unix 毫秒
+  int64 to = 4 [(gogoproto.moretags) = "form:\"to\""];
+  // 按交易对符号过滤，可选，例如 "BTC-USDC"
+  string symbol = 5 [(gogoproto.moretags) = "form:\"symbol\""];
+  // 分页游标，首页传空字符串，后续传上一页响应返回的 cursor
+  string cursor = 6 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 单页返回数量上限，取值范围 1 至 100；为 0 或超过 100 时按 100 处理
+  uint64 limit = 7 [(gogoproto.moretags) = "form:\"limit\""];
+  // 交易域过滤，可选；为空或未传表示全部；"0"=Perp，"1"=Spot
+  string trading_domain = 8 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询账户成交历史响应
+message ListTradesResponse {
+  // 成交记录列表
+  repeated TradeResponse trades = 1;
+  // 下一页分页游标，无更多数据时为 null
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+// 成交详情
+message TradeResponse {
+  // 账户地址
+  bytes account = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 基础币种 ID
+  uint32 base_token = 2;
+  // 计价币种 ID
+  uint32 quote_token = 3;
+  // 交易对符号，例如 "BTC-USDC"；无法解析时为空字符串
+  string symbol = 4;
+  // 关联订单 ID
+  uint64 order_id = 5;
+  // 持仓模式：0=CROSS（全仓），1=ISOLATED（逐仓）
+  share.schema.PositionMode mode = 6 [(gogoproto.jsontag) = "mode"];
+  // 成交方向：0=LONG（买入），1=SHORT（卖出）
+  share.schema.PositionSide side = 7 [(gogoproto.jsontag) = "side"];
+  // 本笔成交是否以挂单方（Maker）身份成交；false 表示吃单方（Taker）
+  bool is_maker = 8 [(gogoproto.jsontag) = "is_maker"];
+  // 成交价格
+  string price = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 成交数量，以基础币种计
+  string size = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "size"
+  ];
+  // 基础币种手续费；负数表示支出，正数表示返佣收入；Perp 域恒为 0
+  string base_fee = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "base_fee"
+  ];
+  // 计价币种手续费；负数表示支出，正数表示返佣收入；Perp 域手续费恒以计价币种计
+  string quote_fee = 12 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "quote_fee"
+  ];
+  // 交易域：0=Perp，1=Spot
+  share.schema.TradingDomain trading_domain = 13
+      [(gogoproto.jsontag) = "trading_domain"];
+  // 链上成交时间，Unix 毫秒
+  int64 on_chain_created_at = 14 [(gogoproto.jsontag) = "on_chain_created_at"];
+}
+
+// 按交易对查询公开成交历史请求
+message ListTradesBySymbolRequest {
+  // 交易对符号，例如 "BTC-USDC"，必填
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+  // 交易域，可选；为空或未传默认 Perp；"0"=Perp，"1"=Spot
+  string trading_domain = 2 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 按交易对查询公开成交历史响应
+message ListTradesBySymbolResponse {
+  // 公开成交记录列表
+  repeated TradeBySymbolResponse trades = 1;
+}
+
+// 公开成交详情
+message TradeBySymbolResponse {
+  // 交易对符号，例如 "BTC-USDC"
+  string symbol = 1;
+  // 吃单方（Taker）成交方向：0=LONG（买入），1=SHORT（卖出）
+  share.schema.PositionSide side = 2 [(gogoproto.jsontag) = "side"];
+  // 成交数量，以基础币种计
+  string size = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 成交价格
+  string price = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 成交时间，Unix 毫秒
+  int64 time = 5 [(gogoproto.jsontag) = "time"];
+  // 成交交易哈希
+  string tx_hash = 6 [(gogoproto.jsontag) = "tx_hash"];
+  // 交易域：0=Perp，1=Spot
+  share.schema.TradingDomain trading_domain = 7
+      [(gogoproto.jsontag) = "trading_domain"];
+}

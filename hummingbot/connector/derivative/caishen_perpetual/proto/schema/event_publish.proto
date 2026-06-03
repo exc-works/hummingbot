@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+import "schema/changes_collector.proto";
+import "google/protobuf/timestamp.proto";
+
+// SimpleSequenceMessage carries immutable tx-level sequence metadata shared by
+// all event chunks.
+message SimpleSequenceMessage {
+  // Global sequence id. Monotonic in processing order.
+  uint64 sequence_id = 1;
+  // Sequence timestamp in UTC.
+  google.protobuf.Timestamp time = 2;
+  // Block number that contains this sequence.
+  uint64 number = 3;
+  // Transaction hash for this sequence (32-byte hash).
+  bytes tx_hash = 4 [(schema.hash) = true];
+  // Target account address for this sequence.
+  bytes target_address = 5 [(schema.address) = true];
+}
+
+// SequenceMessage adds pagination metadata for chunked event payloads.
+message SequenceMessage {
+  // Shared tx-level sequence metadata.
+  SimpleSequenceMessage simple = 1;
+  // Current 1-based chunk index. Must satisfy 1 <= page <= total_page.
+  int32 page = 2;
+  // Total number of chunks for this sequence and channel. Must be >= 1.
+  int32 total_page = 3;
+}
+
+// Event is the envelope used to publish channel-specific protobuf payload
+// bytes.
+message Event {
+  // Sequence and pagination metadata.
+  SequenceMessage sequence = 1;
+  // Protobuf-encoded payload bytes for one changes channel chunk. Can be empty
+  // if there are no channel changes for the sequence.
+  bytes data = 2;
+}

@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package risk;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service RiskLimits {
+  rpc RiskLimit(RiskLimitsRequest) returns (RiskLimitsResponse) {
+    option (google.api.http).get = "/v1/risk-limits";
+  }
+}
+
+message RiskLimitsRequest {
+  uint32 id = 1 [(gogoproto.moretags) = "form:\"id\" binding:\"required\""];
+}
+
+message RiskLimitsResponse {
+  uint32 id = 1;
+  string risk_limit = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/engine/runtime/types.RiskLimits",
+    (gogoproto.nullable) = false
+  ];
+  int64 created_at = 3 [(gogoproto.jsontag) = "created_at"];
+  int64 updated_at = 4 [(gogoproto.jsontag) = "updated_at"];
+}
