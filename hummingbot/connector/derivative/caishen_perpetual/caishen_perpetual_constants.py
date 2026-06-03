@@ -16,11 +16,13 @@ DOMAIN = EXCHANGE_NAME
 TESTNET_DOMAIN = "caishen_perpetual_testnet"
 
 # === API URL ===
-PERPETUAL_BASE_URL = "https://api.perpdex.dev"
+PERPETUAL_BASE_URL = "https://api.plato.exchange"
 TESTNET_BASE_URL = "https://api-dev.plato.exchange"
 
-PERPETUAL_WS_URL = "wss://api.perpdex.dev/v1/stream"
+PERPETUAL_WS_URL = "wss://api.plato.exchange/v1/ws"
 TESTNET_WS_URL = "wss://api-dev.plato.exchange/v1/ws"
+
+TRADING_DOMAIN_PERP = "0"
 
 # === API 端点路径 ===
 
@@ -33,7 +35,7 @@ PING_URL = "/v1/udf/time"
 GET_LATEST_BLOCK_URL = "/v1/explorer/block/latest"
 
 SUBMIT_TX_URL = "/v1/tx"
-ACCOUNT_INFO_URL = "/v1/balances/usdc"
+ACCOUNT_INFO_URL = "/v1/balances/perp"
 ORDER_OPEN_URL = "/v1/orders/open"
 POSITION_INFORMATION_URL = "/v1/positions/open"
 ACCOUNT_TRADE_LIST_URL = "/v1/trades/by-account"

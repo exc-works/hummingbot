@@ -310,7 +310,6 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         )
     
     def _create_user_stream_data_source(self):
-        # 保留原有方法，返回 UserStreamDataSource（即使暂时不使用 WebSocket）
         return CaishenPerpetualUserStreamDataSource(
             auth=self._auth,
             trading_pairs=self._trading_pairs,
@@ -318,28 +317,27 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             api_factory=self._web_assistants_factory,
             domain=self.domain,
         )
-    
-    def _is_user_stream_initialized(self):
-        # WebSocket 暂时未实现，总是返回 True，让连接器通过 REST API 轮询更新
-        # 保留原有的 _create_user_stream_data_source 方法，待后续实现
-        return True
-    
-    def _create_user_stream_tracker(self):
-        # WebSocket 暂时未实现，返回 None
-        # 保留原有的 _create_user_stream_data_source 方法，待后续实现
-        return None
-    
-    def _create_user_stream_tracker_task(self):
-        # WebSocket 暂时未实现，返回 None
-        # 保留原有的 _create_user_stream_data_source 方法，待后续实现
-        return None
-    
+
     async def _user_stream_event_listener(self):
-        # WebSocket 暂时未实现，此方法为空实现
-        # 所有更新都通过 REST API 轮询完成（_status_polling_loop_fetch_updates）
-        # 保留原有的 _create_user_stream_data_source 方法，待后续实现
-        while True:
-            await self._sleep(60.0)  # 保持任务运行但不做任何事
+        async for event_message in self._iter_user_event_queue():
+            try:
+                method = event_message.get("method")
+                payload = web_utils.unwrap_ws_notification_payload(
+                    event_message.get("params", event_message)
+                )
+
+                if method == "order_changed_notification" and payload.get("order") is not None:
+                    await self._process_order_message(payload["order"])
+                elif method == "trade_notification":
+                    await self._process_trade_message(payload)
+                elif method == "balances_notification" and payload.get("balance") is not None:
+                    await self._process_balance_message(payload["balance"])
+                elif method == "position_notification":
+                    await self._process_position_message(payload)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self.logger().exception("Unexpected error in user stream listener")
 
     async def _status_polling_loop_fetch_updates(self):
         await safe_gather(
@@ -820,10 +818,11 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                 params={
                     "account": self.api_key,
                     "symbol": exchange_symbol,
-                    "cursor": "",  # 分页游标，传空字符串
+                    "cursor": "",
                     "limit": 100,
                     "from": from_ts_ms,
                     "to": to_ts_ms,
+                    "trading_domain": CONSTANTS.TRADING_DOMAIN_PERP,
                 },
                 is_auth_required=True
             )
@@ -992,8 +991,11 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         # 调用 GET 接口查询所有未关闭的订单
         response = await self._api_get(
             path_url=CONSTANTS.ORDER_OPEN_URL,
-            params={"account": self.api_key},
-            is_auth_required=True
+            params={
+                "account": self.api_key,
+                "trading_domain": CONSTANTS.TRADING_DOMAIN_PERP,
+            },
+            is_auth_required=True,
         )
         
         # 检查 API 响应状态
@@ -1058,18 +1060,6 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         return _order_update
 
     async def _iter_user_event_queue(self) -> AsyncIterable[Dict[str, any]]:
-        """
-        WebSocket 暂时未实现，此方法为空实现。
-        如果 _user_stream_tracker 为 None（WebSocket 被禁用），直接返回，不 yield 任何值。
-        """
-        # WebSocket 被禁用时，_user_stream_tracker 为 None
-        if self._user_stream_tracker is None:
-            # 直接返回，结束 generator（不 yield 任何值）
-            # 由于 _user_stream_event_listener 已经被重写为空实现，这个方法理论上不会被调用
-            # 但为了安全起见，我们在这里处理 None 的情况
-            return
-        
-        # 如果 WebSocket 已启用，使用正常的实现
         while True:
             try:
                 yield await self._user_stream_tracker.user_stream.get()
@@ -1084,69 +1074,137 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                 await self._sleep(1.0)
 
     async def _process_trade_message(self, trade: Dict[str, Any], client_order_id: Optional[str] = None):
-        """
-        Updates in-flight order and trigger order filled event for trade message received. Triggers order completed
-        event if the total executed amount equals to the specified order amount.
-        Example Trade:
-        """
-        exchange_order_id = str(trade.get("oid", ""))
-        tracked_order = self._order_tracker.all_fillable_orders_by_exchange_order_id.get(exchange_order_id)
-
-        if tracked_order is None:
-            all_orders = self._order_tracker.all_fillable_orders
-            for k, v in all_orders.items():
-                await v.get_exchange_order_id()
-            _cli_tracked_orders = [o for o in all_orders.values() if exchange_order_id == o.exchange_order_id]
-            if not _cli_tracked_orders:
-                self.logger().debug(f"Ignoring trade message with id {client_order_id}: not in in_flight_orders.")
-                return
-            tracked_order = _cli_tracked_orders[0]
-        trading_pair_base_coin = tracked_order.base_asset
-        if trade["coin"] == trading_pair_base_coin:
-            position_action = PositionAction.OPEN if trade["dir"].split(" ")[0] == "Open" else PositionAction.CLOSE
-            fee_asset = tracked_order.quote_asset
-            fee = TradeFeeBase.new_perpetual_fee(
-                fee_schema=self.trade_fee_schema(),
-                position_action=position_action,
-                percent_token=fee_asset,
-                flat_fees=[TokenAmount(amount=Decimal(trade["fee"]), token=fee_asset)]
-            )
-            trade_update: TradeUpdate = TradeUpdate(
-                trade_id=str(trade["tid"]),
-                client_order_id=tracked_order.client_order_id,
-                exchange_order_id=str(trade["oid"]),
-                trading_pair=tracked_order.trading_pair,
-                fill_timestamp=trade["time"] * 1e-3,
-                fill_price=Decimal(trade["px"]),
-                fill_base_amount=Decimal(trade["sz"]),
-                fill_quote_amount=Decimal(trade["px"]) * Decimal(trade["sz"]),
-                fee=fee,
-            )
-            self._order_tracker.process_trade_update(trade_update)
-
-    def _process_order_message(self, order_msg: Dict[str, Any]):
-        """
-        Updates in-flight order and triggers cancelation or failure event if needed.
-
-        :param order_msg: The order response from either REST or web socket API (they are of the same format)
-
-        Example Order:
-        """
-        client_order_id = str(order_msg["order"].get("cloid", ""))
-        tracked_order = self._order_tracker.all_updatable_orders.get(client_order_id)
-        if not tracked_order:
-            self.logger().debug(f"Ignoring order message with id {client_order_id}: not in in_flight_orders.")
+        exchange_order_id = str(trade.get("order_id", ""))
+        if not exchange_order_id:
             return
-        current_state = order_msg["status"]
-        tracked_order.update_exchange_order_id(str(order_msg["order"]["oid"]))
-        order_update: OrderUpdate = OrderUpdate(
-            trading_pair=tracked_order.trading_pair,
-            update_timestamp=order_msg["statusTimestamp"] * 1e-3,
-            new_state=CONSTANTS.ORDER_STATE[current_state],
-            client_order_id=order_msg["order"]["cloid"],
-            exchange_order_id=str(order_msg["order"]["oid"]),
+
+        tracked_order = self._order_tracker.all_fillable_orders_by_exchange_order_id.get(exchange_order_id)
+        if tracked_order is None:
+            for order in self._order_tracker.all_fillable_orders.values():
+                if str(order.exchange_order_id) == exchange_order_id:
+                    tracked_order = order
+                    break
+        if tracked_order is None:
+            self.logger().debug(f"Ignoring trade message for order id {exchange_order_id}: not in in_flight_orders.")
+            return
+
+        fee_asset = tracked_order.quote_asset
+        fee_amount = Decimal(str(trade.get("quote_fee", trade.get("fee", "0"))))
+        position_action = PositionAction.OPEN
+        fee = TradeFeeBase.new_perpetual_fee(
+            fee_schema=self.trade_fee_schema(),
+            position_action=position_action,
+            percent_token=fee_asset,
+            flat_fees=[TokenAmount(amount=abs(fee_amount), token=fee_asset)],
         )
-        self._order_tracker.process_order_update(order_update=order_update)
+
+        ts_ms = trade.get("time", int(time.time() * 1000))
+        try:
+            fill_timestamp = int(ts_ms) / 1000.0
+        except (ValueError, TypeError):
+            fill_timestamp = time.time()
+
+        fill_base_amount = Decimal(str(trade.get("size", "0")))
+        fill_price = Decimal(str(trade.get("price", "0")))
+        trade_update = TradeUpdate(
+            trade_id=str(trade.get("tx_hash", f"{exchange_order_id}-{ts_ms}")),
+            client_order_id=tracked_order.client_order_id,
+            exchange_order_id=exchange_order_id,
+            trading_pair=tracked_order.trading_pair,
+            fee=fee,
+            fill_base_amount=fill_base_amount,
+            fill_quote_amount=fill_base_amount * fill_price,
+            fill_price=fill_price,
+            fill_timestamp=fill_timestamp,
+            is_taker=not trade.get("is_maker", False),
+        )
+        self._order_tracker.process_trade_update(trade_update)
+
+    async def _process_order_message(self, order_msg: Dict[str, Any]):
+        exchange_order_id = str(order_msg.get("order_id", ""))
+        if not exchange_order_id:
+            return
+
+        tracked_order = None
+        for order in self._order_tracker.all_updatable_orders.values():
+            if order.exchange_order_id == exchange_order_id:
+                tracked_order = order
+                break
+        if tracked_order is None:
+            return
+
+        ts_ms = order_msg.get("updated_at", order_msg.get("on_chain_created_at", int(time.time() * 1000)))
+        try:
+            update_timestamp = int(ts_ms) / 1000.0
+        except (ValueError, TypeError):
+            update_timestamp = time.time()
+
+        order_update = OrderUpdate(
+            trading_pair=tracked_order.trading_pair,
+            update_timestamp=update_timestamp,
+            new_state=CONSTANTS.get_order_state(order_msg.get("status")),
+            client_order_id=tracked_order.client_order_id,
+            exchange_order_id=exchange_order_id,
+        )
+        self._order_tracker.process_order_update(order_update)
+
+    async def _process_balance_message(self, balance_msg: Dict[str, Any]):
+        asset = balance_msg.get("symbol", CONSTANTS.CURRENCY)
+        try:
+            wallet = Decimal(str(balance_msg.get("wallet", "0") or "0"))
+            isolated_position_frozen = Decimal(str(balance_msg.get("isolated_position_frozen", "0") or "0"))
+            isolated_order_frozen = Decimal(str(balance_msg.get("isolated_order_frozen", "0") or "0"))
+            cross_order_frozen = Decimal(str(balance_msg.get("cross_order_frozen", "0") or "0"))
+            available = wallet - isolated_position_frozen - isolated_order_frozen - cross_order_frozen
+            if available < Decimal("0"):
+                available = Decimal("0")
+            self._account_balances[asset] = wallet
+            self._account_available_balances[asset] = available
+        except (ValueError, TypeError, decimal.InvalidOperation):
+            self.logger().warning(f"Unable to parse balance websocket message: {balance_msg}")
+
+    async def _process_position_message(self, position_msg: Dict[str, Any]):
+        ex_trading_pair = position_msg.get("symbol")
+        if ex_trading_pair is None:
+            return
+        try:
+            hb_trading_pair = await self.trading_pair_associated_to_exchange_symbol(ex_trading_pair)
+        except KeyError:
+            return
+
+        status = position_msg.get("status")
+        if status in (2, 3, "2", "3", "closed", "liquidated"):
+            for position_side in (PositionSide.LONG, PositionSide.SHORT):
+                pos_key = self._perpetual_trading.position_key(hb_trading_pair, position_side)
+                self._perpetual_trading.remove_position(pos_key)
+            return
+
+        position_side = PositionSide.LONG if position_msg.get("side") in (0, "0", "long", "LONG") else PositionSide.SHORT
+        try:
+            size = Decimal(str(position_msg.get("size", "0")))
+            entry_price = Decimal(str(position_msg.get("entry_price", "0")))
+            leverage = Decimal(str(position_msg.get("leverage", "1")))
+            unrealized_pnl = Decimal(str(position_msg.get("unrealized_pnl", "0")))
+        except (ValueError, TypeError, decimal.InvalidOperation):
+            self.logger().warning(f"Unable to parse position websocket message: {position_msg}")
+            return
+
+        amount = size * (Decimal("-1.0") if position_side == PositionSide.SHORT else Decimal("1.0"))
+        pos_key = self._perpetual_trading.position_key(hb_trading_pair, position_side)
+        if abs(amount) > 0:
+            self._perpetual_trading.set_position(
+                pos_key,
+                Position(
+                    trading_pair=hb_trading_pair,
+                    position_side=position_side,
+                    unrealized_pnl=unrealized_pnl,
+                    entry_price=entry_price,
+                    amount=amount,
+                    leverage=leverage,
+                ),
+            )
+        else:
+            self._perpetual_trading.remove_position(pos_key)
 
     async def _format_trading_rules(self, exchange_info_dict: Dict) -> List[TradingRule]:
         """
@@ -1187,8 +1245,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         
         for symbol_info in symbols:
             try:
-                # 检查交易对状态是否可用 (status=1 表示可用)
-                if symbol_info.get("status") != 1:
+                if not web_utils.is_exchange_information_valid(symbol_info):
                     continue
                 
                 # 获取交易对符号
@@ -1290,10 +1347,9 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             try:
                 exchange_symbol = symbol_info.get("symbol", "UNKNOWN")
                 status = symbol_info.get("status")
-                
-                # 检查交易对状态是否可用 (status=1 表示可用)
-                if status != 1:
-                    self.logger().debug(f"跳过不可用的交易对: {exchange_symbol}, status={status}")
+
+                if not web_utils.is_exchange_information_valid(symbol_info):
+                    self.logger().debug(f"Skipping unavailable symbol: {exchange_symbol}, status={status}")
                     skipped_count += 1
                     continue
                 
@@ -1371,7 +1427,10 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         
         response = await self._api_get(
             path_url=CONSTANTS.TICKER_PRICE_CHANGE_URL,
-            params={"symbol": exchange_symbol}
+            params={
+                "symbol": exchange_symbol,
+                "trading_domain": CONSTANTS.TRADING_DOMAIN_PERP,
+            },
         )
         
         # 检查 API 返回的状态码

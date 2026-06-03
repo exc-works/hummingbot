@@ -1,6 +1,6 @@
 # caishen_perpetual_web_utils.py
 from decimal import Decimal
-from typing import Any, Dict, Optional,Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import hummingbot.connector.derivative.caishen_perpetual.caishen_perpetual_constants as CONSTANTS
 from hummingbot.core.api_throttler.async_throttler import AsyncThrottler
@@ -19,9 +19,13 @@ class CaishenPerpetualRESTPreProcessor(RESTPreProcessorBase):
         return request
 
 
-def public_rest_url(path_url: str, domain: str = CONSTANTS.DOMAIN) -> str:
+def rest_url(path_url: str, domain: str = CONSTANTS.DOMAIN) -> str:
     base_url = CONSTANTS.PERPETUAL_BASE_URL if domain == CONSTANTS.DOMAIN else CONSTANTS.TESTNET_BASE_URL
     return base_url + path_url
+
+
+def public_rest_url(path_url: str, domain: str = CONSTANTS.DOMAIN) -> str:
+    return rest_url(path_url, domain)
 
 
 def private_rest_url(path_url: str, domain: str = CONSTANTS.DOMAIN) -> str:
@@ -54,8 +58,30 @@ async def get_current_server_time(throttler, domain) -> float:
     return time.time()
 
 
-def is_exchange_information_valid(rule: Dict[str, Any]) -> bool:
-    return True
+def parse_l2book_levels(levels: List[Any]) -> List[List[float]]:
+    parsed: List[List[float]] = []
+    for level in levels:
+        if isinstance(level, dict):
+            parsed.append([float(level["price"]), float(level["size"])])
+        elif isinstance(level, (list, tuple)) and len(level) >= 2:
+            parsed.append([float(level[0]), float(level[1])])
+    return parsed
+
+
+def unwrap_ws_notification_payload(params: dict) -> dict:
+    if not isinstance(params, dict):
+        return {}
+    result = params.get("result")
+    if isinstance(result, dict):
+        return result
+    return params
+
+
+def is_exchange_information_valid(symbol_info: dict) -> bool:
+    return (
+        symbol_info.get("status") == 1
+        and symbol_info.get("trading_domain") in (0, "0", None)
+    )
 
 def float_to_int_for_hashing(x: float) -> int:
     return float_to_int(x, 8)

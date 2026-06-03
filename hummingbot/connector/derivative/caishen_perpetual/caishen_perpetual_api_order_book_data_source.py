@@ -1,8 +1,8 @@
 import asyncio
 import time
-from collections import defaultdict
+from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import hummingbot.connector.derivative.caishen_perpetual.caishen_perpetual_constants as CONSTANTS
 import hummingbot.connector.derivative.caishen_perpetual.caishen_perpetual_web_utils as web_utils
@@ -22,108 +22,68 @@ if TYPE_CHECKING:
 
 
 class CaishenPerpetualAPIOrderBookDataSource(PerpetualAPIOrderBookDataSource):
-    _bpobds_logger: Optional[HummingbotLogger] = None
-    _trading_pair_symbol_map: Dict[str, Mapping[str, str]] = {}
-    _mapping_initialization_lock = asyncio.Lock()
+    _logger: Optional[HummingbotLogger] = None
+    _request_id: int = 1
 
     def __init__(
-            self,
-            trading_pairs: List[str],
-            connector: 'CaishenPerpetualDerivative',
-            api_factory: WebAssistantsFactory,
-            domain: str = CONSTANTS.DOMAIN
+        self,
+        trading_pairs: List[str],
+        connector: "CaishenPerpetualDerivative",
+        api_factory: WebAssistantsFactory,
+        domain: str = CONSTANTS.DOMAIN,
     ):
         super().__init__(trading_pairs)
         self._connector = connector
         self._api_factory = api_factory
         self._domain = domain
-        self._trading_pairs: List[str] = trading_pairs
-        self._message_queue: Dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
 
-    async def get_last_traded_prices(self,
-                                     trading_pairs: List[str],
-                                     domain: Optional[str] = None) -> Dict[str, float]:
-        return await self._connector.get_last_traded_prices(trading_pair=trading_pairs)
+    async def get_last_traded_prices(
+        self, trading_pairs: List[str], domain: Optional[str] = None
+    ) -> Dict[str, float]:
+        return await self._connector.get_last_traded_prices(trading_pairs=trading_pairs)
+
+    def _next_request_id(self) -> int:
+        request_id = self._request_id
+        self._request_id += 1
+        return request_id
 
     async def get_funding_info(self, trading_pair: str) -> FundingInfo:
-        """
-        获取指定交易对的资金费率信息
-        
-        Args:
-            trading_pair: Hummingbot 格式的交易对，如 "ETH-USDC"
-            
-        Returns:
-            FundingInfo 对象，包含 index_price, mark_price, rate, next_funding_utc_timestamp
-            
-        API 响应格式:
-        ticker_response: {
-            "code": 0,
-            "data": {
-                "index_price": "92779.3",
-                "mark_price": "90759.2",
-                ...
-            }
-        }
-        
-        funding_response: {
-            "code": 0,
-            "data": {
-                "real_time_funding_rates": [
-                    {
-                        "symbol": "BTC-USDC",
-                        "funding_rate": "-0.04"
-                    }
-                ]
-            }
-        }
-        """
         exchange_symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
-        
-        # 获取 ticker 数据（包含 index_price 和 mark_price）
+
         ticker_response = await self._connector._api_get(
             path_url=CONSTANTS.TICKER_PRICE_CHANGE_URL,
-            params={"symbol": exchange_symbol}
+            params={
+                "symbol": exchange_symbol,
+                "trading_domain": CONSTANTS.TRADING_DOMAIN_PERP,
+            },
         )
-        
-        # 获取资金费率信息
+
         funding_response: Dict = await self._request_complete_funding_info(trading_pair)
-        
-        # 从 ticker_response 中提取价格信息
+
         ticker_data = ticker_response.get("data", {})
         index_price = Decimal(str(ticker_data.get("index_price", "0")))
         mark_price = Decimal(str(ticker_data.get("mark_price", "0")))
-        
-        # 从 funding_response 中提取资金费率
-        # response 格式: {"code": 0, "data": {"real_time_funding_rates": [...]}}
+
         funding_rate = Decimal("0")
-        
         if funding_response.get("code") == 0:
             data = funding_response.get("data", {})
             real_time_funding_rates = data.get("real_time_funding_rates", [])
-            
-            # 遍历找到匹配的交易对
             for rate_info in real_time_funding_rates:
                 if rate_info.get("symbol") == exchange_symbol:
                     funding_rate = Decimal(str(rate_info.get("funding_rate", "0")))
                     break
-        
-        # 计算下次资金费率结算时间
+
         next_funding_utc_timestamp = self._next_funding_time(trading_pair)
-        
-        funding_info = FundingInfo(
+
+        return FundingInfo(
             trading_pair=trading_pair,
             index_price=index_price,
             mark_price=mark_price,
             next_funding_utc_timestamp=next_funding_utc_timestamp,
             rate=funding_rate,
         )
-        
-        return funding_info
 
     async def listen_for_funding_info(self, output: asyncio.Queue):
-        """
-        Reads the funding info events queue and updates the local funding info information.
-        """
         while True:
             try:
                 for trading_pair in self._trading_pairs:
@@ -144,276 +104,197 @@ class CaishenPerpetualAPIOrderBookDataSource(PerpetualAPIOrderBookDataSource):
                 await self._sleep(CONSTANTS.FUNDING_RATE_UPDATE_INTERNAL_SECOND)
 
     async def _request_order_book_snapshot(self, trading_pair: str) -> Dict[str, Any]:
-        """
-        获取订单簿快照
-        
-        API: GET /v1/l2book?symbol=ETH-USDC&aggregation_level=1x&limit=200
-        
-        返回格式:
-        {
-            "code": 0,
-            "msg": "",
-            "data": {
-                "sequence": 2920,
-                "timestamp": "2025-12-10T02:28:51.001Z",
-                "asks": [
-                {
-                    "price": "180",
-                    "size": "1"
-                }
-                ],
-                "bids": [
-                {
-                    "price": "100",
-                    "size": "1"
-                }
-                ]
-            }
-        }
-        """
         exchange_symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
-        
         params = {
             "symbol": exchange_symbol,
             "aggregation_level": "1x",
-            "limit": 200
+            "limit": 200,
+            "trading_domain": CONSTANTS.TRADING_DOMAIN_PERP,
         }
-
-        data = await self._connector._api_get(
+        return await self._connector._api_get(
             path_url=CONSTANTS.SNAPSHOT_REST_URL,
-            params=params
+            params=params,
         )
-        return data
 
     async def _order_book_snapshot(self, trading_pair: str) -> OrderBookMessage:
-        """
-        解析订单簿快照并创建 OrderBookMessage
-        """
         snapshot_response: Dict[str, Any] = await self._request_order_book_snapshot(trading_pair)
-        
-        # 检查 API 返回的状态码
+
         response_code = snapshot_response.get("code", -1)
         if response_code != 0:
-            msg = f"获取订单簿快照失败: code={response_code}, msg={snapshot_response.get('msg', '')}"
+            msg = f"Failed to fetch order book snapshot: code={response_code}, msg={snapshot_response.get('msg', '')}"
             self.logger().error(msg)
             raise IOError(msg)
-        
-        # 从 data 字段中提取数据
+
         data = snapshot_response.get("data", {})
         if not data:
-            msg = "订单簿快照响应中缺少 'data' 字段"
-            self.logger().error(msg)
-            raise IOError(msg)
-        
-        # 从 ISO 8601 时间戳转换为 Unix 时间戳（秒）
-        # 格式: "2025-12-10T02:28:51.001Z"
-        timestamp_str = data.get('timestamp', '')
+            raise IOError("Order book snapshot response missing 'data' field")
+
+        timestamp_str = data.get("timestamp", "")
         if timestamp_str:
-            from datetime import datetime
-            # 处理 ISO 8601 格式，去掉 'Z' 后缀
-            timestamp_str_clean = timestamp_str.rstrip('Z')
-            dt = datetime.fromisoformat(timestamp_str_clean)
-            timestamp = int(dt.timestamp())
+            timestamp_str_clean = str(timestamp_str).rstrip("Z")
+            timestamp = int(datetime.fromisoformat(timestamp_str_clean).timestamp())
         else:
-            timestamp = int(time.time())
-        
-        # 解析 bids 和 asks（从 data 字段中获取）
-        # 格式: [{"price": "string", "size": "string"}]
-        bids = [[float(item['price']), float(item['size'])] for item in data.get('bids', [])]
-        asks = [[float(item['price']), float(item['size'])] for item in data.get('asks', [])]
-        
-        # 使用 sequence 作为 update_id，如果没有则使用 timestamp
-        sequence = data.get('sequence', '')
-        update_id = int(sequence) if sequence and str(sequence).isdigit() else timestamp
-        
-        snapshot_msg: OrderBookMessage = OrderBookMessage(
-            OrderBookMessageType.SNAPSHOT, 
+            ts_ms = data.get("ts")
+            timestamp = int(ts_ms / 1000) if ts_ms else int(time.time())
+
+        bids = web_utils.parse_l2book_levels(data.get("bids", []))
+        asks = web_utils.parse_l2book_levels(data.get("asks", []))
+        sequence = data.get("sequence", timestamp)
+        update_id = int(sequence) if str(sequence).isdigit() else timestamp
+
+        return OrderBookMessage(
+            OrderBookMessageType.SNAPSHOT,
             {
                 "trading_pair": trading_pair,
                 "update_id": update_id,
                 "bids": bids,
                 "asks": asks,
-            }, 
-            timestamp=timestamp
+            },
+            timestamp=timestamp,
         )
-        return snapshot_msg
 
     async def _connected_websocket_assistant(self) -> WSAssistant:
-        url = f"{web_utils.wss_url(self._domain)}"
         ws: WSAssistant = await self._api_factory.get_ws_assistant()
-        await ws.connect(ws_url=url, ping_timeout=CONSTANTS.HEARTBEAT_TIME_INTERVAL)
+        await ws.connect(ws_url=web_utils.wss_url(self._domain), ping_timeout=CONSTANTS.HEARTBEAT_TIME_INTERVAL)
         return ws
 
+    async def _send_l2book_subscribe(self, ws: WSAssistant, trading_pair: str):
+        symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "l2book_subscribe",
+            "params": {
+                "symbol": symbol,
+                "aggregation_level": "1x",
+                "trading_domain": CONSTANTS.TRADING_DOMAIN_PERP,
+            },
+            "id": self._next_request_id(),
+        }
+        await ws.send(WSJSONRequest(payload=payload))
+        self.logger().info(f"Subscribed to l2book for {trading_pair} ({symbol})")
+
+    async def _send_l2book_unsubscribe(self, ws: WSAssistant, trading_pair: str):
+        symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "l2book_unsubscribe",
+            "params": {
+                "symbol": symbol,
+                "aggregation_level": "1x",
+                "trading_domain": CONSTANTS.TRADING_DOMAIN_PERP,
+            },
+            "id": self._next_request_id(),
+        }
+        await ws.send(WSJSONRequest(payload=payload))
+        self.logger().info(f"Unsubscribed from l2book for {trading_pair} ({symbol})")
+
     async def _subscribe_channels(self, ws: WSAssistant):
-        """
-        Subscribes to the trade events and diff orders events through the provided websocket connection.
+        for trading_pair in self._trading_pairs:
+            await self._send_l2book_subscribe(ws, trading_pair)
 
-        :param ws: the websocket assistant used to connect to the exchange
-        """
+    async def subscribe_to_trading_pair(self, trading_pair: str) -> bool:
+        if self._ws_assistant is None:
+            self.logger().warning(f"Cannot subscribe to {trading_pair}: WebSocket not connected")
+            return False
         try:
-            for trading_pair in self._trading_pairs:
-                symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
-                trades_payload = {
-                    "method": "subscribe",
-                    "subscription": {
-                        "type": CONSTANTS.TRADES_ENDPOINT_NAME,
-                        "coin": symbol,
-                    }
-                }
-                subscribe_trade_request: WSJSONRequest = WSJSONRequest(payload=trades_payload)
-
-                order_book_payload = {
-                    "method": "subscribe",
-                    "subscription": {
-                        "type": CONSTANTS.DEPTH_ENDPOINT_NAME,
-                        "coin": symbol,
-                    }
-                }
-                subscribe_orderbook_request: WSJSONRequest = WSJSONRequest(payload=order_book_payload)
-
-                await ws.send(subscribe_trade_request)
-                await ws.send(subscribe_orderbook_request)
-
-                self.logger().info("Subscribed to public order book, trade channels...")
+            await self._send_l2book_subscribe(self._ws_assistant, trading_pair)
+            self.add_trading_pair(trading_pair)
+            return True
         except asyncio.CancelledError:
             raise
         except Exception:
-            self.logger().error("Unexpected error occurred subscribing to order book data streams.")
-            raise
+            self.logger().exception(f"Unexpected error subscribing to {trading_pair} order book")
+            return False
 
-    async def listen_for_subscriptions(self):
-        """
-        WebSocket 暂时未实现，跳过 WebSocket 订阅。
-        所有订单簿更新都通过 REST API 快照完成（_request_order_book_snapshots）。
-        保留原有的 _connected_websocket_assistant 和 _subscribe_channels 方法，待后续实现。
-        """
-        # WebSocket 未实现，此方法为空实现
-        # 订单簿更新通过 REST API 快照完成，由 listen_for_order_book_snapshots 方法处理
-        # 该方法会在超时后自动调用 _request_order_book_snapshots
-        self.logger().info("WebSocket subscriptions disabled. Using REST API for order book updates.")
-        while True:
-            await self._sleep(3600.0)  # 保持任务运行但不做任何事
-
-    async def listen_for_order_book_snapshots(self, ev_loop: asyncio.AbstractEventLoop, output: asyncio.Queue):
-        """
-        重写父类方法，当 WebSocket 禁用时，定期通过 REST API 请求订单簿快照。
-        这样可以确保 orderbook 能够及时更新，而不是等待 1 小时超时。
-        
-        注意：父类方法会等待消息队列中的快照消息，但因为我们禁用了 WebSocket，
-        不会有消息进入队列，所以需要主动定期请求快照。
-        """
-        # 由于 WebSocket 未实现，我们直接定期请求快照，而不是等待消息队列
-        # 间隔时间设置为 5 秒，这样 orderbook 可以及时更新
-        REST_SNAPSHOT_INTERVAL = 5.0
-        
-        # 首先立即请求一次快照，确保 orderbook 尽快填充（在初始化之后）
-        # 注意：初始化时已经通过 _init_order_books 获取了一次快照，这里再次获取可以确保数据是最新的
+    async def unsubscribe_from_trading_pair(self, trading_pair: str) -> bool:
+        if self._ws_assistant is None:
+            self.logger().warning(f"Cannot unsubscribe from {trading_pair}: WebSocket not connected")
+            return False
         try:
-            await self._request_order_book_snapshots(output=output)
-        except Exception as e:
-            self.logger().warning(f"Error fetching initial order book snapshots: {e}")
-        
-        # 然后定期请求快照更新
-        while True:
-            try:
-                await self._sleep(REST_SNAPSHOT_INTERVAL)
-                await self._request_order_book_snapshots(output=output)
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                # 如果请求快照失败，记录错误但继续循环，不要因为一次失败就停止更新
-                self.logger().warning(f"Error requesting order book snapshots: {e}. Will retry in {REST_SNAPSHOT_INTERVAL} seconds.")
-                # 继续循环，等待下次重试
+            await self._send_l2book_unsubscribe(self._ws_assistant, trading_pair)
+            self.remove_trading_pair(trading_pair)
+            return True
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self.logger().exception(f"Unexpected error unsubscribing from {trading_pair} order book")
+            return False
 
     def _channel_originating_message(self, event_message: Dict[str, Any]) -> str:
-        channel = ""
-        if "result" not in event_message:
-            stream_name = event_message.get("channel")
-            if "l2Book" in stream_name:
-                channel = self._snapshot_messages_queue_key
-            elif "trades" in stream_name:
-                channel = self._trade_messages_queue_key
-        return channel
+        method = event_message.get("method", "")
+        if method == "l2book_notification":
+            return self._diff_messages_queue_key
+        if method == "symbol_trade_notification":
+            return self._trade_messages_queue_key
+        return ""
 
     async def _parse_order_book_diff_message(self, raw_message: Dict[str, Any], message_queue: asyncio.Queue):
-        pass
-        # timestamp: float = raw_message["data"]["time"] * 1e-3
-        # trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(
-        #     raw_message["data"]["coin"] + '-' + CONSTANTS.CURRENCY)
-        # data = raw_message["data"]
-        # order_book_message: OrderBookMessage = OrderBookMessage(OrderBookMessageType.DIFF, {
-        #     "trading_pair": trading_pair,
-        #     "update_id": data["time"],
-        #     "bids": [[float(i['px']), float(i['sz'])] for i in data["levels"][0]],
-        #     "asks": [[float(i['px']), float(i['sz'])] for i in data["levels"][1]],
-        # }, timestamp=timestamp)
-        # message_queue.put_nowait(order_book_message)
+        payload = web_utils.unwrap_ws_notification_payload(raw_message.get("params", raw_message))
+        symbol = payload.get("symbol")
+        if symbol is None:
+            return
+        trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(symbol=symbol)
+        for update in payload.get("updates", []):
+            ts_ms = update.get("ts", int(time.time() * 1000))
+            sequence_range = update.get("sequence_range", {})
+            update_id = update.get("sequence", sequence_range.get("end", ts_ms))
+            update_id = int(update_id) if str(update_id).isdigit() else int(ts_ms)
+            bids = web_utils.parse_l2book_levels(update.get("bids", []))
+            asks = web_utils.parse_l2book_levels(update.get("asks", []))
+            if not bids and not asks:
+                continue
+            message_queue.put_nowait(
+                OrderBookMessage(
+                    OrderBookMessageType.DIFF,
+                    {
+                        "trading_pair": trading_pair,
+                        "update_id": update_id,
+                        "bids": bids,
+                        "asks": asks,
+                    },
+                    timestamp=ts_ms / 1000.0,
+                )
+            )
 
     async def _parse_order_book_snapshot_message(self, raw_message: Dict[str, Any], message_queue: asyncio.Queue):
-        pass
-        # timestamp: float = raw_message["data"]["time"] * 1e-3
-        # trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(
-        #     raw_message["data"]["coin"] + '-' + CONSTANTS.CURRENCY)
-        # data = raw_message["data"]
-        # order_book_message: OrderBookMessage = OrderBookMessage(OrderBookMessageType.SNAPSHOT, {
-        #     "trading_pair": trading_pair,
-        #     "update_id": data["time"],
-        #     "bids": [[float(i['px']), float(i['sz'])] for i in data["levels"][0]],
-        #     "asks": [[float(i['px']), float(i['sz'])] for i in data["levels"][1]],
-        # }, timestamp=timestamp)
-        # message_queue.put_nowait(order_book_message)
+        await self._parse_order_book_diff_message(raw_message, message_queue)
 
     async def _parse_trade_message(self, raw_message: Dict[str, Any], message_queue: asyncio.Queue):
-        pass
-        # data = raw_message["data"]
-        # for trade_data in data:
-        #     trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(
-        #         trade_data["coin"] + '-' + CONSTANTS.CURRENCY)
-        #     trade_message: OrderBookMessage = OrderBookMessage(OrderBookMessageType.TRADE, {
-        #         "trading_pair": trading_pair,
-        #         "trade_type": float(TradeType.SELL.value) if trade_data["side"] == "A" else float(
-        #             TradeType.BUY.value),
-        #         "trade_id": trade_data["hash"],
-        #         "price": float(trade_data["px"]),
-        #         "amount": float(trade_data["sz"])
-        #     }, timestamp=trade_data["time"] * 1e-3)
-
-        #     message_queue.put_nowait(trade_message)
+        payload = web_utils.unwrap_ws_notification_payload(raw_message.get("params", raw_message))
+        symbol = payload.get("symbol")
+        if symbol is None:
+            return
+        trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(symbol=symbol)
+        for trade in payload.get("updates", []):
+            side = trade.get("side", trade.get("is_buy"))
+            trade_type = TradeType.BUY if side in (True, "buy", 0, "0") else TradeType.SELL
+            ts_ms = trade.get("time", trade.get("ts", int(time.time() * 1000)))
+            message_queue.put_nowait(
+                OrderBookMessage(
+                    OrderBookMessageType.TRADE,
+                    {
+                        "trading_pair": trading_pair,
+                        "trade_type": float(trade_type.value),
+                        "trade_id": str(trade.get("tx_hash", trade.get("id", ts_ms))),
+                        "price": float(trade.get("price", 0)),
+                        "amount": float(trade.get("size", trade.get("amount", 0))),
+                    },
+                    timestamp=ts_ms / 1000.0 if ts_ms else time.time(),
+                )
+            )
 
     async def _parse_funding_info_message(self, raw_message: Dict[str, Any], message_queue: asyncio.Queue):
         pass
 
     async def _request_complete_funding_info(self, trading_pair: str):
         exchange_symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
-        funding_interval_hours = self._connector._funding_interval_hours.get(trading_pair, 8)
-        data = await self._connector._api_get(path_url=CONSTANTS.EXCHANGE_INFO_URL,
-                                               params={"symbol": exchange_symbol, "funding_interval_hours": funding_interval_hours})
-        return data
+        return await self._connector._api_get(
+            path_url=CONSTANTS.FUNDING_URL,
+            params={"symbol": exchange_symbol},
+        )
 
     def _next_funding_time(self, trading_pair: str) -> int:
-        """
-        计算指定交易对的下次资金费率结算时间戳
-        
-        不同交易对的结算周期不同：
-        - ETH-USDC: 每 8 小时结算一次
-        - BTC-USDC: 每 1 小时结算一次
-        - SOL-USDC: 每 4 小时结算一次
-        
-        Args:
-            trading_pair: Hummingbot 格式的交易对名称，如 "ETH-USDC"
-            
-        Returns:
-            下次资金费率结算的 UTC 时间戳（秒）
-        """
-        # 从 connector 中获取该交易对的资金费率结算周期（小时）
         funding_interval_hours = self._connector._funding_interval_hours.get(trading_pair, 8)
-        
-        # 计算下次结算时间
-        # 例如：当前时间 10:30，结算周期 8 小时，下次结算时间为 16:00
         current_time = time.time()
         interval_seconds = funding_interval_hours * 3600
-        
-        # 找到下一个结算时间点
-        next_funding_time = int(((current_time // interval_seconds) + 1) * interval_seconds)
-        
-        return next_funding_time
+        return int(((current_time // interval_seconds) + 1) * interval_seconds)
