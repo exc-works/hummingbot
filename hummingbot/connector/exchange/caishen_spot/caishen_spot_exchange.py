@@ -30,6 +30,7 @@ from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTr
 from hummingbot.core.data_type.trade_fee import TokenAmount, TradeFeeBase
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.core.utils.estimate_fee import build_trade_fee
+from hummingbot.core.web_assistant.connections.data_types import RESTMethod
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
 
 
@@ -159,6 +160,38 @@ class CaishenSpotExchange(ExchangePyBase):
             order_side=order_side,
             amount=amount,
             price=price,
+        )
+
+    async def _api_request(
+        self,
+        path_url,
+        overwrite_url: Optional[str] = None,
+        method: RESTMethod = RESTMethod.GET,
+        params: Optional[Dict[str, Any]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        is_auth_required: bool = False,
+        return_err: bool = False,
+        limit_id: Optional[str] = None,
+        trading_pair: Optional[str] = None,
+        headers: Optional[Dict[str, Any]] = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        if limit_id is None:
+            limit_id = web_utils.get_rest_api_limit_id_for_endpoint(
+                endpoint=path_url,
+                trading_pair=trading_pair,
+            )
+        return await super()._api_request(
+            path_url=path_url,
+            overwrite_url=overwrite_url,
+            method=method,
+            params=params,
+            data=data,
+            is_auth_required=is_auth_required,
+            return_err=return_err,
+            limit_id=limit_id,
+            headers=headers,
+            **kwargs,
         )
 
     async def _make_trading_rules_request(self) -> Any:

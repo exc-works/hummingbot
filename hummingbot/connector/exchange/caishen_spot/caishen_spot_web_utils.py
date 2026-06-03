@@ -56,6 +56,10 @@ def is_exchange_information_valid(symbol_info: dict) -> bool:
     )
 
 
+def get_rest_api_limit_id_for_endpoint(endpoint: str, trading_pair: Optional[str] = None) -> str:
+    return CONSTANTS.ALL_ENDPOINTS_LIMIT
+
+
 def unwrap_ws_notification_payload(params: dict) -> dict:
     """
     Plato WS notifications wrap payloads as params.result (not params directly).
