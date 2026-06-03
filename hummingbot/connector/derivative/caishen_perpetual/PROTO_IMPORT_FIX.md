@@ -62,3 +62,37 @@ print('✅ All imports successful!')
 2. **重新编译 proto 文件后**，需要重新运行修复脚本
 3. **确保 `deepproto/__init__.py` 在任何 proto 文件导入之前被导入**
 
+## Protobuf 版本兼容（gencode vs runtime）
+
+Hummingbot Docker/conda 环境使用 **protobuf 5.29.x** runtime。`deepproto/` 必须用 **protobuf 5.x** 的 `grpc_tools.protoc` 生成。
+
+若 connect 时报错：
+
+```
+gencode 6.33.5 runtime 5.29.6
+Runtime version cannot be older than the linked gencode version
+```
+
+说明镜像里的 `deepproto/*_pb2.py` 是用 protobuf 6.x 生成的。处理步骤：
+
+```bash
+# 1. 本地用 5.x 工具链重新生成
+pip install 'protobuf>=5.28,<6' 'grpcio-tools>=1.68,<1.70'
+cd hummingbot/connector/derivative/caishen_perpetual
+bash create_proto_file.sh
+
+# 2. 重新构建本地镜像（源码在镜像内，仅改 conf 挂载不够）
+TAG=:dev make build-dev
+
+# 3. docker-compose 使用 image: hummingbot/hummingbot:dev 后重启
+docker compose up -d --force-recreate
+```
+
+验证：
+
+```bash
+python3 -c "import google.protobuf; print(google.protobuf.__version__)"
+grep -m1 'Protobuf Python Version' deepproto/schema/order_pb2.py
+# runtime 应为 5.29.x，gencode 注释应为 5.28.x 或 5.29.x
+```
+

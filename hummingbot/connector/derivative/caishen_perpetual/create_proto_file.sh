@@ -25,6 +25,26 @@
 INPUT_DIR="proto/"
 OUTPUT_DIR="deepproto/"
 
+# Hummingbot conda env ships protobuf 5.x runtime; gencode must not be newer.
+check_protobuf_version() {
+    local pb_version
+    pb_version=$(python3 -c "import google.protobuf; print(google.protobuf.__version__)" 2>/dev/null || true)
+    if [ -z "$pb_version" ]; then
+        echo "错误: 未安装 google.protobuf，请先安装 grpcio-tools / protobuf 5.x"
+        exit 1
+    fi
+    local major="${pb_version%%.*}"
+    if [ "$major" -ge 6 ] 2>/dev/null; then
+        echo "错误: 当前 protobuf runtime 为 ${pb_version}，与 Hummingbot 不兼容。"
+        echo "请使用 protobuf 5.x 重新生成 deepproto，例如:"
+        echo "  pip install 'protobuf>=5.28,<6' 'grpcio-tools>=1.68,<1.70'"
+        exit 1
+    fi
+    echo "使用 protobuf runtime ${pb_version} 生成 deepproto..."
+}
+
+check_protobuf_version
+
 # 创建输出目录（如果不存在）
 mkdir -p $OUTPUT_DIR
 
@@ -113,3 +133,11 @@ _ = google_dot_api_dot_http__pb2.DESCRIPTOR\
 fi
 
 echo "完成！"
+
+# Verify generated gencode matches protobuf 5.x (Hummingbot runtime is 5.29.x)
+if grep -r "Protobuf Python Version: 6\." "$OUTPUT_DIR_ABS" --include="*_pb2.py" -q 2>/dev/null; then
+    echo "错误: 检测到 protobuf 6.x 生成的 *_pb2.py，与 Hummingbot runtime 不兼容。"
+    echo "请安装 protobuf 5.x 后重新运行此脚本。"
+    exit 1
+fi
+echo "protobuf 版本检查通过 (gencode 5.x)。"
