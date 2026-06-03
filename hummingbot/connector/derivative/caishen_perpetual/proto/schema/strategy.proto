@@ -1,0 +1,303 @@
+syntax = "proto3";
+
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/order.proto";
+import "schema/extensions.proto";
+
+// StrategyTemplateType identifies strategy algorithm families.
+enum StrategyTemplateType {
+  // Unknown/invalid template type.
+  UNKNOWN = 0;
+  // Time-Weighted Average Price strategy.
+  TWAP = 1;
+  // Iceberg strategy.
+  ICEBERG = 2;
+  // Spot TWAP strategy.
+  SPOT_TWAP = 3;
+  // Spot Iceberg strategy.
+  SPOT_ICEBERG = 4;
+}
+
+// StrategyInstanceStatus is the lifecycle state of a strategy instance.
+enum StrategyInstanceStatus {
+  // Created but not actively submitting orders yet.
+  PENDING = 0;
+  // Actively running.
+  RUNNING = 1;
+  // Manually stopped.
+  STOPPED = 2;
+  // Finished naturally by privileged complete action.
+  COMPLETED = 3;
+  // Stopped due to an unrecoverable error.
+  FAILED = 4;
+  // Temporarily paused; will resume to RUNNING automatically.
+  SUSPENDED = 5;
+}
+
+// IcebergOrderPreference controls how Iceberg child order prices are selected.
+enum IcebergOrderPreference {
+  // Prefer faster execution.
+  QUICK_EXECUTION = 0;
+  // Balance faster execution and better price.
+  BALANCED = 1;
+  // Queue at order book prices.
+  PASSIVE_QUEUE = 2;
+}
+
+// OrderAction expresses exposure intent for strategy orders.
+enum OrderAction {
+  // Unknown/invalid action.
+  UNKNOWN_ACTION = 0;
+  // Increase exposure.
+  OPEN = 1;
+  // Reduce or close exposure.
+  CLOSE = 2;
+}
+
+// CreateStrategyMessage creates a new strategy instance.
+message CreateStrategyMessage {
+  // Strategy template type.
+  // Supported values: TWAP, ICEBERG.
+  StrategyTemplateType template_type = 1;
+  // Template-specific parameters.
+  // Exactly one param block must be set, and it must match template_type.
+  oneof params {
+    // Parameters for TWAP.
+    TwapStrategyParamsMessage twap_params = 2;
+    // Parameters for Iceberg.
+    IcebergStrategyParamsMessage iceberg_params = 3;
+    // Parameters for Spot TWAP.
+    SpotTwapStrategyParamsMessage spot_twap_params = 4;
+    // Parameters for Spot Iceberg.
+    SpotIcebergStrategyParamsMessage spot_iceberg_params = 5;
+  }
+}
+
+// StopStrategyMessage requests stopping one strategy instance.
+message StopStrategyMessage {
+  // Strategy instance ID to stop.
+  // Example: 10001.
+  uint64 strategy_id = 1;
+}
+
+// TwapStrategyParamsMessage defines TWAP strategy creation parameters.
+message TwapStrategyParamsMessage {
+  // Base token ID of the target perp symbol.
+  // Together with quote_token, this must reference an open perp symbol.
+  uint32 base_token = 1;
+  // Quote token ID of the target perp symbol.
+  // Together with base_token, this must reference an open perp symbol.
+  uint32 quote_token = 2;
+  // Order side (LONG/SHORT).
+  PositionSide side = 3;
+  // Exposure intent (OPEN/CLOSE).
+  OrderAction action = 4;
+  // trailing_delta interpretation:
+  // - DISTANCE: absolute quote-price offset.
+  // - PERCENTAGE: ratio (for example 0.01 means 1%).
+  // trailing_delta_type must be a valid enum value.
+  TrailingDeltaType trailing_delta_type = 5;
+  // Aggressiveness delta value (decimal string). Must be positive.
+  // Example: "5" in DISTANCE mode, "0.005" in PERCENTAGE mode.
+  string trailing_delta = 6 [(schema.decimal) = true];
+  // Price guardrail (decimal string):
+  // - LONG: max buy price.
+  // - SHORT: min sell price.
+  // Must be > 0 and precision must not exceed symbol tick precision.
+  string price_bound = 7 [(schema.decimal) = true];
+  // Order interval in seconds, valid range is [5, 120].
+  uint32 time_interval_second = 8;
+  // Per-order size in base token (decimal string).
+  // Must be >= symbol min_size, lot-size aligned, and within symbol size
+  // precision. Example: "0.01".
+  string size_per_order = 9 [(schema.decimal) = true];
+  // Total strategy size in base token (decimal string).
+  // Must be >= size_per_order, lot-size aligned, and within symbol size
+  // precision. Example: "1.5".
+  string total_size = 10 [(schema.decimal) = true];
+  // Position mode applied to child orders (CROSS/ISOLATED).
+  PositionMode mode = 11;
+}
+
+// IcebergStrategyParamsMessage defines Iceberg strategy creation parameters.
+message IcebergStrategyParamsMessage {
+  // Base token ID of the target perp symbol.
+  // Together with quote_token, this must reference an open perp symbol.
+  uint32 base_token = 1;
+  // Quote token ID of the target perp symbol.
+  // Together with base_token, this must reference an open perp symbol.
+  uint32 quote_token = 2;
+  // Order side (LONG/SHORT).
+  PositionSide side = 3;
+  // Exposure intent (OPEN/CLOSE).
+  OrderAction action = 4;
+  // Position mode (CROSS/ISOLATED).
+  PositionMode mode = 5;
+  // Maximum concurrent child orders per placement cycle, range [1, 5].
+  uint32 single_orders = 6;
+  // Size per child order in base token (decimal string).
+  // Must be >= symbol min_size, lot-size aligned, and within symbol size
+  // precision.
+  string single_size = 7 [(schema.decimal) = true];
+  // Total strategy size in base token (decimal string).
+  // Must be >= single_size * single_orders, lot-size aligned, and within symbol
+  // size precision.
+  string total_size = 8 [(schema.decimal) = true];
+  // Price guardrail (decimal string):
+  // - LONG: max buy price.
+  // - SHORT: min sell price.
+  // Pass "0" to disable the guardrail.
+  // If non-zero, must be a valid decimal > 0 and precision must not exceed
+  // symbol tick precision.
+  string price_bound = 9 [(schema.decimal) = true];
+  // Child order placement preference.
+  IcebergOrderPreference order_preference = 10;
+}
+
+// SpotTwapStrategyParamsMessage defines Spot TWAP strategy creation parameters
+// (no open/close concept, no margin mode).
+message SpotTwapStrategyParamsMessage {
+  // Base token ID of the target spot symbol.
+  // Together with quote_token, this must reference an open spot symbol.
+  uint32 base_token = 1;
+  // Quote token ID of the target spot symbol.
+  // Together with base_token, this must reference an open spot symbol.
+  uint32 quote_token = 2;
+  // Trade side: LONG = buy, SHORT = sell.
+  PositionSide side = 3;
+  // trailing_delta interpretation:
+  // - DISTANCE: absolute quote-price offset.
+  // - PERCENTAGE: ratio (for example 0.01 means 1%).
+  // trailing_delta_type must be a valid enum value.
+  TrailingDeltaType trailing_delta_type = 4;
+  // Aggressiveness delta value (decimal string). Must be positive.
+  // Example: "5" in DISTANCE mode, "0.005" in PERCENTAGE mode.
+  string trailing_delta = 5 [(schema.decimal) = true];
+  // Price guardrail (decimal string):
+  // - LONG: max buy price.
+  // - SHORT: min sell price.
+  // Must be > 0 and precision must not exceed symbol tick precision.
+  string price_bound = 6 [(schema.decimal) = true];
+  // Order interval in seconds, valid range is [5, 120].
+  uint32 time_interval_second = 7;
+  // Per-order size in base token (decimal string).
+  // Must be >= symbol min_size, lot-size aligned, and within symbol size
+  // precision. Example: "0.01".
+  string size_per_order = 8 [(schema.decimal) = true];
+  // Total strategy size in base token (decimal string).
+  // Must be >= size_per_order, lot-size aligned, and within symbol size
+  // precision. Example: "1.5".
+  string total_size = 9 [(schema.decimal) = true];
+}
+
+// SpotIcebergStrategyParamsMessage defines Spot Iceberg strategy creation
+// parameters (no open/close concept, no margin mode).
+message SpotIcebergStrategyParamsMessage {
+  // Base token ID of the target spot symbol.
+  // Together with quote_token, this must reference an open spot symbol.
+  uint32 base_token = 1;
+  // Quote token ID of the target spot symbol.
+  // Together with base_token, this must reference an open spot symbol.
+  uint32 quote_token = 2;
+  // Trade side: LONG = buy, SHORT = sell.
+  PositionSide side = 3;
+  // Maximum concurrent child orders per placement cycle, range [1, 5].
+  uint32 single_orders = 4;
+  // Size per child order in base token (decimal string).
+  // Must be >= symbol min_size, lot-size aligned, and within symbol size
+  // precision.
+  string single_size = 5 [(schema.decimal) = true];
+  // Total strategy size in base token (decimal string).
+  // Must be >= single_size * single_orders, lot-size aligned, and within symbol
+  // size precision.
+  string total_size = 6 [(schema.decimal) = true];
+  // Price guardrail (decimal string):
+  // - LONG: max buy price.
+  // - SHORT: min sell price.
+  // Pass "0" to disable the guardrail.
+  // If non-zero, must be a valid decimal > 0 and precision must not exceed
+  // symbol tick precision.
+  string price_bound = 7 [(schema.decimal) = true];
+  // Child order placement preference.
+  IcebergOrderPreference order_preference = 8;
+}
+
+// StrategyPlaceOrderMessage is a privileged order placement payload used by
+message StrategyPlaceOrderMessage {
+  // Strategy instance ID that owns this order.
+  uint64 strategy_id = 1;
+  // Base token ID of the target symbol.
+  uint32 base_token = 2;
+  // Quote token ID of the target symbol.
+  uint32 quote_token = 3;
+  // Order side (LONG/SHORT).
+  PositionSide side = 4;
+  // Position mode (CROSS/ISOLATED).
+  PositionMode mode = 5;
+  // Order type (LIMIT or MARKET).
+  OrderType type = 6;
+  // Time-in-force.
+  // INVALID defaults to GTC. MARKET orders are executed as IOC.
+  OrderTimeInForce time_in_force = 7;
+  // Price decimal string.
+  // - LIMIT: required and must be > 0.
+  // - MARKET: must be "0".
+  string price = 8 [(schema.decimal) = true];
+  // Size decimal string in base token.
+  // Must be >= 0.
+  string size = 9 [(schema.decimal) = true];
+  // Reduce-only hint.
+  // If size is "0", this order is treated as reduce-only.
+  bool reduce_only = 10;
+  // Self-trade prevention mode.
+  SelfTradePreventionMode stpMode = 11;
+}
+
+// SpotStrategyPlaceOrderMessage is a privileged spot order placement payload
+message SpotStrategyPlaceOrderMessage {
+  // Strategy instance ID that owns this order.
+  uint64 strategy_id = 1;
+  // Base token ID of the target symbol.
+  uint32 base_token = 2;
+  // Quote token ID of the target symbol.
+  uint32 quote_token = 3;
+  // Trade side: LONG = buy, SHORT = sell.
+  PositionSide side = 4;
+  // Order type (LIMIT or MARKET).
+  OrderType type = 5;
+  // Time-in-force.
+  // INVALID defaults to GTC. MARKET orders are executed as IOC.
+  OrderTimeInForce time_in_force = 6;
+  // Price decimal string.
+  // - LIMIT: required and must be > 0.
+  // - MARKET: must be "0".
+  string price = 7 [(schema.decimal) = true];
+  // Size decimal string in base token.
+  // Must be >= 0.
+  string size = 8 [(schema.decimal) = true];
+  // Self-trade prevention mode.
+  SelfTradePreventionMode stp_mode = 9;
+}
+
+// StrategyCancelOrderMessage cancels one order under a strategy.
+message StrategyCancelOrderMessage {
+  // Strategy instance ID.
+  uint64 strategy_id = 1;
+  // Order ID to cancel. Must be > 0 when provided.
+  // At least one of order_id or client_order_id must be provided.
+  optional uint64 order_id = 2;
+  // Client order ID to cancel.
+  // Max length: 16 bytes.
+  // At least one of order_id or client_order_id must be provided.
+  optional bytes client_order_id = 3;
+}
+
+// CompleteStrategyMessage marks one strategy as naturally completed.
+// This is a privileged strategy-service action.
+message CompleteStrategyMessage {
+  // Strategy instance ID.
+  uint64 strategy_id = 1;
+}

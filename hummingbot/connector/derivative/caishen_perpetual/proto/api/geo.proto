@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package geo;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// Geo 地理位置
+service Geo {
+  // 查询当前请求 IP 的地理位置及封锁状态
+  rpc GetGeoBlock(GetGeoBlockRequest) returns (GetGeoBlockResponse) {
+    option (google.api.http) = {
+      get: "/v1/geo-block"
+    };
+  }
+}
+
+// 查询 GeoBlock 请求；IP 取自客户端连接，无需传参
+message GetGeoBlockRequest {}
+
+// 查询 GeoBlock 响应
+message GetGeoBlockResponse {
+  // 当前 IP 所在地区是否被封锁
+  bool blocked = 1 [(gogoproto.jsontag) = "blocked"];
+  // 发起本次请求的客户端 IP
+  string ip = 2 [(gogoproto.jsontag) = "ip"];
+  // 国家 ISO 3166-1 alpha-2 代码，例如 "US"；无法识别时为空串
+  string country = 3 [(gogoproto.jsontag) = "country"];
+  // 一级行政区划 ISO 代码，例如 "CA"；无数据时为空串
+  string region = 4 [(gogoproto.jsontag) = "region"];
+}

@@ -1,0 +1,28 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+// ConvertToMultiSigMessage converts a regular account into a multisig account.
+message ConvertToMultiSigMessage {
+  // Required signer threshold (M in M-of-N).
+  // Must satisfy: 0 < threshold <= len(signers), and threshold <= 10.
+  uint32 threshold = 1;
+  // Allowed signer addresses (N signers), each 20 bytes and unique.
+  // Example: 3 signers with threshold 2 means 2-of-3 multisig.
+  repeated bytes signers = 2;
+}
+
+// UpdateMultiSigConfigMessage updates signer set and threshold of an existing
+// multisig account.
+message UpdateMultiSigConfigMessage {
+  // New required signer threshold (M in M-of-N).
+  // Must satisfy: 0 < threshold <= len(signers), and threshold <= 10.
+  uint32 threshold = 1;
+  // New allowed signer addresses, each 20 bytes and unique.
+  repeated bytes signers = 2;
+}
+
+// ConvertToRegularMessage disables multisig and reverts account mode to
+// regular.
+message ConvertToRegularMessage {}

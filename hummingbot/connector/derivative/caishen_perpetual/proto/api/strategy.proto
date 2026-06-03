@@ -1,0 +1,167 @@
+syntax = "proto3";
+
+package strategy;
+
+import "google/api/annotations.proto";
+import "google/protobuf/wrappers.proto";
+import "gogoproto/gogo.proto";
+import "schema/base.proto";
+import "schema/strategy.proto";
+import "schema/order.proto";
+import "order.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 策略
+service Strategy {
+  // 查询主账户下已停止的策略历史，可按模板类型与交易对过滤，按创建时间游标分页。
+  rpc ListStrategies(ListStrategiesRequest) returns (ListStrategiesResponse) {
+    option (google.api.http).get = "/v1/strategies/stopped";
+  }
+
+  // 查询主账户下当前运行中的策略实例，一次性返回全部结果。
+  rpc ListRunningStrategies(ListRunningStrategiesRequest)
+      returns (ListRunningStrategiesResponse) {
+    option (google.api.http).get = "/v1/strategies/running";
+  }
+
+  // 按策略实例 ID 查询单个策略的详情。
+  rpc GetStrategyById(GetStrategyByIdRequest)
+      returns (GetStrategyByIdResponse) {
+    option (google.api.http).get = "/v1/strategies/by-strategy-id";
+  }
+
+  // 查询指定策略实例关联的订单历史。
+  rpc ListStrategyOrders(ListStrategyOrdersRequest)
+      returns (order.ListOrderHistoryResponse) {
+    option (google.api.http).get = "/v1/strategies/orders";
+  }
+}
+
+message ListStrategiesRequest {
+  // 查询所用的主账户，必填。
+  string master_account = 1
+      [(gogoproto.moretags) = "form:\"master_account\" binding:\"required\""];
+  // 模板类型过滤：1=TWAP, 2=ICEBERG, 3=SPOT_TWAP, 4=SPOT_ICEBERG。
+  // 可选；不传或 0（UNKNOWN）表示返回所有模板类型。
+  int32 template_type = 3 [
+    (gogoproto.moretags) = "form:\"template_type\"",
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.StrategyTemplateType",
+    (gogoproto.nullable) = true
+  ];
+  // 分页游标，首页传空字符串，后续页传上一页返回的 cursor。
+  string cursor = 4 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 单页返回数量上限。
+  uint64 limit = 5 [(gogoproto.moretags) = "form:\"limit\""];
+  // 交易域，可选；空或未传表示全部；0=Perp, 1=Spot。
+  string trading_domain = 6 [(gogoproto.moretags) = "form:\"trading_domain\""];
+  // 按交易对名称过滤，例如 "BTC-USDC"，不传则不过滤。
+  string symbol = 7 [(gogoproto.moretags) = "form:\"symbol\""];
+}
+
+message ListStrategiesResponse {
+  repeated StrategyResponse strategies = 1;
+  // 下一页游标，为 null 时表示已无更多数据。
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+message ListRunningStrategiesRequest {
+  // 查询所用的主账户，必填。
+  string master_account = 1
+      [(gogoproto.moretags) = "form:\"master_account\" binding:\"required\""];
+  // 模板类型过滤：1=TWAP, 2=ICEBERG, 3=SPOT_TWAP, 4=SPOT_ICEBERG。
+  // 可选；不传或 0（UNKNOWN）表示返回所有模板类型。
+  int32 template_type = 2 [
+    (gogoproto.moretags) = "form:\"template_type\"",
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.StrategyTemplateType",
+    (gogoproto.nullable) = true
+  ];
+  // 交易域，可选；空或未传表示全部；0=Perp, 1=Spot。
+  string trading_domain = 3 [(gogoproto.moretags) = "form:\"trading_domain\""];
+  // 按交易对名称过滤，例如 "BTC-USDC"，不传则不过滤。
+  string symbol = 4 [(gogoproto.moretags) = "form:\"symbol\""];
+}
+
+message ListRunningStrategiesResponse {
+  repeated StrategyResponse strategies = 1;
+}
+
+message GetStrategyByIdRequest {
+  // 查询所用的主账户，必填。
+  string master_account = 1
+      [(gogoproto.moretags) = "form:\"master_account\" binding:\"required\""];
+  // 策略实例 ID，必填。
+  uint64 strategy_id = 2
+      [(gogoproto.moretags) = "form:\"strategy_id\" binding:\"required\""];
+  // 交易域：0=Perp, 1=Spot, 2=Prediction，不传默认为 0（Perp）。
+  share.schema.TradingDomain trading_domain = 3
+      [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+message GetStrategyByIdResponse {
+  StrategyResponse strategy = 1;
+}
+
+message ListStrategyOrdersRequest {
+  // 查询所用的主账户，必填。
+  string master_account = 1
+      [(gogoproto.moretags) = "form:\"master_account\" binding:\"required\""];
+  // 策略实例 ID，必填。
+  uint64 strategy_id = 2
+      [(gogoproto.moretags) = "form:\"strategy_id\" binding:\"required\""];
+  // 按订单上链时间过滤的起始时间（含），Unix 毫秒；取值不大于 0 时不设下界。
+  int64 from = 3 [(gogoproto.moretags) = "form:\"from\""];
+  // 按订单上链时间过滤的结束时间（不含），Unix 毫秒；取值不大于 0 时不设上界。
+  int64 to = 4 [(gogoproto.moretags) = "form:\"to\""];
+  // 分页游标，首页传空字符串，后续页传上一页返回的 cursor。
+  string cursor = 5 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 单页返回数量上限。
+  uint64 limit = 6 [(gogoproto.moretags) = "form:\"limit\""];
+  // 交易域：0=Perp, 1=Spot, 2=Prediction，不传默认为 0（Perp）。
+  share.schema.TradingDomain trading_domain = 7
+      [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 策略实例信息
+message StrategyResponse {
+  uint64 strategy_id = 1;
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  bytes master_account = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 策略名称，取值为模板类型名称，例如
+  // "TWAP"、"ICEBERG"、"SPOT_TWAP"、"SPOT_ICEBERG"。
+  string name = 4;
+  // 策略参数，JSON 字符串，其结构因策略模板类型而异。
+  string params = 5;
+  // 策略状态：0=PENDING（待启动）, 1=RUNNING（运行中）,
+  // 2=STOPPED（已手动停止）, 3=COMPLETED（已正常完成）,
+  // 4=FAILED（因不可恢复错误而停止）。
+  share.schema.StrategyInstanceStatus status = 6
+      [(gogoproto.jsontag) = "status"];
+  // 模板类型：1=TWAP, 2=ICEBERG, 3=SPOT_TWAP, 4=SPOT_ICEBERG。
+  share.schema.StrategyTemplateType template_type = 7
+      [(gogoproto.jsontag) = "template_type"];
+  // 创建时间，Unix 毫秒。
+  int64 created_at = 8 [(gogoproto.jsontag) = "created_at,string"];
+  // 结束时间，Unix 毫秒；策略尚未结束（如运行中）时为 0。
+  int64 finished_at = 9 [(gogoproto.jsontag) = "finished_at,string"];
+  // 执行状态，JSON 字符串，其结构因策略模板类型而异；
+  // 运行中的策略反映当前进度，策略停止后不再更新。
+  string execution_state = 10;
+  // 交易域：0=Perp, 1=Spot, 2=Prediction。
+  share.schema.TradingDomain trading_domain = 11
+      [(gogoproto.jsontag) = "trading_domain"];
+}

@@ -1,0 +1,318 @@
+syntax = "proto3";
+
+package vault;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 金库
+service Vault {
+  // 查询金库列表
+  rpc ListVaults(ListVaultsRequest) returns (ListVaultsResponse) {
+    option (google.api.http).get = "/v1/vaults";
+  }
+
+  // 按 Leader 查询金库列表
+  rpc ListVaultAccountsByLeader(ListVaultAccountsByLeaderRequest)
+      returns (ListVaultAccountsByLeaderResponse) {
+    option (google.api.http).get = "/v1/vaults/by-leader";
+  }
+
+  // 查询金库详情
+  rpc GetVaultInfo(GetVaultInfoRequest) returns (GetVaultInfoResponse) {
+    option (google.api.http).get = "/v1/vault/info";
+  }
+}
+
+// 查询金库列表请求
+message ListVaultsRequest {
+  // 用户账户地址；可选，传入后将返回该账户在各金库的持仓资产。
+  string account = 1 [(gogoproto.moretags) = "form:\"account\""];
+}
+
+// 查询金库列表响应
+message ListVaultsResponse {
+  // 金库列表
+  repeated VaultResponse vaults = 1;
+}
+
+// 按 Leader 查询金库账户列表请求
+message ListVaultAccountsByLeaderRequest {
+  // Leader 账户地址
+  string leader = 1
+      [(gogoproto.moretags) = "form:\"leader\" binding:\"required\""];
+}
+
+// 按 Leader 查询金库列表响应
+message ListVaultAccountsByLeaderResponse {
+  // 金库列表
+  repeated LeaderVaultResponse vaults = 1;
+}
+
+// Leader 视角的金库元数据
+message LeaderVaultResponse {
+  // 金库账户
+  bytes vault_account = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "vault_account"
+  ];
+  // 金库名称
+  string name = 2;
+  // 金库描述
+  string desc = 3;
+  // 创建时间（Unix 毫秒）
+  int64 created_at = 4 [(gogoproto.jsontag) = "created_at"];
+  // 金库状态：0=normal, 1=closing, 2=closed, 3=maintaining。
+  uint32 status = 5 [(gogoproto.jsontag) = "status"];
+  // 提现时是否自动平仓
+  bool auto_close_on_withdraw = 6
+      [(gogoproto.jsontag) = "auto_close_on_withdraw"];
+}
+
+// 查询金库详情请求
+message GetVaultInfoRequest {
+  // 金库账户地址。
+  string vault_account = 1
+      [(gogoproto.moretags) = "form:\"vault_account\" binding:\"required\""];
+  // 用户账户地址；可选，传入后将返回该账户视角的盈亏、最大回撤与可提取金额。
+  string account = 2 [(gogoproto.moretags) = "form:\"account\""];
+}
+
+// 查询金库详情响应
+message GetVaultInfoResponse {
+  // 金库账户
+  bytes vault_account = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "vault_account"
+  ];
+  // 金库名称
+  string name = 2;
+  // 金库描述
+  string desc = 3;
+  // Leader 账户
+  bytes leader = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 是否允许继续存款
+  bool allow_deposits = 5 [(gogoproto.jsontag) = "allow_deposits"];
+  // 提现时是否自动平仓
+  bool auto_close_on_withdraw = 6
+      [(gogoproto.jsontag) = "auto_close_on_withdraw"];
+  // 金库状态：0=normal, 1=closing, 2=closed, 3=maintaining。
+  int32 status = 7 [(gogoproto.jsontag) = "status"];
+  // 年化收益率，基于近 30 天数据线性年化；为扣除手续费、分成前的收益率。
+  string apr = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // Leader 收益分成比例。
+  string leader_profit_share = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "leader_profit_share"
+  ];
+  // Leader 当前持有份额占总份额的比例。
+  string leader_fraction = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "leader_fraction"
+  ];
+  // 曲线快照信息
+  VaultSnapshotsResponse snapshots = 11 [(gogoproto.nullable) = false];
+  // 金库当前累计盈亏。
+  string pnl = 12 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 金库账户累计交易量。
+  string volume = 13 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 金库最大回撤，基于份额净值（sharePrice）计算，采样周期 15
+  // 分钟，为采样估算值，非精确值。
+  string estimate_max_drawdown = 14 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "estimate_max_drawdown"
+  ];
+  // 指定用户在该金库的累计盈亏；仅在请求传入 account 时返回，否则为 null。
+  string account_all_time_pnl = 15 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "account_all_time_pnl,omitempty"
+  ];
+  // 指定用户在该金库的未实现盈亏；仅在请求传入 account 时返回，否则为 null。
+  string account_unrealized_pnl = 16 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "account_unrealized_pnl,omitempty"
+  ];
+  // 指定用户在该金库的最大回撤，基于账户权益（equity）计算，采样周期 15
+  // 分钟，为采样估算值，非精确值； 仅在请求传入 account 时返回，否则为 null。
+  string account_estimate_max_drawdown = 17 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "account_estimate_max_drawdown,omitempty"
+  ];
+  // 指定用户按当前份额净值估算的最大可提取金额；
+  // 仅在请求传入 account 时返回，否则为 null。
+  string max_withdrawable = 18 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "max_withdrawable,omitempty"
+  ];
+  // 存款人列表
+  repeated VaultDepositorResponse depositors = 19
+      [(gogoproto.jsontag) = "depositors"];
+  // 当前份额净值。
+  string share_price = 20 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "share_price"
+  ];
+  // 当前总份额。
+  string total_shares = 21 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "total_shares"
+  ];
+  // 当前 epoch。
+  uint64 epoch = 22 [(gogoproto.jsontag) = "epoch"];
+  // 当前净值（TVL）。
+  string equity = 23 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 是否需要 Leader 处理维护事项；仅 Leader 视角返回，非 Leader 视角恒为
+  // false。
+  bool maintenance_required = 24 [(gogoproto.jsontag) = "maintenance_required"];
+  reserved 25, 27;
+  // 触发维护的份额净值阈值；仅在需要维护时返回，否则为 null。
+  string maintenance_threshold = 26 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "maintenance_threshold"
+  ];
+}
+
+// 金库信息
+message VaultResponse {
+  // 金库账户
+  bytes vault_account = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "vault_account"
+  ];
+  // 金库名称
+  string name = 2;
+  // Leader 账户
+  bytes leader = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 年化收益率，基于近 30 天数据线性年化；为扣除手续费、分成前的收益率。
+  string apr = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 当前净值（TVL）。
+  string equity = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 用户持仓资产，由用户持有份额与当前净值折算；未传入 account 时为 0。
+  string amount = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 创建时间（Unix 毫秒）
+  int64 created_at = 7 [(gogoproto.jsontag) = "created_at"];
+  // 曲线快照信息
+  VaultSnapshotsResponse snapshots = 8 [(gogoproto.nullable) = false];
+}
+
+// 金库曲线快照
+message VaultSnapshotsResponse {
+  // 快照更新时间（Unix 毫秒）
+  int64 updated_at = 1 [(gogoproto.jsontag) = "updated_at"];
+  // 不同时间窗口的曲线数据
+  map<string, VaultCurveWindowResponse> curves = 2;
+}
+
+// 单个时间窗口的曲线数据
+message VaultCurveWindowResponse {
+  // 窗口标识，例如 1d/7d/30d/all
+  string window = 1;
+  // 窗口更新时间（Unix 毫秒）
+  int64 updated_at = 2 [(gogoproto.jsontag) = "updated_at"];
+  // 盈亏曲线点集合。
+  repeated VaultCurvePointResponse pnl_points = 3
+      [(gogoproto.jsontag) = "pnl_points"];
+  // 净值曲线点集合；金库详情接口返回，列表概览接口不返回，未返回时该字段不出现。
+  repeated VaultCurvePointResponse equity_points = 4
+      [(gogoproto.jsontag) = "equity_points,omitempty"];
+}
+
+// 曲线点
+message VaultCurvePointResponse {
+  // 时间戳（Unix 毫秒）
+  int64 time = 1 [(gogoproto.jsontag) = "time"];
+  // 曲线值
+  string value = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// 金库存款人信息
+message VaultDepositorResponse {
+  // 存款人账户
+  bytes depositor = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 当前持仓资产，由持有份额与当前净值折算。
+  string amount = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 未实现盈亏。
+  string unrealized_pnl = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "unrealized_pnl"
+  ];
+  // 累计盈亏。
+  string all_time_pnl = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "all_time_pnl"
+  ];
+  // 链上加入时间（Unix 毫秒）
+  int64 on_chain_created_at = 5 [(gogoproto.jsontag) = "on_chain_created_at"];
+  // 当前持有份额。
+  string shares = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 持仓成本份额净值。
+  string cost_per_share = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "cost_per_share"
+  ];
+  // 存款人所在 epoch。
+  uint64 epoch = 8;
+}

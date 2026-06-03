@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/error.proto";
+import "schema/changes_collector.proto";
+
+// ActionResult is the per-sequence execution result.
+message ActionResult {
+  // Execution error. NO_ERROR indicates success.
+  Error error = 1;
+  // Deterministic state changes emitted by this action. Can be empty.
+  ChangesCollector collector = 2;
+}

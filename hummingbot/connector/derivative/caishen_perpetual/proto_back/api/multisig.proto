@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package multisig;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Multisig {
+  rpc GetMultisigConfig(GetMultisigConfigRequest)
+      returns (GetMultisigConfigResponse) {
+    option (google.api.http).get = "/v1/multisig/config";
+  }
+}
+
+message GetMultisigConfigRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+}
+
+message GetMultisigConfigResponse {
+  bytes account = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  uint32 threshold = 2;
+  repeated bytes signers = 3 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+}

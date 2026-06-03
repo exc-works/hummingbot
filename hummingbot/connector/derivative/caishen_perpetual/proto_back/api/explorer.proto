@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package explorer;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "schema/tx.proto";
+import "schema/error.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Explorer {
+  // LatestBlock 返回最新的区块
+  rpc LatestBlock(LatestBlockRequest) returns (LatestBlockResponse) {
+    option (google.api.http) = {
+      get: "/v1/explorer/block/latest"
+    };
+  }
+
+  // 根据区块高度获取区块详情(包括tx列表)
+  // 可能的错误：1088-未找到区块
+  rpc GetBlock(GetBlockRequest) returns (GetBlockResponse) {
+    option (google.api.http) = {
+      get: "/v1/explorer/block/{number}"
+    };
+  }
+  // 根据txHash获取tx详情
+  // 可能的错误：1089-未找到tx
+  rpc GetTx(GetTxRequest) returns (GetTxResponse) {
+    option (google.api.http) = {
+      get: "/v1/explorer/tx/{hash}"
+    };
+  }
+  // 根据地址获取账户的tx列表(最多300条)
+  rpc ListAccountTxs(ListAccountTxsRequest) returns (ListAccountTxsResponse) {
+    option (google.api.http) = {
+      get: "/v1/explorer/account/{account}"
+    };
+  }
+}
+
+message LatestBlockRequest {}
+
+message LatestBlockResponse {
+  BlockResponse block = 1;
+}
+
+message BlockResponse {
+  uint64 number = 1;
+  bytes proposer = 2 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  bytes hash = 3 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  int64 time = 4;
+  uint64 start_sequence_id = 5;
+  uint64 end_sequence_id = 6;
+}
+
+message GetBlockRequest {
+  uint64 number = 1 [(gogoproto.moretags) = "uri:\"number\""];
+}
+
+message GetBlockResponse {
+  uint64 number = 1;
+  // unix millisecs
+  int64 time = 2;
+  uint64 num_tx = 3 [(gogoproto.jsontag) = "num_tx"];
+  bytes proposer = 4 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  bytes hash = 5 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  repeated BlockTx txs = 6 [(gogoproto.jsontag) = "txs"];
+}
+
+message BlockTx {
+  bytes hash = 1 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  uint64 number = 2;
+  int64 time = 3;
+  bytes account = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  share.schema.TxActionType action = 5;
+}
+
+message GetTxRequest {
+  string hash = 1 [(gogoproto.moretags) = "uri:\"hash\""];
+}
+
+message GetTxResponse {
+  bytes hash = 1 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  uint64 number = 2;
+  int64 time = 3;
+  bytes account = 4 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  share.schema.TxActionType action = 5;
+  bytes data = 6;
+  share.schema.Error error = 7 [(gogoproto.jsontag) = "error"];
+}
+
+message ListAccountTxsRequest {
+  string account = 1 [(gogoproto.moretags) = "uri:\"account\""];
+}
+
+message ListAccountTxsResponse {
+  repeated BlockTx txs = 1 [(gogoproto.jsontag) = "txs"];
+}

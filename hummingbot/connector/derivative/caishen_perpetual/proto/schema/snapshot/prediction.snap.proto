@@ -1,0 +1,123 @@
+// Code generated DO NOT EDIT.
+// source: protoc-gen-snapshot
+
+syntax = "proto3";
+package share.schema.snapshot;
+
+option go_package = "github.com/exc-works/caishen/share/schema/snapshot";
+
+import "schema/chain.proto";
+import "schema/order.proto";
+import "schema/prediction.proto";
+
+message AddressWeightEntry {
+  bytes address = 1;
+  string weight = 2;
+}
+
+message PermissionDomainConfigRow {
+  share.schema.PermissionDomain domain = 1;
+  PermissionDomainConfigSnapshot config = 2;
+}
+
+message PermissionDomainConfigSnapshot {
+  string threshold = 1;
+  repeated AddressWeightEntry proposers = 2;
+}
+
+message PredictionConfig {
+  string create_market_bond_amount = 1;
+  string proposal_bond_amount = 2;
+  string dispute_bond_amount = 3;
+  int64 dispute_duration = 4;
+  int64 min_event_expire_duration = 5;
+  int64 max_event_expire_duration = 6;
+  uint32 max_number_of_order_each_match = 7;
+  uint32 max_orders_per_account = 8;
+  uint32 fee_exponent = 9;
+}
+
+message PredictionConfigFile {
+  PredictionConfig config = 1;
+  uint64 next_event_id = 2;
+  uint32 next_token_id = 3;
+  repeated uint32 prediction_token_ids = 4;
+}
+
+message PredictionEventSnapshot {
+  uint64 event_id = 1;
+  repeated uint64 symbol_ids = 2;
+  int64 deadline = 3;
+  bytes created_by = 4;
+  string create_market_bond_amount = 5;
+  optional uint64 proposed_candidate = 6;
+  optional share.schema.PredictionOutcome proposed_candidate_outcome = 8;
+  bytes proposed_by = 10;
+  int64 dispute_deadline = 11;
+  bytes disputed_by = 12;
+  string proposal_bond_amount = 13;
+  string dispute_bond_amount = 14;
+}
+
+message PredictionOrderSnapshot {
+  int64 time = 1;
+  string price = 2;
+  string filled_price = 3;
+  string size = 4;
+  string filled = 5;
+  string quote_size = 6;
+  string taker_fee_rate = 7;
+  string maker_fee_rate = 8;
+  uint64 id = 9;
+  uint64 seq = 10;
+  bytes account_id = 11;
+  bytes client_order_id = 12;
+  share.schema.PositionSide side = 13;
+  share.schema.OrderType type = 14;
+  share.schema.OrderTimeInForce time_in_force = 15;
+  share.schema.OrderStatus status = 16;
+  share.schema.SelfTradePreventionMode stp_mode = 17;
+  bool hidden = 18;
+  uint32 yes_token_id = 19;
+  uint32 no_token_id = 20;
+  share.schema.PredictionOutcome outcome = 21;
+}
+
+message PredictionSymbolRow {
+  uint64 symbol_id = 1;
+  PredictionSymbolSnapshot symbol = 2;
+}
+
+message PredictionSymbolSnapshot {
+  uint32 yes_token_id = 1;
+  uint32 no_token_id = 2;
+  uint32 status = 3;
+  optional share.schema.PredictionOutcome outcome = 4;
+  uint64 event_id = 6;
+}
+
+message SlashedBondRecordSnapshot {
+  string remaining_amount = 1;
+  uint32 eligible_recipient_count = 2;
+  repeated SlashedBondDistributionEntry distributed = 3;
+}
+
+message SlashedBondRow {
+  uint64 event_id = 1;
+  uint64 symbol_id = 2;
+  SlashedBondRecordSnapshot record = 3;
+}
+
+message SnapshotPredictionOrderBookFile {
+  string last_trade_price = 1;
+  share.schema.PredictionOutcome last_outcome = 2;
+  repeated PredictionOrderSnapshot yes_bids = 3;
+  repeated PredictionOrderSnapshot yes_asks = 4;
+  repeated PredictionOrderSnapshot no_bids = 5;
+  repeated PredictionOrderSnapshot no_asks = 6;
+}
+
+message SlashedBondDistributionEntry {
+  bytes account_id = 1;
+  string amount = 2;
+}

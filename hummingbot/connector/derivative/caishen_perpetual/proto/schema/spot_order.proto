@@ -1,0 +1,112 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+import "schema/order.proto";
+
+// SpotPlaceOrderMessage is the spot order-placement payload.
+// Perp-only fields (mode/reduce_only/position_id) are intentionally excluded.
+message SpotPlaceOrderMessage {
+  // Base token id.
+  uint32 base_token = 1;
+  // Quote token id.
+  uint32 quote_token = 2;
+  // Order side. Required.
+  PositionSide side = 3;
+  // Parent order type. Required.
+  OrderType type = 4;
+  // Time-in-force for the parent order.
+  // INVALID_TIME_IN_FORCE defaults to GTC.
+  // MARKET orders are always treated as IOC.
+  OrderTimeInForce time_in_force = 5;
+  // Parent order limit price.
+  // Required and > 0 for LIMIT.
+  // Should be omitted for MARKET and conditional parent types.
+  optional string price = 6 [(schema.decimal) = true];
+  // Parent order base size.
+  // Must be >= 0 when provided.
+  // Required and > 0 for LIMIT.
+  // For MARKET, at least one of size/quote_size must be > 0.
+  // Should be omitted for conditional parent types.
+  // Example: "0.5".
+  optional string size = 7 [(schema.decimal) = true];
+  // Parent order quote notional (MARKET only).
+  // Must be > 0 when provided.
+  // Mutually exclusive with size.
+  // Decimal places must not exceed symbol max market-quote precision.
+  // Should be omitted for LIMIT and conditional parent types.
+  // Example: "100".
+  optional string quote_size = 8 [(schema.decimal) = true];
+
+  // Trigger params.
+  // Required when type=TRIGGER.
+  // Must be omitted for type=LIMIT/MARKET/TAKE_PROFIT_STOP_LOSS/TRAILING.
+  optional TriggerParamsMessage trigger = 9;
+  // Attached take-profit params.
+  // At least one of tp/sl is required when type=TAKE_PROFIT_STOP_LOSS.
+  optional TriggerParamsMessage tp = 10;
+  // Attached stop-loss params.
+  // At least one of tp/sl is required when type=TAKE_PROFIT_STOP_LOSS.
+  optional TriggerParamsMessage sl = 11;
+  // Trailing params.
+  // Required when type=TRAILING.
+  // Must be omitted for other order types.
+  optional TrailingParamsMessage trailing = 12;
+
+  // STP mode.
+  SelfTradePreventionMode stp_mode = 13;
+  // Client-generated id, 1-16 bytes, unique among open orders of the account.
+  // Example: "spot-20260417-001" (as bytes).
+  optional bytes client_order_id = 14;
+}
+
+// SpotCancelOrderMessage cancels one spot order by id or client_order_id.
+message SpotCancelOrderMessage {
+  // Order id. Optional.
+  // At least one of order_id/client_order_id must be provided.
+  optional uint64 order_id = 1;
+  // Client order id. Optional, max 16 bytes.
+  // At least one of order_id/client_order_id must be provided.
+  optional bytes client_order_id = 2;
+}
+
+// SpotCancelBatchOrdersMessage cancels up to 10 spot orders in one tx message.
+message SpotCancelBatchOrdersMessage {
+  // Batch cancel list. Maximum 10 entries.
+  repeated SpotCancelOrderMessage batch = 1;
+}
+
+// SpotAmendOrderMessage amends an existing spot order.
+message SpotAmendOrderMessage {
+  // Order id. Optional.
+  // At least one of order_id/client_order_id must be provided.
+  optional uint64 order_id = 1;
+  // Client order id. Optional, max 16 bytes.
+  // At least one of order_id/client_order_id must be provided.
+  optional bytes client_order_id = 2;
+  // Amended limit price.
+  // Must be >= 0 when provided.
+  // Effective only for LIMIT orders.
+  optional string price = 3 [(schema.decimal) = true];
+  // Amended size.
+  // Must be >= 0 when provided.
+  // Effective only for LIMIT orders.
+  optional string size = 4 [(schema.decimal) = true];
+
+  // Amended trigger params. Effective for TRIGGER orders.
+  optional TriggerParamsMessage trigger = 5;
+  // Amended take-profit params.
+  optional TriggerParamsMessage tp = 6;
+  // Amended stop-loss params.
+  optional TriggerParamsMessage sl = 7;
+}
+
+// SpotTriggerOrderMessage manually triggers one spot conditional parent order.
+message SpotTriggerOrderMessage {
+  // Conditional parent order id. Must be > 0.
+  uint64 order_id = 1;
+  // For TAKE_PROFIT_STOP_LOSS parents: true triggers TP, false triggers SL.
+  bool tp_triggered = 2;
+}

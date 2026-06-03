@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+package open_interest;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 持仓量
+service OpenInterest {
+  // 获取指定交易对的当前持仓量
+  rpc GetOpenInterestBySymbol(GetOpenInterestBySymbolRequest)
+      returns (GetOpenInterestBySymbolResponse) {
+    option (google.api.http) = {
+      get: "/v1/open-interests/by-symbol"
+    };
+  }
+
+  // 列出所有交易对的当前持仓量
+  rpc ListOpenInterest(ListOpenInterestRequest)
+      returns (ListOpenInterestResponse) {
+    option (google.api.http) = {
+      get: "/v1/open-interests"
+    };
+  }
+
+  // 获取指定交易对的持仓量历史数据
+  rpc GetOpenInterestHistory(GetOpenInterestHistoryRequest)
+      returns (GetOpenInterestHistoryResponse) {
+    option (google.api.http) = {
+      get: "/v1/open-interests/history"
+    };
+  }
+}
+
+// 结果上下文
+message ResultContext {
+  // 持仓量状态的序列号，每次更新递增；无数据时为 0
+  uint64 sequence = 1;
+}
+
+// 获取指定交易对当前持仓量的请求
+message GetOpenInterestBySymbolRequest {
+  // 交易对符号，必填
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+}
+
+// 获取指定交易对当前持仓量的响应
+message GetOpenInterestBySymbolResponse {
+  // 结果上下文
+  ResultContext context = 1;
+  // 基础代币 ID
+  uint32 base_token = 2;
+  // 计价代币 ID
+  uint32 quote_token = 3;
+  // 持仓量，按基础代币数量计；为单边口径（多空两边等价，只计一边）；十进制字符串
+  string amount = 4;
+  // 交易对符号；无法解析代币对时为空串
+  string symbol = 5;
+  // 多头仓位数量（笔数）
+  int32 long_positions = 6 [(gogoproto.jsontag) = "long_positions"];
+  // 空头仓位数量（笔数）
+  int32 short_positions = 7 [(gogoproto.jsontag) = "short_positions"];
+}
+
+// 列出所有交易对当前持仓量的请求
+message ListOpenInterestRequest {}
+
+// 列出所有交易对当前持仓量的响应
+message ListOpenInterestResponse {
+  // 各交易对的当前持仓量列表
+  repeated GetOpenInterestBySymbolResponse open_interests = 1;
+}
+
+// 获取持仓量历史的请求
+message GetOpenInterestHistoryRequest {
+  // 交易对符号，必填
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+  // 起始时间，Unix 毫秒，包含；为 0 时不限下界
+  int64 from = 2 [(gogoproto.moretags) = "form:\"from\""];
+  // 结束时间，Unix 毫秒，不包含；为 0 时不限上界
+  int64 to = 3 [(gogoproto.moretags) = "form:\"to\""];
+  // 返回条数上限，默认 100；时间范围无硬性上限，返回条数受 limit 限制
+  int64 limit = 4 [(gogoproto.moretags) =
+                       "form:\"limit,default=100\" binding:\"required\""];
+}
+
+// 获取持仓量历史的响应
+message GetOpenInterestHistoryResponse {
+  // 持仓量历史项列表，按时间倒序排列
+  repeated OpenInterestHistoryItem history = 1;
+}
+
+// 持仓量历史项
+message OpenInterestHistoryItem {
+  // 时间戳，Unix 毫秒
+  int64 ts = 1;
+  // 持仓量，十进制字符串
+  string amount = 2;
+}

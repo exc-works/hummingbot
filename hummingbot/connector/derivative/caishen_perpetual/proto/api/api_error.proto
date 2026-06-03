@@ -1,0 +1,106 @@
+syntax = "proto3";
+package error;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+// ApiErrorCode 列出 HTTP 与 WebSocket API
+// 可能返回的错误码。每个值的前导注释为该错误的 英文文案模板，其中 {0}、{1}
+// 为位置占位符，在返回时填充为具体值。
+enum ApiErrorCode {
+  option (share.schema.generate_messages) = true;
+  // Success: the call succeeded. This value is never returned with a message
+  // body; the API layer surfaces success via HTTP 2xx + ApiResponse.Code = 0.
+  API_NO_ERROR = 0;
+
+  // The request contains an invalid argument.
+  BAD_ARGUMENT = 10001;
+  // The argument {0} is invalid
+  BAD_ARGUMENT_CUSTOM = 10002;
+  // The system is busy. Please try again shortly.
+  SYSTEM_BUSY = 10003;
+  // The signer is not authorized for this operation.
+  PERMISSION_DENIED = 10004;
+  // An internal server error occurred. Please retry later.
+  INTERNAL_ERROR = 10005;
+  // The request conflicts with the current resource state.
+  CONFLICT = 10006;
+  // The specified token was not found.
+  TOKEN_NOT_FOUND = 10014;
+  // Invalid request sequence number.
+  BAD_SEQUENCE = 10017;
+  // The account ID is invalid or does not exist.
+  BAD_ACCOUNT_ID = 10020;
+  // The specified symbol was not found.
+  SYMBOL_NOT_FOUND = 10021;
+  // The specified order type is not supported.
+  BAD_ORDER_TYPE = 10026;
+  // Invalid client_order_id format.
+  BAD_CLIENT_ORDER_ID = 10049;
+  // The specified candle resolution is not supported.
+  BAD_RESOLUTION = 10075;
+  // Subscription limit exceeded for this connection (max {0}).
+  TOO_MANY_SUBSCRIPTIONS = 10077;
+  // Params length mismatch, expected {0}, got {1}
+  PARAMS_LENGTH_MISMATCH = 10078;
+  // The specified subscription was not found.
+  SUBSCRIPTION_NOT_FOUND = 10079;
+  // Requested limit exceeds the maximum allowed value of {0}.
+  QUERY_LIMIT_EXCEEDED = 10085;
+  // Risk limits are not configured for this market.
+  RISK_LIMITS_NOT_FOUND = 10086;
+  // Fee tier profile is not configured for this trading domain.
+  FEE_TIER_PROFILE_NOT_FOUND = 10087;
+  // The specified block number is invalid or out of range.
+  INVALID_BLOCK_NUMBER = 10088;
+  // The transaction hash is invalid or malformed.
+  INVALID_TX_HASH = 10089;
+  // One of order_id or client_order_id must be provided
+  ONE_ID_REQUIRED = 10091;
+  // Only one of order_id or client_order_id can be provided
+  ONLY_ONE_ID_ALLOWED = 10092;
+  // Pagination cursor is required.
+  CURSOR_IS_EMPTY = 10093;
+  // Rate limit exceeded. Slow down and retry later.
+  RATE_LIMIT_EXCEEDED = 10094;
+  // The specified time range exceeds the maximum allowed limit
+  TIME_RANGE_EXCEEDED = 10095;
+  // The transaction action is not supported
+  UNSUPPORTED_TRANSACTION_ACTION = 10096;
+  // The specified strategy instance was not found.
+  STRATEGY_INSTANCE_NOT_FOUND = 10097;
+  // The faucet has already been claimed for this account.
+  FAUCET_ALREADY_CLAIMED = 10098;
+  // Insufficient ETH balance on Arbitrum, required {0} ETH
+  FAUCET_INSUFFICIENT_ETH = 10099;
+  // Invalid file status
+  INVALID_FILE_STATUS = 10100;
+  // File status cannot be updated multiple times
+  UPDATE_FILE_STATUS_MULTIPLE_TIMES = 10101;
+  // Filename already exists
+  FILENAME_ALREADY_EXISTS = 10102;
+  // The filename is invalid; check allowed characters and length.
+  INVALID_FILENAME = 10103;
+  // Unsupported file type
+  UNSUPPORTED_FILE_TYPE = 10104;
+  // The deadline is invalid or has already passed.
+  INVALID_DEADLINE = 10105;
+  // The specified subaccount was not found.
+  SUBACCOUNT_NOT_FOUND = 10106;
+  // The event draft has expired; save a new draft and submit again
+  PREDICTION_EVENT_DRAFT_DEADLINE_EXPIRED = 10107;
+  // No event draft corresponding to this transaction was found. Please save it
+  // via the event draft API before submitting
+  PREDICTION_EVENT_DRAFT_NOT_FOUND = 10108;
+  // The symbol_count in the signed transaction does not match the number of
+  // outcomes in the saved draft
+  PREDICTION_EVENT_DRAFT_SYMBOL_COUNT_MISMATCH = 10109;
+  // The transaction is for a binary market but the saved draft still has
+  // multi-outcome entries
+  PREDICTION_EVENT_DRAFT_BINARY_OUTCOMES_CONFLICT = 10110;
+  // The specified prediction event was not found.
+  PREDICTION_EVENT_NOT_FOUND = 10111;
+  // The prediction market config was not found.
+  PREDICTION_CONFIG_NOT_FOUND = 10112;
+}

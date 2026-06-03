@@ -1,0 +1,97 @@
+syntax = "proto3";
+package file;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 文件
+service File {
+  // 生成上传 URL
+  rpc GenerateUploadUrls(GenerateUploadUrlsRequest)
+      returns (GenerateUploadUrlsResponse) {
+    option (google.api.http) = {
+      post: "/v1/files/generate-upload-urls",
+      body: "*"
+    };
+  }
+}
+
+message GenerateUploadUrlsRequest {
+  repeated string files_suffix = 1 [(gogoproto.jsontag) = "files_suffix"];
+}
+
+message GenerateUploadUrlsResponse {
+  repeated UploadFileResponse upload_files = 1
+      [(gogoproto.jsontag) = "upload_files"];
+}
+
+message UploadFileResponse {
+  string upload_url = 1 [(gogoproto.jsontag) = "upload_url"];
+  string file_path = 2 [(gogoproto.jsontag) = "file_path"];
+  map<string, string> form_data = 3 [(gogoproto.jsontag) = "form_data"];
+}
+
+message PreSignedParameter {
+  // filename 是最终存储在 Bucket 中的文件名，如有需要应带上完整的文件夹路径
+  string filename = 1 [(gogoproto.jsontag) = "filename"];
+  // content_type 是该文件对应的 Content Type；为空时将用 mime 工具确认其
+  // ContentType
+  string content_type = 2 [(gogoproto.jsontag) = "content_type"];
+  // max_file_size 表示上传文件的最大大小限制；为 0 表示不限制
+  uint64 max_file_size = 3 [(gogoproto.jsontag) = "max_file_size,string"];
+  // policy_expire_time 是预签名策略的过期时间；超过该时间后上传操作将被拒绝
+  google.protobuf.Timestamp policy_expire_time = 4 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "policy_expire_time"
+  ];
+}
+
+message PreSignedUploadRequest {
+  // pre_signed_params 是预签名所需的参数
+  repeated PreSignedParameter pre_signed_params = 1
+      [(gogoproto.jsontag) = "pre_signed_params"];
+}
+
+message PreSignedResult {
+  // filename 是返回的最终对象名
+  string filename = 1 [(gogoproto.jsontag) = "filename"];
+  // upload_url 是用于 POST 上传文件的 URL
+  string upload_url = 2 [(gogoproto.jsontag) = "upload_url"];
+  // form_data 是预签名上传所需的字段与值，需填入 POST 的 FormData
+  map<string, string> form_data = 3 [(gogoproto.jsontag) = "form_data"];
+}
+
+message PreSignedUploadResponse {
+  // pre_signed_results 是用于上传的预签名结果集
+  repeated PreSignedResult pre_signed_results = 1
+      [(gogoproto.jsontag) = "pre_signed_results"];
+}
+
+message UpdateFileStatusRequest {
+  // file_status 表示所提供文件名的当前应用状态。1 -> UploadedAndActive；2 ->
+  // Removed
+  int32 file_status = 1 [
+    (gogoproto.jsontag) = "file_status",
+    (gogoproto.moretags) = "form:\"file_status\""
+  ];
+  // filenames 是待更新状态的文件列表
+  repeated string filenames = 2 [
+    (gogoproto.jsontag) = "filenames",
+    (gogoproto.moretags) = "form:\"filenames\""
+  ];
+  // 文件删除的截止时间，仅当 file_status=2 时生效
+  google.protobuf.Timestamp deadline = 3 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "deadline"
+  ];
+}
+
+message UpdateFileStatusResponse {
+  // uploaded 是与 filenames 对应的上传状态；仅当 file_status 为 1 时返回
+  repeated bool uploaded = 1 [(gogoproto.jsontag) = "uploaded,omitempty"];
+}

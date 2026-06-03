@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package open_interest;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service OpenInterest {
+  // GetOpenInterestBySymbol 获取指定交易对的开仓量
+  rpc GetOpenInterestBySymbol(GetOpenInterestBySymbolRequest)
+      returns (GetOpenInterestBySymbolResponse) {
+    option (google.api.http) = {
+      get: "/v1/open-interests/by-symbol"
+    };
+  }
+
+  // ListOpenInterest 列出所有交易对的开仓量
+  rpc ListOpenInterest(ListOpenInterestRequest)
+      returns (ListOpenInterestResponse) {
+    option (google.api.http) = {
+      get: "/v1/open-interests"
+    };
+  }
+
+  // GetOpenInterestHistory 获取开仓量历史数据
+  rpc GetOpenInterestHistory(GetOpenInterestHistoryRequest)
+      returns (GetOpenInterestHistoryResponse) {
+    option (google.api.http) = {
+      get: "/v1/open-interests/history"
+    };
+  }
+}
+
+message ResultContext {
+  uint64 sequence = 1;
+}
+
+message GetOpenInterestBySymbolRequest {
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+}
+
+message GetOpenInterestBySymbolResponse {
+  ResultContext context = 1;
+  uint32 base_token = 2;
+  uint32 quote_token = 3;
+  string amount = 4;
+  // Text format of the symbol, "BTC-USDT" for example.
+  string symbol = 5;
+  int32 long_positions = 6 [(gogoproto.jsontag) = "long_positions"];
+  int32 short_positions = 7 [(gogoproto.jsontag) = "short_positions"];
+}
+
+message ListOpenInterestRequest {}
+
+message ListOpenInterestResponse {
+  repeated GetOpenInterestBySymbolResponse open_interests = 1;
+}
+
+message GetOpenInterestHistoryRequest {
+  // Text format of the symbol, "BTC-USDT" for example.
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+  // Starting timestamp (in milliseconds) for querying historical OI, inclusive.
+  int64 from = 2 [(gogoproto.moretags) = "form:\"from\""];
+  // Ending timestamp (in milliseconds) for querying historical OI, exclusive.
+  int64 to = 3 [(gogoproto.moretags) = "form:\"to\""];
+  int64 limit = 4 [(gogoproto.moretags) =
+                       "form:\"limit,default=100\" binding:\"required\""];
+}
+
+message GetOpenInterestHistoryResponse {
+  repeated OpenInterestHistoryItem history = 1;
+}
+
+message OpenInterestHistoryItem {
+  int64 ts = 1;
+  string amount = 2;
+}

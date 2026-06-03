@@ -1,0 +1,253 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+import "schema/order.proto";
+
+// PredictionOutcome identifies which outcome token is being referenced.
+enum PredictionOutcome {
+  // YES outcome token.
+  YES = 0;
+  // NO outcome token.
+  NO = 1;
+}
+
+// PredictionMatchType describes how a prediction trade was matched.
+enum PredictionMatchType {
+  // Match type not specified.
+  UNSPECIFIED = 0;
+  // Direct YES-vs-YES or NO-vs-NO opposing-side match.
+  COMPLEMENTARY = 1;
+  // Synthetic cross via mint path (opposite-token same-side buy).
+  MINT = 2;
+  // Synthetic cross via merge path (opposite-token same-side sell).
+  MERGE = 3;
+}
+
+// PredictionPlaceOrderMessage places an order in a prediction market.
+// Prediction markets only support LIMIT and MARKET order types.
+// No trigger/TP/SL/trailing support.
+message PredictionPlaceOrderMessage {
+  // YES token ID. Together with no_token identifies one market.
+  // Both token IDs must reference an existing prediction market pair.
+  uint32 yes_token = 1;
+  // NO token ID. Together with yes_token identifies one market.
+  // Both token IDs must reference an existing prediction market pair.
+  uint32 no_token = 2;
+  // Outcome token being traded (YES or NO).
+  PredictionOutcome outcome = 3;
+  // Direction: LONG (buy) or SHORT (sell).
+  PositionSide side = 4;
+  // Order type. Only LIMIT and MARKET are accepted.
+  OrderType type = 5;
+  // Time-in-force.
+  // INVALID defaults to GTC. MARKET orders are executed as IOC.
+  OrderTimeInForce time_in_force = 6;
+  // Limit price in decimal string.
+  // - LIMIT: required and must be > 0.
+  // - MARKET: must be empty or "0".
+  // Example: "0.532".
+  optional string price = 7 [(schema.decimal) = true];
+  // Base size in outcome token amount.
+  // - LIMIT: required and must be > 0.
+  // - MARKET: optional if quote_size is provided.
+  // Example: "25".
+  optional string size = 8 [(schema.decimal) = true];
+  // Optional client idempotency key for deduplication.
+  // Max length: 16 bytes.
+  // Example: 16-byte random value.
+  optional bytes client_order_id = 9;
+  // USD notional for MARKET by-value orders.
+  // Constraints:
+  // - only valid for MARKET,
+  // - must be > 0 when provided,
+  // - mutually exclusive with size,
+  // - precision must be <= 8 decimal places.
+  // Example: "100.50".
+  optional string quote_size = 10 [(schema.decimal) = true];
+}
+
+// PredictionCancelOrderMessage cancels a prediction market order.
+message PredictionCancelOrderMessage {
+  // Order ID to cancel. Must be > 0 when provided.
+  // At least one of order_id or client_order_id must be provided.
+  optional uint64 order_id = 1;
+  // Client order ID to cancel.
+  // Max length: 16 bytes.
+  // At least one of order_id or client_order_id must be provided.
+  optional bytes client_order_id = 2;
+}
+
+// PredictionCancelBatchOrdersMessage cancels multiple prediction market orders
+// in one transaction.
+message PredictionCancelBatchOrdersMessage {
+  // Batch cancel items.
+  repeated PredictionCancelOrderMessage batch = 1;
+}
+
+// PredictionRegisterEventMessage creates a new prediction event.
+message PredictionRegisterEventMessage {
+  // Number of candidate symbols to create under the event.
+  // Valid range: [1, 10].
+  uint32 symbol_count = 1;
+  // Event expiration timestamp in Unix milliseconds.
+  // Example: 1710000000000.
+  // It must be in the future, and (deadline - tx_time) must be within
+  // PredictionConfig.min_event_expire_duration and
+  // PredictionConfig.max_event_expire_duration.
+  int64 deadline = 2;
+}
+
+// PredictionUpdateConfigMessage updates global prediction market configuration.
+message PredictionUpdateConfigMessage {
+  // Bond required to create one prediction event.
+  // Set a positive decimal value to update; omit to keep unchanged.
+  optional string create_market_bond_amount = 1 [(schema.decimal) = true];
+  // Bond required to propose an outcome.
+  // Set a positive decimal value to update; omit to keep unchanged.
+  optional string proposal_bond_amount = 2 [(schema.decimal) = true];
+  // Bond required to open a dispute.
+  // Set a positive decimal value to update; omit to keep unchanged.
+  optional string dispute_bond_amount = 3 [(schema.decimal) = true];
+  // Dispute window duration in milliseconds.
+  // Example: 86400000 for 24h.
+  optional int64 dispute_duration = 4;
+  // Per-account max active non-IOC/FOK orders per market; 0 means no limit.
+  optional uint32 max_orders_per_account = 5;
+  // Minimum allowed (deadline - tx_time), in milliseconds, for
+  // PredictionRegisterEventMessage.deadline.
+  // Must be > 0 and <= max_event_expire_duration.
+  optional int64 min_event_expire_duration = 6;
+  // Maximum allowed (deadline - tx_time), in milliseconds, for
+  // PredictionRegisterEventMessage.deadline.
+  // Must be > 0 and >= min_event_expire_duration.
+  optional int64 max_event_expire_duration = 7;
+  // Max counterpart order count processed per match cycle.
+  // 0 means no cap.
+  optional uint32 max_number_of_order_each_match = 8;
+  // Exponent used in prediction fee calculation.
+  // Valid range: [0, 3].
+  optional uint32 fee_exponent = 9;
+}
+
+// PredictionProposeOutcomeMessage submits an outcome proposal for an event.
+message PredictionProposeOutcomeMessage {
+  // Event ID, for example 42.
+  uint64 event_id = 1;
+  // YES token ID of the candidate market.
+  uint32 candidate_yes_token = 2;
+  // NO token ID of the candidate market.
+  uint32 candidate_no_token = 3;
+  // Proposed final outcome for the candidate market.
+  PredictionOutcome proposed_outcome = 4;
+}
+
+// PredictionDisputeMessage disputes an outcome proposal.
+message PredictionDisputeMessage {
+  // Event ID being disputed.
+  uint64 event_id = 1;
+  // YES token ID of the disputed candidate.
+  uint32 candidate_yes_token = 2;
+  // NO token ID of the disputed candidate.
+  uint32 candidate_no_token = 3;
+}
+
+// PredictionResolveDisputeMessage resolves a disputed proposal (privileged).
+message PredictionResolveDisputeMessage {
+  // Event ID being resolved.
+  uint64 event_id = 1;
+  // YES token ID of the resolved candidate.
+  uint32 candidate_yes_token = 2;
+  // NO token ID of the resolved candidate.
+  uint32 candidate_no_token = 3;
+  // Outcome selected as final by privileged resolver.
+  PredictionOutcome final_candidate_outcome = 4;
+  // Proposal ID hash to resolve (32 bytes).
+  bytes proposal_id = 5 [(schema.hash) = true];
+}
+
+// PredictionConfirmOutcomeMessage confirms a proposal after the dispute window
+// expires with no dispute. Anyone can call this.
+message PredictionConfirmOutcomeMessage {
+  // Event ID to finalize.
+  uint64 event_id = 1;
+  // YES token ID of the confirmed candidate.
+  uint32 candidate_yes_token = 2;
+  // NO token ID of the confirmed candidate.
+  uint32 candidate_no_token = 3;
+}
+
+// PredictionBatchMessage is used for batch operations on a prediction event
+// symbol.
+message PredictionBatchMessage {
+  // Event ID to process.
+  uint64 event_id = 1;
+  // YES token ID of the target market.
+  uint32 yes_token = 2;
+  // NO token ID of the target market.
+  uint32 no_token = 3;
+  // Optional caller-provided batch-size hint.
+  // Non-positive values mean no explicit size preference.
+  // The executor can use a different effective batch size.
+  int32 batch = 4;
+}
+
+// PredictionDistributeSlashedBondMessage distributes slashed bond to
+// recipients.
+message PredictionDistributeSlashedBondMessage {
+  // Event ID that owns the slashed bond record.
+  uint64 event_id = 1;
+  // YES token ID of the target market.
+  uint32 yes_token = 2;
+  // NO token ID of the target market.
+  uint32 no_token = 3;
+  // Recipients who should receive slashed bond rewards in this batch.
+  // Constraints:
+  // - each account is a 20-byte address,
+  // - addresses must be unique within this request,
+  // - max recipient count per request is 10.
+  repeated bytes accounts = 4;
+  // Reward amounts corresponding to accounts. Each amount must be > 0 and its
+  // precision must not exceed 8 decimal places.
+  repeated string amounts = 5;
+  // Total number of recipients whose final reward is > 0 after rounding to
+  // 8 decimal places.
+  // When this value is 0, accounts and amounts must both be empty, and the
+  // system transfers the full slashed amount to the prediction fee account.
+  uint32 eligible_recipient_count = 6;
+}
+
+// PredictionEndMarketMessage ends an event after its deadline has passed by
+// transitioning Active symbols to Ended. Anyone can call this instruction.
+message PredictionEndMarketMessage {
+  // Event ID to end.
+  uint64 event_id = 1;
+}
+
+// PredictionSplitMessage splits USD into YES + NO tokens.
+// 1 USD = 1 YES + 1 NO. The size field specifies the number of token pairs.
+message PredictionSplitMessage {
+  // YES token ID. Together with no_token identifies the market.
+  uint32 yes_token = 1;
+  // NO token ID. Together with yes_token identifies the market.
+  uint32 no_token = 2;
+  // Number of token pairs to mint.
+  // Must be > 0 and must satisfy the market lot/min-size constraints.
+  // Example: "50".
+  string size = 3 [(schema.decimal) = true];
+}
+
+// PredictionMergeMessage merges YES + NO tokens back into USD.
+// 1 YES + 1 NO = 1 USD. The size field specifies the number of token pairs.
+message PredictionMergeMessage {
+  // YES token ID. Together with no_token identifies the market.
+  uint32 yes_token = 1;
+  // NO token ID. Together with yes_token identifies the market.
+  uint32 no_token = 2;
+  // Number of token pairs to burn.
+  // Must be > 0 and must satisfy the market lot/min-size constraints.
+  // Example: "50".
+  string size = 3 [(schema.decimal) = true];
+}

@@ -1,0 +1,612 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+// ErrorCode defines protocol-level deterministic validation and execution
+// failures. Numeric values are persisted and used in API responses.
+enum ErrorCode {
+  // Enables enum-to-message mapping derived from enum comments.
+  option (schema.generate_messages) = true;
+  // Success: the action was accepted and processed without error.
+  NO_ERROR = 0;
+  reserved 1 to 1000;
+  // Removed unused error codes. Numeric IDs are kept reserved.
+  reserved 1008, 1011, 1076, 1080 to 1081, 1084, 1098, 1113, 1118, 1151, 1161;
+  reserved "NOT_PROPOSER", "INSUFFICIENT_SIGNATURES",
+      "TAKER_FEE_RATE_MUST_NOT_NEGATIVE", "UPDATE_STALE_PRICE",
+      "UNAPPROVED_AGENT", "AGENT_NOT_FOUND", "BAD_STOP_TYPE",
+      "BAD_TRAILING_BASE_PRICE", "NOT_ENOUGH_ORDERS_TO_MATCH",
+      "REDUCE_PRICE_OUT_OF_LIQUIDATION_PRICE", "NOT_PENDING_ORDER",
+      "CALCULATE_BANKRUPTCY_PRICE_FAILED";
+  // The specified recent block hash does not exist or has expired.
+  RECENT_BLOCK_HASH_INVALID = 1001;
+  // The recent block has not been finalized yet.
+  RECENT_BLOCK_NOT_FINALIZED = 1002;
+  // The transaction hash already exists.
+  DUPLICATE_TRANSACTION_HASH = 1003;
+  // Malformed data: the data is empty or cannot be parsed.
+  MALFORMED_DATA = 1004;
+  // The chain has already been initialized during genesis and cannot be
+  // re-initialized.
+  CHAIN_ALREADY_INITIALIZED = 1005;
+  // No signatures were provided.
+  MISSING_SIGNATURES = 1006;
+  // The transaction contains too many signatures.
+  TOO_MANY_SIGNATURES = 1007;
+  // The account is invalid.
+  INVALID_ACCOUNT = 1009;
+  // The signature failed all supported verification methods.
+  SIGNATURE_VERIFICATION_FAILED = 1010;
+  // Duplicate signer detected.
+  DUPLICATE_SIGNER = 1012;
+  // The transaction target address is invalid.
+  INVALID_TARGET_ADDRESS = 1013;
+  // The transaction message is too large.
+  MESSAGE_TOO_LARGE = 1014;
+  // Permission configuration is missing, so the authorization check cannot be
+  // completed.
+  MISSING_PERMISSION_CONFIG = 1015;
+  // The signature contains an unrecognized signer address.
+  UNRECOGNIZED_SIGNER_ADDRESS = 1016;
+  // The signature threshold is not met, or the caller does not have sufficient
+  // permission to access this resource.
+  INSUFFICIENT_SIGNATURE_THRESHOLD_OR_PERMISSION = 1017;
+  // The target address is not included in the signers.
+  TARGET_ADDRESS_NOT_IN_SIGNERS = 1018;
+  // Duplicate proposer found in the proposers list.
+  DUPLICATE_PROPOSER = 1019;
+  // The total proposer weight is less than the required threshold.
+  TOTAL_PROPOSER_WEIGHT_BELOW_THRESHOLD = 1020;
+  // The length of the proposers list does not match the length of the weights
+  // list.
+  PROPOSERS_AND_WEIGHTS_LENGTH_MISMATCH = 1021;
+  // Multi-signature verification failed.
+  MULTISIG_VERIFICATION_FAILED = 1022;
+  // The signature type is ambiguous and cannot be determined as agent, regular
+  // account or multi-signature.
+  SIGNATURE_TYPE_AMBIGUOUS = 1023;
+  // The permission domain is invalid.
+  INVALID_PERMISSION_DOMAIN = 1024;
+  reserved 1025 to 1050;
+
+  // The action type is not supported.
+  UNSUPPORTED_ACTION_TYPE = 1051;
+  // The token is already registered.
+  TOKEN_ALREADY_REGISTERED = 1052;
+  // The token decimal precision exceeds the allowed limit.
+  TOKEN_DECIMALS_TOO_LARGE = 1053;
+  // The specified token does not exist.
+  TOKEN_NOT_FOUND = 1054;
+  // The decimal value is malformed and cannot be parsed.
+  MALFORMED_DECIMAL_VALUE = 1055;
+  // The value must be greater than zero.
+  POSITIVE_VALUE_REQUIRED = 1056;
+  // Amount precision exceeds the allowed limit of {0} decimal places.
+  AMOUNT_DECIMALS_TOO_LARGE = 1057;
+  // Deposits for this token are not enabled on the selected chain.
+  DEPOSIT_NOT_AVAILABLE = 1058;
+  // Invalid chain ID.
+  INVALID_CHAIN_ID = 1059;
+  // No proposers are specified.
+  PROPOSERS_CANNOT_BE_EMPTY = 1060;
+  // The chain is already registered.
+  CHAIN_ALREADY_REGISTERED = 1061;
+  // The chain is not registered.
+  CHAIN_NOT_REGISTERED = 1062;
+  // The idempotency key has already been used.
+  IDEMPOTENCY_KEY_ALREADY_USED = 1063;
+  // The base token and quote token cannot be the same.
+  BASE_AND_QUOTE_TOKEN_CANNOT_BE_SAME = 1064;
+  // Price limit bound must be in (0, 1); the conditional price limit bound
+  // must not be less than the price limit bound.
+  INVALID_PRICE_LIMIT_BOUND = 1065;
+  // The leverage value is invalid.
+  INVALID_LEVERAGE = 1066;
+  // The maintenance margin rate (MMR) is invalid.
+  INVALID_MMR = 1067;
+  // Risk limit range is required.
+  MISSING_RANGE = 1068;
+  // The lower bound of the range is invalid.
+  INVALID_RANGE_LOWER = 1069;
+  // The upper bound of the range is invalid.
+  INVALID_RANGE_UPPER = 1070;
+  // The risk limit configuration is invalid.
+  INVALID_RISK_LIMITS = 1071;
+  // The symbol is already registered.
+  SYMBOL_ALREADY_REGISTERED = 1072;
+  // The funding rate bound is invalid.
+  INVALID_FUNDING_RATE_BOUND = 1073;
+  // The first fee tier level must be 0.
+  FIRST_FEE_TIER_MUST_ZERO = 1074;
+  // Fee tier levels must be continuous.
+  FEE_TIER_MUST_CONTINUOUS = 1075;
+  // The fee tier level exceeds the allowed maximum.
+  FEE_TIER_LEVEL_TOO_LARGE = 1077;
+  // At least one fee tier is required.
+  FEE_TIERS_CANNOT_EMPTY = 1078;
+  // The specified fee tier was not found.
+  FEE_TIER_NOT_FOUND = 1079;
+  // The maximum number of agent wallets has been exceeded.
+  MAX_AGENTS_EXCEEDED = 1082;
+  // The agent wallet already exists.
+  AGENT_ALREADY_EXISTS = 1083;
+  // The agent name exceeds the maximum allowed length.
+  AGENT_NAME_MAX_LENGTH_EXCEEDED = 1085;
+  // The agent wallet expiration time exceeds the maximum allowed value.
+  MAX_VALID_TIME_EXCEEDED = 1086;
+  // The agent name is required.
+  AGENT_NAME_REQUIRED = 1087;
+  // The default leverage value is invalid.
+  INVALID_DEFAULT_LEVERAGE = 1088;
+  // The trigger price is invalid: it cannot be parsed or is less than or equal
+  // to zero.
+  INVALID_TRIGGER_PRICE = 1089;
+  // The post-trigger order type is not supported. Only limit and market orders
+  // are allowed.
+  UNSUPPORTED_POST_TRIGGER_ORDER_TYPE = 1090;
+  // A trigger limit order must include a limit price.
+  TRIGGER_LIMIT_ORDER_MISSING_LIMIT_PRICE = 1091;
+  // A trigger market order cannot include a limit price.
+  TRIGGER_MARKET_ORDER_CANNOT_HAVE_LIMIT_PRICE = 1092;
+  // The trigger direction is invalid.
+  INVALID_TRIGGER_DIRECTION = 1093;
+  // Trigger parameters are missing.
+  MISSING_TRIGGER_PARAMS = 1094;
+  // Take-profit or stop-loss parameters are missing.
+  MISSING_TP_OR_SL_PARAMS = 1095;
+  // The trigger price type is invalid.
+  INVALID_TRIGGER_PRICE_TYPE = 1096;
+  // The activation price is invalid.
+  INVALID_ACTIVATION_PRICE = 1097;
+  // The trailing delta type is invalid.
+  INVALID_ORDER_TRAILING_DELTA_TYPE = 1099;
+  // The trailing delta is invalid.
+  INVALID_TRAILING_DELTA = 1100;
+  // The order action is invalid.
+  INVALID_ORDER_ACTION = 1101;
+  // The order type is invalid.
+  INVALID_ORDER_TYPE = 1102;
+  // The order time-in-force value is invalid.
+  INVALID_ORDER_TIME_IN_FORCE = 1103;
+  // The client order ID exceeds the maximum length of 16 bytes.
+  INVALID_CLIENT_ORDER_ID = 1104;
+  // The symbol was not found.
+  SYMBOL_NOT_FOUND = 1105;
+  // The symbol is not yet open for trading (opens at {0}).
+  SYMBOL_NOT_OPEN = 1106;
+  // The symbol has been closed. This operation is not allowed.
+  SYMBOL_ALREADY_CLOSED = 1107;
+  // Insufficient balance or margin to perform the requested operation.
+  INSUFFICIENT_MARGIN = 1108;
+  // Active orders reached the per-symbol limit ({0}/{1}).
+  ORDER_COUNT_LIMIT_EXCEEDED = 1109;
+  // Post-only order would take liquidity at {0}.
+  POST_ONLY_WOULD_TAKE = 1110;
+  // FOK order cannot be fully filled.
+  FOK_CANNOT_FILL = 1111;
+  // The order would match too many counter orders (limit {0}). Please reduce
+  // the order size.
+  MATCH_LIMIT_EXCEEDED = 1112;
+  // No position available to reduce. Please open a position before performing a
+  // reduce-only action.
+  NO_POSITION_TO_REDUCE = 1114;
+  // A better-priced reduce-only order already exists.
+  REDUCE_ONLY_PRICE_NOT_BETTER = 1115;
+  // A duplicate client order ID already exists.
+  DUPLICATE_CLIENT_ORDER_ID = 1116;
+  // Order price violates the allowed range (limit {0}).
+  PRICE_OUT_OF_RESTRICTED_RANGE = 1117;
+  // The price is invalid.
+  INVALID_PRICE = 1119;
+  // The size is invalid.
+  INVALID_SIZE = 1120;
+  // Price precision exceeds the allowed limit of {0} decimal places.
+  PRICE_DECIMALS_TOO_LARGE = 1121;
+  // The price does not match the tick size {0}.
+  TICK_SIZE_CONDITION_MISMATCH = 1122;
+  // Size precision exceeds the allowed limit of {0} decimal places.
+  SIZE_DECIMALS_TOO_LARGE = 1123;
+  // The size is below the minimum allowed value of {0}.
+  SIZE_TOO_SMALL = 1124;
+  // The size does not match the lot size {0}.
+  LOT_SIZE_CONDITION_MISMATCH = 1125;
+  // The position mode is invalid.
+  INVALID_POSITION_MODE = 1126;
+  // Market orders must not set a price.
+  MARKET_ORDER_SHOULD_NOT_SET_PRICE = 1127;
+  // No trade price is available.
+  NO_TRADE_PRICE = 1128;
+  // Trailing order parameters are missing.
+  MISSING_TRAILING_PARAMS = 1129;
+  // The risk limits ID is invalid.
+  INVALID_RISK_LIMITS_ID = 1130;
+  // The risk limits ID was not found.
+  RISK_LIMITS_ID_NOT_FOUND = 1131;
+  // The risk limits ID is already registered.
+  RISK_LIMITS_ID_ALREADY_REGISTERED = 1132;
+  // Risk limit ranges must be continuous.
+  RISK_LIMITS_RANGE_MUST_CONTINUOUS = 1133;
+  // Trigger, take-profit, stop-loss, and trailing parameters cannot be set for
+  // reduce-only orders.
+  REDUCE_ONLY_CANNOT_SET_TRIGGER_TP_SL_TRAILING = 1134;
+  // Take-profit and stop-loss can only be set on limit or market orders.
+  // Trigger or trailing orders cannot be used for take-profit or stop-loss.
+  TP_SL_ORDER_TYPE_RESTRICTION = 1135;
+  // The position is already closed.
+  POSITION_ALREADY_CLOSED = 1136;
+  // The self-trade prevention mode is invalid.
+  INVALID_SELF_TRADE_PREVENTION_MODE = 1137;
+  // Either the order ID or the client order ID must be provided.
+  ORDER_ID_OR_CLIENT_ORDER_ID_REQUIRED = 1138;
+  // The order was not found.
+  ORDER_NOT_FOUND = 1139;
+  // The number of orders to cancel exceeds the allowed limit.
+  CANCEL_ORDER_COUNT_LIMIT_EXCEEDED = 1140;
+  // The account type does not match.
+  ACCOUNT_TYPE_MISMATCH = 1141;
+  // The threshold is invalid.
+  INVALID_THRESHOLD = 1142;
+  // The agent address is invalid.
+  INVALID_AGENT_ADDRESS = 1143;
+  // The operation would cause the position to exceed the maximum leverage {0}
+  // allowed by the risk limit.
+  POSITION_RISK_LIMIT_EXCEEDED = 1144;
+  // The number of positions to settle funding fees exceeds the allowed limit.
+  FUNDING_SETTLEMENT_POSITION_COUNT_LIMIT_EXCEEDED = 1145;
+  // The position is in liquidation mode; the requested operation is
+  // not allowed.
+  LIQUIDATION_MODE_OPERATION_NOT_ALLOWED = 1146;
+  // The receiver is invalid.
+  INVALID_RECEIVER = 1147;
+  // The idempotency key is invalid.
+  INVALID_IDEMPOTENCY_KEY = 1148;
+  // The hash is invalid.
+  INVALID_HASH = 1149;
+  // The pending withdrawal was not found.
+  PENDING_WITHDRAW_NOT_FOUND = 1150;
+  // The reduce-only order side cannot be the same as the position side.
+  UNEXPECTED_ORDER_SIDE = 1152;
+  // The funding interval (hours) is invalid.
+  INVALID_FUNDING_INTERVAL_HOURS = 1153;
+  // In cross mode, base token and quote token must not be set.
+  SHOULD_NOT_SET_BASE_AND_QUOTE_TOKEN = 1154;
+  // The position was not found.
+  POSITION_NOT_FOUND = 1155;
+  // The position is not in liquidation mode.
+  POSITION_NOT_IN_LIQUIDATION_MODE = 1156;
+  // The position's maintenance margin rate is insufficient to exit
+  // liquidation mode.
+  POSITION_MAINTENANCE_MARGIN_RATE_INSUFFICIENT = 1157;
+  // The position's maintenance margin rate is too high to enter liquidation
+  // mode.
+  POSITION_MAINTENANCE_MARGIN_RATE_TOO_HIGH = 1158;
+  // The symbol open time is invalid.
+  INVALID_SYMBOL_OPEN_TIME = 1159;
+  // The symbol close time is invalid.
+  INVALID_SYMBOL_CLOSE_TIME = 1160;
+  // There are still open orders. Please cancel all
+  // open orders before liquidating the position.
+  OPEN_ORDERS_EXIST = 1162;
+  // The insurance fund is not allowed to enter liquidation mode, so the
+  // operation is rejected.
+  INSURANCE_FUND_CANNOT_ENTER_LIQUIDATION_MODE = 1163;
+  // No order fields were changed in the amend request.
+  NO_ORDER_FIELD_CHANGED = 1165;
+  // The take-profit and stop-loss trigger directions cannot be the same.
+  TP_SL_TRIGGER_DIRECTION_CONFLICT = 1166;
+  // For conditional orders, take-profit and stop-loss can only be set via
+  // TP/SL. Trailing orders are not allowed for take-profit or stop-loss.
+  TP_SL_TRAILING_NOT_ALLOWED_FOR_CONDITIONAL_ORDER = 1167;
+  // Trigger or trailing parameters are not allowed for take-profit or stop-loss
+  // orders.
+  TP_SL_TRIGGER_TRAILING_NOT_ALLOWED = 1168;
+  // Trailing take-profit and stop-loss orders cannot be configured with
+  // trigger, TP, or SL parameters.
+  TRAILING_MUTUALLY_EXCLUSIVE_PARAMS = 1169;
+  // The price field is malformed and cannot be parsed.
+  MALFORMED_PRICE = 1170;
+  // The size field is malformed and cannot be parsed.
+  MALFORMED_SIZE = 1171;
+  // Trailing take-profit/stop-loss orders cannot be modified.
+  TRAILING_ORDER_NOT_MODIFIABLE = 1172;
+  // The min deposit field is malformed and cannot be parsed.
+  MALFORMED_MIN_DEPOSIT = 1173;
+  // The minimum withdrawal field is malformed and cannot be parsed.
+  MALFORMED_MIN_WITHDRAW = 1174;
+  // The withdrawal fee field is malformed and cannot be parsed.
+  MALFORMED_WITHDRAW_FEE = 1175;
+  // The minimum withdrawal amount must be greater than the withdrawal fee.
+  MIN_WITHDRAW_AMOUNT_NOT_GREATER_THAN_FEE = 1176;
+  // The deposit amount is below the minimum allowed deposit amount.
+  DEPOSIT_AMOUNT_BELOW_MINIMUM = 1177;
+  // Withdrawals are not allowed for this token, or to the specified chain.
+  WITHDRAW_NOT_ALLOWED = 1178;
+  // The withdrawal amount is below the minimum allowed withdrawal amount.
+  WITHDRAW_AMOUNT_BELOW_MINIMUM = 1179;
+  // The number of user-created subaccounts exceeds the limit.
+  TOO_MANY_SUBACCOUNTS = 1180;
+  // The subaccount name length is invalid (must be 1-16 characters if not
+  // empty).
+  SUBACCOUNT_NAME_LENGTH_INVALID = 1181;
+  // The subaccount name already exists for the same master account and type.
+  SUBACCOUNT_NAME_DUPLICATE = 1182;
+  // The subaccount type is invalid or not allowed.
+  INVALID_SUBACCOUNT_TYPE = 1183;
+  // Subaccounts are not allowed to perform this operation.
+  SUBACCOUNT_OPERATION_NOT_SUPPORTED = 1184;
+  // The risk account position side is invalid.
+  ADL_POSITION_SIDE_INVALID = 1187;
+  // The tick size is invalid.
+  TICK_SIZE_INVALID = 1188;
+  // The insurance fund cover value is invalid.
+  INSURANCE_FUND_COVER_INVALID = 1189;
+  // The insurance fund is insufficient.
+  INSURANCE_FUND_INSUFFICIENT = 1190;
+  // The sender and receiver cannot be the same.
+  SENDER_RECEIVER_CANNOT_BE_SAME = 1191;
+  // The user has insufficient balance. Deposit is required before performing
+  // this operation.
+  INSUFFICIENT_BALANCE_NEED_DEPOSIT = 1192;
+  // Token 101 (USD settlement token) must be registered and deposit-enabled.
+  // The current config would make it non-depositable.
+  USD_MUST_BE_DEPOSIT_ENABLED = 1193;
+  // The fee account has insufficient balance to transfer.
+  INSUFFICIENT_FEE_BALANCE = 1194;
+  // The fee type is invalid.
+  INVALID_FEE_TYPE = 1195;
+  // The take-profit or stop-loss trigger is invalid.
+  INVALID_TP_SL_TRIGGER = 1196;
+  // The vault name length is invalid.
+  INVALID_VAULT_NAME_LENGTH = 1197;
+  // The vault description length is invalid.
+  INVALID_VAULT_DESCRIPTION_LENGTH = 1198;
+  // The vault name already exists.
+  VAULT_NAME_DUPLICATE = 1199;
+  // The deposit amount is below the minimum allowed deposit amount.
+  VAULT_DEPOSIT_AMOUNT_BELOW_MINIMUM = 1200;
+  // The vault equity is negative.
+  VAULT_NEGATIVE_EQUITY = 1201;
+  // The vault shares are too small to deposit.
+  VAULT_SHARES_TOO_SMALL_TO_DEPOSIT = 1202;
+  // The vault is not found.
+  VAULT_NOT_FOUND = 1203;
+  // The vault deposit is not available.
+  VAULT_DEPOSIT_NOT_AVAILABLE = 1204;
+  // Only the vault leader can enable or disable deposits.
+  VAULT_ONLY_LEADER_CAN_SET_DEPOSIT = 1205;
+  // Only the vault leader can set auto-close on withdrawal.
+  VAULT_ONLY_LEADER_CAN_SET_AUTO_CLOSE = 1206;
+  // The vault account is not allowed to perform this operation.
+  VAULT_OPERATION_NOT_SUPPORTED = 1207;
+  // Only the vault leader can close the vault.
+  VAULT_ONLY_LEADER_CAN_CLOSE = 1208;
+  // The vault has open positions and cannot be closed.
+  VAULT_HAS_OPEN_POSITION = 1209;
+  // The vault has open orders and cannot be closed.
+  VAULT_HAS_OPEN_ORDER = 1210;
+  // The vault is already closing.
+  VAULT_ALREADY_CLOSING = 1211;
+  // The vault is not in closing status.
+  VAULT_NOT_CLOSING = 1212;
+  // The vault is closing.
+  VAULT_CLOSING = 1213;
+  // The vault has no shares.
+  VAULT_HAS_NO_SHARES = 1214;
+  // The trading domain is invalid.
+  INVALID_TRADING_DOMAIN = 1215;
+  // Only USD token is allowed for transfers to other domain.
+  ONLY_USD_TOKEN_FOR_CROSS_TRANSFER = 1216;
+  // Spot conditional orders only support last-trade trigger price type.
+  SPOT_ONLY_SUPPORTS_LAST_TRADE_TRIGGER_PRICE = 1217;
+  // Size and quote size are mutually exclusive.
+  SIZE_AND_QUOTE_SIZE_MUTUALLY_EXCLUSIVE = 1218;
+  // Spot limit orders must specify a size.
+  SPOT_LIMIT_ORDER_MUST_SET_SIZE = 1219;
+  // Market orders must specify either a size or a quote size.
+  MARKET_ORDER_MUST_SET_SIZE_OR_QUOTE_SIZE = 1220;
+  // Spot conditional orders must not set size directly; size is specified in
+  // the trigger parameters.
+  SPOT_CONDITIONAL_ORDER_CANNOT_SET_SIZE = 1221;
+  // Spot conditional orders must not set quote size.
+  SPOT_CONDITIONAL_ORDER_CANNOT_SET_QUOTE_SIZE = 1222;
+  // Spot conditional orders must not set price directly; price is specified in
+  // the trigger parameters.
+  SPOT_CONDITIONAL_ORDER_CANNOT_SET_PRICE = 1223;
+  // The quote size is too small to meet the minimum trade requirement.
+  QUOTE_SIZE_TOO_SMALL = 1224;
+  // The market order could not be filled because the price moved beyond the
+  // allowed limit.
+  MARKET_ORDER_EXCEEDS_PRICE_LIMIT = 1225;
+  // The filled size is below the minimum lot size. The order has been rejected.
+  FILL_SIZE_BELOW_LOT_SIZE = 1226;
+  // Quote size precision exceeds the allowed limit of {0} decimal places.
+  QUOTE_SIZE_DECIMALS_TOO_LARGE = 1227;
+  // Quote size is not supported for take-profit or stop-loss orders. Please use
+  // size instead.
+  TP_SL_QUOTE_SIZE_NOT_SUPPORTED = 1228;
+  // Quote size is only supported for spot trading. Please use size for perp
+  // orders.
+  QUOTE_SIZE_NOT_SUPPORTED_FOR_PERP = 1229;
+  // Quote size is only supported for market orders. Please use size instead.
+  QUOTE_SIZE_ONLY_SUPPORTED_FOR_MARKET_ORDER = 1230;
+  // The prediction market is no longer active for trading.
+  PREDICTION_MARKET_ENDED = 1231;
+  // The prediction market or event is in an invalid lifecycle status for this
+  // action.
+  PREDICTION_INVALID_STATUS = 1232;
+  // The prediction event symbol count is invalid.
+  PREDICTION_INVALID_SYMBOL_COUNT = 1234;
+  // The prediction event deadline is invalid.
+  PREDICTION_INVALID_DEADLINE = 1235;
+  // The prediction outcome is invalid.
+  PREDICTION_INVALID_OUTCOME = 1236;
+  // The prediction fee exponent exceeds the allowed maximum.
+  PREDICTION_INVALID_FEE_EXPONENT = 1237;
+  // The proposal ID is invalid.
+  PREDICTION_INVALID_PROPOSAL_ID = 1238;
+  // The eligible recipient count for slashed bond distribution is invalid.
+  PREDICTION_INVALID_ELIGIBLE_RECIPIENT_COUNT = 1239;
+  // The slashed bond distribution amount exceeds the remaining distributable
+  // amount.
+  PREDICTION_SLASHED_BOND_AMOUNT_EXCEEDED = 1240;
+  // The slashed bond distribution recipient count exceeds the eligible
+  // recipient count.
+  PREDICTION_SLASHED_BOND_RECIPIENT_COUNT_EXCEEDED = 1241;
+  // Invalid fee rate: taker must be in [0, 1], maker must be
+  // in [-taker, 1], i.e. negative maker rebate cannot exceed taker rate.
+  INVALID_FEE_RATE = 1242;
+  // The order notional is below the minimum allowed threshold {0}.
+  MIN_NOTIONAL_TOO_SMALL = 1243;
+  // Spot trading pairs must use USD as the quote token.
+  SPOT_QUOTE_TOKEN_MUST_BE_USD = 1244;
+  // The order notional exceeds the maximum allowed threshold {0}.
+  MAX_NOTIONAL_EXCEEDED = 1245;
+  // The vault depositor is not found.
+  VAULT_DEPOSITOR_NOT_FOUND = 1246;
+  // The vault withdraw is too early and the lock period has not passed.
+  VAULT_WITHDRAW_TOO_EARLY = 1247;
+  // The withdraw amount is too small to burn any vault shares.
+  VAULT_SHARES_TOO_SMALL_TO_WITHDRAW = 1248;
+  // Leader remaining share ratio would fall below the minimum after withdraw.
+  VAULT_LEADER_MIN_SHARE_RATIO_BREACH = 1249;
+  // Leader remaining equity would fall below the minimum after withdraw.
+  VAULT_LEADER_MIN_EQUITY_BREACH = 1250;
+  // Vault withdraw auto close cannot be completed because market liquidity is
+  // insufficient.
+  VAULT_WITHDRAW_INSUFFICIENT_LIQUIDITY = 1251;
+  // The vault equity is invalid.
+  VAULT_INVALID_EQUITY = 1252;
+  // The min notional must be non-negative.
+  INVALID_MIN_NOTIONAL = 1253;
+  // The max notional must be non-negative and not less than the min notional.
+  INVALID_MAX_NOTIONAL = 1254;
+  // The operation would cause the position value to exceed the risk limit
+  // range upper bound {0}.
+  POSITION_RISK_RANGE_EXCEEDED = 1255;
+  // The account is not a multisig account.
+  ACCOUNT_NOT_MULTISIG = 1256;
+  // The prediction symbol is not found.
+  PREDICTION_SYMBOL_NOT_FOUND = 1257;
+  // The request payload is missing a required nested message.
+  MALFORMED_DATA_NIL_MESSAGE = 1258;
+  // The request payload bytes could not be unmarshaled.
+  MALFORMED_DATA_UNMARSHAL = 1259;
+  // An element at index {0} in a repeated field is null.
+  MALFORMED_DATA_NULL_BATCH_ITEM = 1260;
+  // A required repeated field is empty.
+  MALFORMED_DATA_EMPTY_BATCH = 1261;
+  // A oneof field has an unknown or unset variant.
+  MALFORMED_DATA_UNKNOWN_VARIANT = 1262;
+  // Two repeated fields expected to have matching length but have {0} and {1}.
+  MALFORMED_DATA_ARRAY_MISMATCH = 1263;
+  // A duplicate entry was detected at index {0}.
+  MALFORMED_DATA_DUPLICATE = 1264;
+  // The batch size exceeds the maximum allowed of {0}.
+  BATCH_SIZE_EXCEEDED = 1265;
+  // Fee tier levels do not match across trading domains, or a required
+  // trading domain is missing.
+  FEE_TIER_STRUCTURE_MISMATCH = 1266;
+  // The wallet has never been funded with this token.
+  WALLET_NOT_FUNDED = 1267;
+  // Insufficient wallet or spot balance. Required {0}, available {1}.
+  INSUFFICIENT_WALLET_BALANCE = 1268;
+  // Insufficient perp available margin. Required {0}, available {1}.
+  INSUFFICIENT_PERP_AVAILABLE = 1269;
+  // Insufficient prediction position size. Required {0}, available {1}.
+  INSUFFICIENT_POSITION_SIZE = 1270;
+  // The vault currently has no withdrawable amount available.
+  VAULT_NO_WITHDRAWABLE = 1271;
+  // The requested margin amount is larger than what can be safely removed.
+  // Requested {0}, removable {1}.
+  MARGIN_NOT_REMOVABLE = 1272;
+  // The lot size is invalid.
+  LOT_SIZE_INVALID = 1273;
+  // The minimum size is invalid.
+  MIN_SIZE_INVALID = 1274;
+  // The minimum size must be a multiple of the lot size.
+  MIN_SIZE_NOT_MULTIPLE_OF_LOT_SIZE = 1275;
+  // The value must not be negative.
+  NON_NEGATIVE_VALUE_REQUIRED = 1276;
+  // The vault is in maintenance and cannot perform this operation.
+  VAULT_MAINTENANCE_IN_PROGRESS = 1277;
+  // The vault share price has not reached the maintenance threshold.
+  VAULT_MAINTENANCE_NOT_REQUIRED = 1278;
+  // The vault has one or more running strategy instances. Stop all strategies
+  // before closing or maintaining the vault.
+  VAULT_HAS_RUNNING_STRATEGY = 1279;
+
+  // Strategy-related error codes (starting from 5000).
+  // The strategy template type is invalid.
+  STRATEGY_INVALID_TEMPLATE_TYPE = 5000;
+  // The TWAP price bound is invalid. It must be greater than zero.
+  STRATEGY_TWAP_INVALID_PRICE_BOUND = 5001;
+  // The TWAP price bound decimal precision exceeds the symbol's tick size
+  // precision.
+  STRATEGY_TWAP_PRICE_BOUND_DECIMALS_TOO_LARGE = 5002;
+  // The TWAP time interval is invalid. It must be between 5 and 120 seconds.
+  STRATEGY_TWAP_INVALID_TIME_INTERVAL = 5003;
+  // The TWAP size per order is not a multiple of the symbol's lot size.
+  STRATEGY_BAD_SIZE_PER_ORDER_LOT_MISMATCH = 5004;
+  // The TWAP size per order decimal precision exceeds the symbol's size
+  // precision.
+  STRATEGY_SIZE_PER_ORDER_DECIMALS_TOO_LARGE = 5005;
+  // The TWAP size per order is smaller than the symbol's minimum order size.
+  STRATEGY_SIZE_PER_ORDER_TOO_SMALL = 5006;
+  // The TWAP total size must be greater than or equal to the size per order.
+  STRATEGY_TOTAL_SIZE_LESS_THAN_SIZE_PER_ORDER = 5007;
+  // The TWAP total size decimal precision exceeds the symbol's size precision.
+  STRATEGY_TOTAL_SIZE_DECIMALS_TOO_LARGE = 5008;
+  // The TWAP total size is not a multiple of the symbol's lot size.
+  STRATEGY_TOTAL_SIZE_LOT_MISMATCH = 5009;
+  // The strategy instance was not found.
+  STRATEGY_INSTANCE_NOT_FOUND = 5010;
+  // The strategy instance is not in a stoppable state.
+  STRATEGY_INSTANCE_ALREADY_STOPPED = 5011;
+
+  // The number of concurrent orders for the Iceberg strategy exceeds the
+  // maximum allowed value (5).
+  STRATEGY_ICEBERG_SINGLE_ORDERS_TOO_LARGE = 5012;
+  // The number of concurrent orders for the Iceberg strategy must be at
+  // least 1.
+  STRATEGY_ICEBERG_SINGLE_ORDERS_ZERO = 5013;
+  // The price bound for the Iceberg strategy is invalid. It must be a
+  // positive value.
+  STRATEGY_ICEBERG_INVALID_PRICE_BOUND = 5014;
+  // The price bound decimal precision for the Iceberg strategy exceeds the
+  // symbol's tick size precision.
+  STRATEGY_ICEBERG_PRICE_BOUND_DECIMALS_TOO_LARGE = 5015;
+  // The trailing delta for the Iceberg strategy is invalid. It must be a
+  // positive value and at least equal to the symbol's tick size.
+  STRATEGY_ICEBERG_INVALID_TRAILING_DELTA = 5016;
+  // The total size for the Iceberg strategy must be at least equal to
+  // single_size multiplied by the number of concurrent orders.
+  STRATEGY_ICEBERG_TOTAL_SIZE_LESS_THAN_MIN = 5017;
+  // The account has reached the maximum number of concurrently running
+  // strategies of this type (5). Stop an existing strategy of the same type
+  // before creating a new one.
+  STRATEGY_MAX_RUNNING_LIMIT_EXCEEDED = 5018;
+  // The Iceberg strategy order preference is invalid.
+  STRATEGY_ICEBERG_INVALID_ORDER_PREFERENCE = 5019;
+  // The strategy size per order is not a valid number.
+  STRATEGY_INVALID_SIZE_PER_ORDER = 5020;
+  // The strategy total size is not a valid number.
+  STRATEGY_INVALID_TOTAL_SIZE = 5021;
+}
+
+// Error is the canonical action-level error payload returned by action-result
+// APIs.
+message Error {
+  // Machine-readable error code for programmatic handling.
+  ErrorCode code = 1;
+  // Human-readable message for display. Do not parse this field for logic;
+  // use `code` instead.
+  string message = 2;
+  // Positional values referenced by `message` placeholders ({0}, {1}, ...),
+  // such as the offending field name, symbol, or value. Provided so clients
+  // can render their own localized message from `code`. The order for each
+  // `code` is stable.
+  repeated string args = 3;
+}

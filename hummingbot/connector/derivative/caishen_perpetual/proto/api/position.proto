@@ -1,0 +1,441 @@
+syntax = "proto3";
+
+package position;
+
+import "google/api/annotations.proto";
+import "google/protobuf/wrappers.proto";
+import "gogoproto/gogo.proto";
+import "schema/order.proto";
+import "schema/base.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 持仓
+service Position {
+  // 根据账户查询所有持仓
+  rpc ListOpenPositions(ListOpenPositionsRequest)
+      returns (ListOpenPositionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/positions/open"
+    };
+  }
+  // 根据账户查询仓位历史流水
+  rpc ListPositionsLedgerHistory(ListPositionsLedgerHistoryRequest)
+      returns (ListPositionsLedgerHistoryResponse) {
+    option (google.api.http) = {
+      get: "/v1/positions/ledger/history"
+    };
+  }
+  // 根据账户查询历史仓位
+  rpc ListPositionsHistory(ListPositionsHistoryRequest)
+      returns (ListPositionsHistoryResponse) {
+    option (google.api.http) = {
+      get: "/v1/positions/history"
+    };
+  }
+  // 查询用户所有交易对的仓位设置(杠杆、逐仓/全仓等)
+  rpc ListPositionModes(ListPositionModesRequest)
+      returns (ListPositionModesResponse) {
+    option (google.api.http) = {
+      get: "/v1/positions/modes"
+    };
+  }
+
+  // 查询用户全币种资金费历史
+  rpc ListPositionFundingHistory(ListPositionFundingHistoryRequest)
+      returns (ListPositionFundingHistoryResponse) {
+    option (google.api.http) = {
+      get: "/v1/positions/funding/history"
+    };
+  }
+}
+
+// 查询资金费历史请求
+message ListPositionFundingHistoryRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 分页游标，首页传空字符串，后续传上一页响应返回的 cursor
+  string cursor = 2 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 返回数量上限，最大 100；传 0 或超过 100 时按 100 处理
+  uint64 limit = 3 [(gogoproto.moretags) = "form:\"limit\""];
+  // 起始时间，闭区间（Unix 毫秒）
+  int64 from = 4 [(gogoproto.moretags) = "form:\"from\""];
+  // 结束时间，开区间（Unix 毫秒）
+  int64 to = 5 [(gogoproto.moretags) = "form:\"to\""];
+  // 交易对符号，例如 BTC-USDC
+  string symbol = 6 [(gogoproto.moretags) = "form:\"symbol\""];
+}
+
+// 查询资金费历史响应
+message ListPositionFundingHistoryResponse {
+  // 资金费历史列表
+  repeated PositionFundingHistory history = 1;
+  // 下一页游标；为 null 时表示已无更多数据
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+// 资金费历史记录
+message PositionFundingHistory {
+  // 持仓 ID
+  uint64 position_id = 1;
+  // 账户 ID
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 持仓模式：0=全仓, 1=逐仓
+  share.schema.PositionMode mode = 3 [(gogoproto.jsontag) = "mode"];
+  // 持仓方向：0=多头, 1=空头
+  share.schema.PositionSide side = 4 [(gogoproto.jsontag) = "side"];
+  // 基础代币 ID
+  uint32 base_token = 5;
+  // 计价代币 ID
+  uint32 quote_token = 6;
+  // 交易对符号，例如 BTC-USDC
+  string symbol = 7;
+  // 仓位大小，按基础代币数量计
+  string size = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 资金费（与手续费无关）；计价 USDC
+  string funding_fee = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 链上创建时间（Unix 毫秒）
+  int64 on_chain_created_at = 10 [(gogoproto.jsontag) = "time,string"];
+}
+
+// 查询持仓模式设置请求
+message ListPositionModesRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+}
+
+// 查询持仓模式设置响应
+message ListPositionModesResponse {
+  // 模式设置列表
+  repeated PositionModeSetting modes = 1;
+}
+
+// 持仓模式设置
+message PositionModeSetting {
+  // 基础代币 ID
+  uint32 base_token = 1;
+  // 计价代币 ID
+  uint32 quote_token = 2;
+  // 持仓模式：0=全仓, 1=逐仓
+  share.schema.PositionMode mode = 3 [(gogoproto.jsontag) = "mode"];
+  // 逐仓杠杆倍数
+  uint32 isolated_leverage = 4;
+  // 全仓杠杆倍数
+  uint32 cross_leverage = 5;
+}
+
+// 查询历史仓位请求
+message ListPositionsHistoryRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 分页游标，首页传空字符串，后续传上一页响应返回的 cursor
+  string cursor = 2 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 返回数量上限，最大 100；传 0 或超过 100 时按 100 处理
+  uint64 limit = 3 [(gogoproto.moretags) = "form:\"limit\""];
+  // 起始时间，闭区间（Unix 毫秒）
+  int64 from = 4 [(gogoproto.moretags) = "form:\"from\""];
+  // 结束时间，开区间（Unix 毫秒）
+  int64 to = 5 [(gogoproto.moretags) = "form:\"to\""];
+  // 交易对符号，例如 BTC-USDC
+  string symbol = 6 [(gogoproto.moretags) = "form:\"symbol\""];
+}
+
+// 查询历史仓位响应
+message ListPositionsHistoryResponse {
+  // 历史持仓列表
+  repeated PositionHistory history = 1;
+  // 下一页游标；为 null 时表示已无更多数据
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+// 历史持仓信息
+message PositionHistory {
+  // 持仓 ID
+  uint64 position_id = 1;
+  // 账户 ID
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 持仓模式：0=全仓, 1=逐仓
+  share.schema.PositionMode mode = 3 [(gogoproto.jsontag) = "mode"];
+  // 持仓方向：0=多头, 1=空头
+  share.schema.PositionSide side = 4 [(gogoproto.jsontag) = "side"];
+  // 基础代币 ID
+  uint32 base_token = 5;
+  // 计价代币 ID
+  uint32 quote_token = 6;
+  // 交易对符号，例如 BTC-USDC
+  string symbol = 7;
+  // 开仓均价
+  string entry_price = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 已实现盈亏，含手续费与资金费；计价 USDC
+  string realized_pnl = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // Taker 手续费率
+  string taker_fee_rate = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 资金费（与手续费无关）；计价 USDC
+  string funding_fee = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 风险限额 ID
+  uint32 risk_limits_id = 12;
+  // 链上创建时间（Unix 毫秒）
+  int64 on_chain_at = 13 [(gogoproto.jsontag) = "on_chain_at,string"];
+  // 链上平仓时间（Unix 毫秒）
+  int64 on_chain_closed_at = 14
+      [(gogoproto.jsontag) = "on_chain_closed_at,string"];
+  // 是否为强平单
+  bool liquidation_order = 15 [(gogoproto.jsontag) = "liquidation_order"];
+  // 仓位历史最大持仓量
+  string size = 16 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 杠杆倍数
+  uint32 leverage = 17;
+}
+
+// 查询持仓流水历史请求
+message ListPositionsLedgerHistoryRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 交易对符号，例如 BTC-USDC
+  string symbol = 2 [(gogoproto.moretags) = "form:\"symbol\""];
+  // 分页游标，首页传空字符串，后续传上一页响应返回的 cursor
+  string cursor = 3 [(gogoproto.moretags) = "form:\"cursor\""];
+  // 返回数量上限，最大 100；传 0 或超过 100 时按 100 处理
+  uint64 limit = 4 [(gogoproto.moretags) = "form:\"limit\""];
+  // 起始时间，闭区间（Unix 毫秒）
+  int64 from = 5 [(gogoproto.moretags) = "form:\"from\""];
+  // 结束时间，开区间（Unix 毫秒）
+  int64 to = 6 [(gogoproto.moretags) = "form:\"to\""];
+  // 交易域过滤（可选）：留空表示全部，0=Perp, 1=Spot, 2=Prediction
+  string trading_domain = 7 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询持仓流水历史响应
+message ListPositionsLedgerHistoryResponse {
+  // 持仓流水列表
+  repeated PositionLedgerHistory history = 1;
+  // 下一页游标；为 null 时表示已无更多数据
+  google.protobuf.StringValue cursor = 2 [
+    (gogoproto.customtype) = "string",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "cursor"
+  ];
+}
+
+// 持仓流水记录
+message PositionLedgerHistory {
+  // 持仓 ID
+  uint64 position_id = 1;
+  // 账户 ID
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 持仓模式：0=全仓, 1=逐仓
+  share.schema.PositionMode mode = 3 [(gogoproto.jsontag) = "mode"];
+  // 持仓方向：0=多头, 1=空头
+  share.schema.PositionSide side = 4 [(gogoproto.jsontag) = "side"];
+  // 基础代币 ID
+  uint32 base_token = 5;
+  // 计价代币 ID
+  uint32 quote_token = 6;
+  // 交易对符号，例如 BTC-USDC
+  string symbol = 7;
+  // 流水类型：1=增仓, 2=减仓, 3=强平, 4=资金费, 5=现货买入, 6=现货卖出
+  int32 type = 8;
+  // 价格
+  string price = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 手续费；计价 USDC
+  string fee = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 已实现盈亏，不含手续费；计价 USDC
+  string realized_pnl = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 交易哈希
+  string hash = 12 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  // 链上操作时间（Unix 毫秒）
+  int64 on_chain_at = 13 [(gogoproto.jsontag) = "on_chain_at,string"];
+  // 仓位大小，按基础代币数量计
+  string size = 14 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 是否为强平单
+  bool liquidation_order = 15 [(gogoproto.jsontag) = "liquidation_order"];
+  // 是否为 ADL（自动减仓）
+  bool adl = 16 [(gogoproto.customname) = "ADL", (gogoproto.jsontag) = "adl"];
+  // 交易域：0=Perp, 1=Spot, 2=Prediction
+  share.schema.TradingDomain trading_domain = 17
+      [(gogoproto.jsontag) = "trading_domain"];
+  // 附加信息，JSON 对象，按流水类型携带不同字段；无附加信息时省略。
+  // 现货流水包含字段 fee_token，表示本次流水手续费所用代币的 ID。
+  bytes extra = 18 [
+    (gogoproto.customtype) = "encoding/json.RawMessage",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "extra,omitempty"
+  ];
+}
+
+// 查询当前持仓请求
+message ListOpenPositionsRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+}
+
+// 查询当前持仓响应
+message ListOpenPositionsResponse {
+  // 当前持仓列表
+  repeated OpenPosition open_positions = 1;
+}
+
+// 当前持仓信息
+message OpenPosition {
+  // 持仓 ID
+  uint64 position_id = 1;
+  // 账户 ID
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 持仓模式：0=全仓, 1=逐仓
+  share.schema.PositionMode mode = 3 [(gogoproto.jsontag) = "mode"];
+  // 持仓方向：0=多头, 1=空头
+  share.schema.PositionSide side = 4 [(gogoproto.jsontag) = "side"];
+  // 基础代币 ID
+  uint32 base_token = 5;
+  // 计价代币 ID
+  uint32 quote_token = 6;
+  // 交易对符号，例如 BTC-USDC
+  string symbol = 7;
+  // 开仓均价
+  string entry_price = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 仓位大小，按基础代币数量计
+  string size = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 保证金
+  string margin = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 已实现盈亏，含手续费与资金费；计价 USDC
+  string realized_pnl = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 强平价格；逐仓在保证金过高、强平价无法正常计算时为 null，全仓恒有值
+  string liquidation_price = 12 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true
+  ];
+  // Taker 手续费率
+  string taker_fee_rate = 13 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 资金费（与手续费无关）；计价 USDC
+  string funding_fee = 14 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 风险限额 ID
+  uint32 risk_limits_id = 15;
+  // 链上创建时间（Unix 毫秒）
+  int64 on_chain_created_at = 16 [(gogoproto.jsontag) = "on_chain_created_at"];
+  // 是否为强平单
+  bool liquidation_order = 17 [(gogoproto.jsontag) = "liquidation_order"];
+  // 持仓状态：0=正常, 1=强平中, 2=已平仓, 3=已强平
+  share.schema.PositionStatus status = 18 [(gogoproto.jsontag) = "status"];
+  // 未实现盈亏，按标记价格计算
+  string unrealized_pnl = 19 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 收益率，基于未实现盈亏计算
+  string roi = 20 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 标记价格
+  string mark_price = 21 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 维持保证金率
+  string mmr = 22 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 维持保证金
+  string mm = 23 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 实际维持保证金率
+  string actual_mmr = 24 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 盈亏平衡价
+  string break_even_price = 25 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 杠杆倍数
+  uint32 leverage = 26 [(gogoproto.jsontag) = "leverage"];
+  // 自动减仓（ADL）风险指示灯，取值 1 到 5；1 表示 ADL 风险最低，5 最高，默认 1
+  uint32 adl_light = 27 [(gogoproto.jsontag) = "adl_light"];
+}

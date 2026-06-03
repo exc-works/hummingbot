@@ -1,0 +1,30 @@
+// Hand-written +pb:custom wire shapes: RiskLimit (the [2]decimal Range is
+// split into lower/upper) and SnapshotRiskLimits (a named slice of RiskLimit).
+// The remaining codegen-driven messages live in base_metadata.snap.proto in
+// the same package, produced by protoc-gen-snapshot.
+syntax = "proto3";
+
+package share.schema.snapshot;
+
+option go_package = "github.com/exc-works/caishen/share/schema/snapshot";
+
+// === Custom messages (hand-written; +pb:custom runtime types) ===
+
+// RiskLimitSnapshot mirrors runtimetypes.RiskLimit (excluding the runtime-only
+// Deduction field which has json:"-" on the source struct). Range[0] (lower)
+// and Range[1] (upper) are flattened to two decimal-text fields because the
+// codegen does not handle [2]decimal Go arrays.
+message RiskLimitSnapshot {
+  string range_lower = 1;
+  string range_upper = 2;
+  string mmr = 3;
+  uint32 max_leverage = 4;
+}
+
+// RiskLimitsRow mirrors runtimetypes.SnapshotRiskLimits. Hand-written because
+// SnapshotRiskLimits.RiskLimits is a named slice (RiskLimits) of +pb:custom
+// elements.
+message RiskLimitsRow {
+  uint32 id = 1;
+  repeated RiskLimitSnapshot risk_limits = 2;
+}

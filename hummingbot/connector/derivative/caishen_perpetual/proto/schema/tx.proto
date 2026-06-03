@@ -1,0 +1,368 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+import "schema/error.proto";
+import "schema/order.proto";
+
+// TxActionType enumerates executable transaction action payloads.
+enum TxActionType {
+  // System-level actions (0-9).
+
+  // Reserved sentinel; not a user-submitted action payload.
+  UNKNOWN_TYPE = 0;
+  // Initialize chain state from genesis payload.
+  GENESIS = 1;
+  // Start block processing and set block metadata.
+  START_BLOCK = 2;
+  // Finish block processing and seal block hash.
+  END_BLOCK = 3;
+  // Update proposer set and threshold for one permission domain.
+  UPDATE_DOMAIN_PROPOSER_SET = 4;
+  reserved 5 to 9;
+
+  // Chain and asset management actions (10-29).
+
+  // Enable cross-chain operations for a chain.
+  ENABLE_CHAIN = 10;
+  // Disable cross-chain operations for a chain.
+  DISABLE_CHAIN = 11;
+  // Register token metadata and config.
+  REGISTER_TOKEN = 12;
+  // Update token metadata and config.
+  UPDATE_TOKEN = 13;
+  // Update deposit and withdrawal switches/limits.
+  UPDATE_DEPOSIT_WITHDRAW_CONFIG = 14;
+  // Credit a completed deposit into ledger balances.
+  DEPOSIT_TOKEN = 15;
+  // Request token withdrawal from ledger balances.
+  WITHDRAW_TOKEN = 16;
+  // Confirm a pending withdrawal.
+  CONFIRM_WITHDRAW = 17;
+  // Reject a pending withdrawal.
+  REJECT_WITHDRAW = 18;
+  // Transfer token balance between accounts.
+  TRANSFER_TOKEN = 19;
+  // Transfer accumulated fee balances.
+  TRANSFER_FEE = 20;
+  // Configure fee-rate tiers by trading domain.
+  REGISTER_FEE_TIER = 21;
+  // Set account fee tier.
+  REGISTER_ACCOUNT_FEE_TIER = 22;
+  reserved 23 to 29;
+
+  // Account and permission actions (30-39).
+
+  // Grant or revoke agent permissions.
+  APPROVE_AGENT = 30;
+  // Convert address to multisig.
+  CONVERT_TO_MULTISIG = 31;
+  // Update multisig config.
+  UPDATE_MULTISIG_CONFIG = 32;
+  // Convert multisig to regular.
+  CONVERT_TO_REGULAR = 33;
+  // Create subaccount.
+  CREATE_SUBACCOUNT = 34;
+  // Transfer funds between trading domains of the same account.
+  TRANSFER_ACCOUNT = 35;
+  reserved 36 to 39;
+
+  // Perpetual futures market-definition actions (40-49).
+
+  // Register perp symbol.
+  PERP_REGISTER_SYMBOL = 40;
+  // Update perp symbol.
+  PERP_UPDATE_SYMBOL = 41;
+  // Batch delist perp symbols.
+  PERP_BATCH_DELIST_SYMBOL = 42;
+  // Register risk limits.
+  PERP_REGISTER_RISK_LIMITS = 43;
+  // Update funding rate.
+  PERP_UPDATE_FUNDING_RATE = 44;
+  // Update index price.
+  PERP_UPDATE_INDEX_PRICE = 45;
+  reserved 46 to 49;
+
+  // Perpetual futures trading and position actions (50-69).
+
+  // Place perp order.
+  PERP_PLACE_ORDER = 50;
+  // Amend perp order.
+  PERP_AMEND_ORDER = 51;
+  // Cancel perp order.
+  PERP_CANCEL_ORDER = 52;
+  // Cancel batch perp orders.
+  PERP_CANCEL_BATCH_ORDERS = 53;
+  // Execute trigger, take-profit, stop-loss, or trailing orders.
+  PERP_TRIGGER_ORDER = 54;
+  // Set position mode.
+  PERP_SET_POSITION_MODE = 55;
+  // Set position leverage.
+  PERP_SET_POSITION_LEVERAGE = 56;
+  // Increase isolated margin.
+  PERP_INCREASE_MARGIN = 57;
+  // Decrease isolated margin.
+  PERP_DECREASE_MARGIN = 58;
+  // Settle batch funding fees.
+  PERP_SETTLE_BATCH_FUNDING_FEES = 59;
+  reserved 60 to 69;
+
+  // Perpetual futures liquidation and insurance actions (70-79).
+
+  // Enter liquidation mode.
+  PERP_ENTER_LIQUIDATION_MODE = 70;
+  // Exit liquidation mode.
+  PERP_EXIT_LIQUIDATION_MODE = 71;
+  // Cancel orders in liquidation mode.
+  PERP_CANCEL_LIQUIDATION_ORDERS = 72;
+  // Liquidate position.
+  PERP_LIQUIDATE_POSITION = 73;
+  // Place order with risk account.
+  PERP_RISK_ACCOUNT_PLACE_ORDER = 74;
+  // Execute ADL.
+  PERP_AUTO_DELEVERAGE = 75;
+  // Transfer insurance fund assets.
+  PERP_TRANSFER_INSURANCE_FUND = 76;
+  reserved 77 to 79;
+
+  // Perpetual futures strategy and vault actions (80-99).
+
+  // Create strategy.
+  PERP_CREATE_STRATEGY = 80;
+  // Stop strategy.
+  PERP_STOP_STRATEGY = 81;
+  // Place an order with strategy privileges.
+  PERP_STRATEGY_PLACE_ORDER = 82;
+  // Cancel an order with strategy privileges.
+  PERP_STRATEGY_CANCEL_ORDER = 83;
+  // Complete strategy.
+  PERP_COMPLETE_STRATEGY = 84;
+  // Create vault.
+  PERP_CREATE_VAULT = 85;
+  // Deposit to vault.
+  PERP_VAULT_DEPOSIT = 86;
+  // Enable or disable vault deposits.
+  PERP_SET_VAULT_DEPOSIT = 87;
+  // Set vault auto_close_on_withdraw flag.
+  PERP_SET_VAULT_AUTO_CLOSE_ON_WITHDRAW = 88;
+  // Prepare a vault for closure.
+  PERP_PREPARE_CLOSE_VAULT = 89;
+  // Execute vault closure in batches.
+  PERP_EXECUTE_CLOSE_VAULT = 90;
+  // Withdraw from vault.
+  PERP_VAULT_WITHDRAW = 91;
+  // Maintain a vault reset in batches.
+  PERP_MAINTAIN_VAULT = 92;
+  reserved 93 to 99;
+
+  // Spot trading actions (100-119).
+
+  // Register spot symbol.
+  SPOT_REGISTER_SYMBOL = 100;
+  // Update spot symbol.
+  SPOT_UPDATE_SYMBOL = 101;
+  // Batch delist spot symbols.
+  SPOT_BATCH_DELIST_SYMBOL = 102;
+  // Place spot order.
+  SPOT_PLACE_ORDER = 103;
+  // Amend spot order.
+  SPOT_AMEND_ORDER = 104;
+  // Cancel spot order.
+  SPOT_CANCEL_ORDER = 105;
+  // Cancel batch spot orders.
+  SPOT_CANCEL_BATCH_ORDERS = 106;
+  // Execute spot trigger, take-profit, stop-loss, or trailing orders.
+  SPOT_TRIGGER_ORDER = 107;
+  // Place spot order with strategy privileges.
+  SPOT_STRATEGY_PLACE_ORDER = 108;
+  // Cancel spot order with strategy privileges.
+  SPOT_STRATEGY_CANCEL_ORDER = 109;
+  // Create a spot strategy instance.
+  SPOT_CREATE_STRATEGY = 110;
+  // Stop a spot strategy instance (user-initiated).
+  SPOT_STOP_STRATEGY = 111;
+  // Mark a spot strategy as naturally completed (privileged).
+  SPOT_COMPLETE_STRATEGY = 112;
+  reserved 113 to 119;
+
+  // Prediction market actions (120-139).
+
+  // Register prediction event.
+  PREDICTION_REGISTER_EVENT = 120;
+  // Update prediction config.
+  PREDICTION_UPDATE_CONFIG = 121;
+  // Propose an outcome.
+  PREDICTION_PROPOSE_OUTCOME = 122;
+  // Confirm the outcome after the dispute window ends.
+  PREDICTION_CONFIRM_OUTCOME = 123;
+  // Submit a dispute.
+  PREDICTION_DISPUTE = 124;
+  // Resolve the dispute and set the final outcome.
+  PREDICTION_RESOLVE_DISPUTE = 125;
+  // End an event's active markets after deadline.
+  PREDICTION_END_MARKET = 126;
+  // Batch-settle one market (orders then positions).
+  PREDICTION_BATCH_SETTLE_OUTCOME = 127;
+  // Distribute slashed bond.
+  PREDICTION_DISTRIBUTE_SLASHED_BOND = 128;
+  // Split: pay USD to receive YES+NO.
+  PREDICTION_SPLIT = 129;
+  // Merge: pay YES+NO to receive USD.
+  PREDICTION_MERGE = 130;
+  // Place prediction order.
+  PREDICTION_PLACE_ORDER = 131;
+  // Cancel prediction order.
+  PREDICTION_CANCEL_ORDER = 132;
+  reserved 133 to 139;
+}
+
+// StartBlockMessage begins processing for a new block.
+message StartBlockMessage {
+  // Block number to start, for example 1024.
+  uint64 number = 1;
+  // Block timestamp in Unix milliseconds.
+  int64 time = 2;
+}
+
+// EndBlockMessage ends processing for a block and carries its hash.
+message EndBlockMessage {
+  // Block number being ended.
+  uint64 number = 1;
+  // Block hash (32 bytes).
+  bytes hash = 2 [(schema.hash) = true];
+}
+
+// TxMessage is the signed transaction action envelope.
+//
+// Serialized TxMessage payload must be <= 1232 bytes.
+// tx_hash is the EIP-712 digest for this message.
+// - EIP-712 domain chainId uses upstream_chain_id (NOT this message's
+// chain_id).
+// - The signed typed-message fields are:
+//   chain_id, recent_block_hash, target_address, action, data.
+message TxMessage {
+  // Chain ID embedded in the signed message payload.
+  // Must match the chain's configured chain ID.
+  // This is NOT the EIP-712 domain chainId.
+  // Example: 1.
+  uint64 chain_id = 1;
+  // Recent upstream block hash anchor (32 bytes) for anti-replay checks.
+  // The hash should satisfy the chain replay-protection policy.
+  // Example: a recent finalized block hash.
+  bytes recent_block_hash = 2 [(schema.hash) = true];
+  // Action selector that determines the payload type carried in data.
+  // Must be a supported TxActionType value.
+  // Example: PERP_PLACE_ORDER.
+  TxActionType action = 3;
+  // Primary account address this action operates on (20 bytes).
+  // Example: trader account address or multisig account address.
+  bytes target_address = 4 [(schema.address) = true];
+  // Protobuf-encoded action payload bytes.
+  // The payload schema is determined by action and must match that schema.
+  // Example: action=PERP_PLACE_ORDER => data encodes PlaceOrderMessage.
+  bytes data = 5;
+  // ECDSA signatures over tx_hash.
+  // Constraints:
+  // - signature count must be in [1, 10],
+  // - each signature is 65 bytes (secp256k1 r||s||v),
+  // - duplicate recovered signers are not allowed.
+  // Recovered signer authorization is action- and account-type dependent.
+  // The signer set must satisfy the protocol permission policy.
+  // Example: one signature for owner/agent actions; multiple for threshold
+  // actions.
+  repeated bytes signatures = 6 [(schema.signatures) = true];
+}
+
+// BlockResult is returned for block lifecycle actions.
+message BlockResult {
+  // Processed block number.
+  uint64 number = 1;
+}
+
+// TxResult is the per-transaction execution result envelope.
+message TxResult {
+  // CancelLiquidationOrdersResult returns canceled IDs and mode exit status.
+  message CancelLiquidationOrdersResult {
+    // Canceled order IDs.
+    repeated uint64 ids = 1;
+    // True if liquidation mode was exited.
+    bool exited_liquidation_mode = 2;
+  }
+  // PlaceOrderResult contains key order fields after place/amend execution.
+  message PlaceOrderResult {
+    // Order ID.
+    uint64 id = 1;
+    // Order size.
+    optional string size = 2 [(schema.decimal) = true];
+    // Filled size.
+    optional string filled = 3 [(schema.decimal) = true];
+    // Limit price if any.
+    optional string price = 4 [(schema.decimal) = true];
+    // Average fill price.
+    optional string filled_price = 5 [(schema.decimal) = true];
+    // Client-supplied order ID bytes.
+    optional bytes client_order_id = 6;
+    // Final/current order status.
+    OrderStatus status = 7;
+  }
+  // CreateSubaccountResult returns the generated subaccount address.
+  message CreateSubaccountResult {
+    // Generated subaccount address (20-byte EVM address).
+    bytes subaccount = 1 [(schema.address) = true];
+  }
+  // PredictionBatchSettleOutcomeResult reports one batch-settlement step
+  // status.
+  message PredictionBatchSettleOutcomeResult {
+    // Prediction event ID.
+    uint64 event_id = 1;
+    // YES token ID of the settled market.
+    uint32 yes_token = 2;
+    // NO token ID of the settled market.
+    uint32 no_token = 3;
+    // True when this market is fully settled.
+    bool symbol_settled = 4;
+    // True when all markets in the event are settled.
+    bool event_settled = 5;
+  }
+
+  // Transaction hash used for signer recovery and downstream matching.
+  bytes tx_hash = 1 [(schema.hash) = true];
+  // Core result: execution error or block lifecycle output.
+  oneof result {
+    // Error response when execution fails.
+    Error error = 2;
+    // Result for start/end block actions.
+    BlockResult block_result = 3;
+  }
+  // Extra action-specific outputs for selected actions.
+  oneof extra {
+    // PERP_CANCEL_LIQUIDATION_ORDERS.
+    CancelLiquidationOrdersResult cancel_liquidation_orders_result = 6;
+    // Place/amend order actions.
+    PlaceOrderResult place_order_result = 7;
+    // CREATE_SUBACCOUNT.
+    CreateSubaccountResult create_subaccount_result = 8;
+    // PREDICTION_BATCH_SETTLE_OUTCOME.
+    PredictionBatchSettleOutcomeResult prediction_batch_settle_outcome_result =
+        9;
+
+  }  // Extra results for specific action types.
+}
+
+// Block is the persisted block header metadata in sequence storage.
+message Block {
+  // Block number.
+  uint64 number = 1;
+  // Proposer account address.
+  bytes proposer = 2 [(schema.address) = true];
+  // Block hash.
+  bytes hash = 3 [(schema.hash) = true];
+  // Block time in Unix milliseconds.
+  int64 time = 4;
+  // First sequence ID in this block.
+  uint64 start_sequence_id = 5;
+  // Last sequence ID in this block.
+  uint64 end_sequence_id = 6;
+}

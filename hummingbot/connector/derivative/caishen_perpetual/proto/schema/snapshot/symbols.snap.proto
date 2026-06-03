@@ -1,0 +1,73 @@
+// Code generated DO NOT EDIT.
+// source: protoc-gen-snapshot
+
+syntax = "proto3";
+package share.schema.snapshot;
+
+option go_package = "github.com/exc-works/caishen/share/schema/snapshot";
+
+import "schema/symbol.proto";
+
+message SpotSymbolRow {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  int64 open_time = 3;
+  int64 close_time = 4;
+  uint32 max_number_of_order_each_match = 5;
+  uint32 max_number_of_order_each_account = 6;
+  string tick_size = 7;
+  string lot_size = 8;
+  string min_size = 9;
+  string min_notional = 10;
+  string max_notional = 11;
+  string price_limit_bound = 12;
+  string conditional_price_limit_bound = 13;
+  share.schema.SymbolStatus status = 14;
+}
+
+message SymbolRow {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  int64 open_time = 3;
+  int64 close_time = 4;
+  uint32 max_number_of_order_each_match = 5;
+  uint32 max_number_of_order_each_account = 6;
+  string tick_size = 7;
+  string lot_size = 8;
+  string min_size = 9;
+  string min_notional = 10;
+  string max_notional = 11;
+  string price_limit_bound = 12;
+  string conditional_price_limit_bound = 13;
+  share.schema.SymbolStatus status = 14;
+  uint32 funding_interval = 15;
+  string funding_rate_bound = 16;
+  uint32 default_leverage = 17;
+  string delist_settlement_price = 18;
+  uint32 risk_limits_id = 19;
+}
+
+message TokenChainEntry {
+  uint64 chain_id = 1;
+  TokenChainSnapshot chain = 2;
+}
+
+message TokenChainSnapshot {
+  uint64 chain_id = 1;
+  bytes contract = 2;
+  string min_deposit = 3;
+  uint32 block_confirmations = 4;
+  int64 deposit_enabled_at = 5;
+  string min_withdraw = 6;
+  int64 withdraw_enabled_at = 7;
+  string withdraw_fee = 8;
+}
+
+message TokenRow {
+  uint32 id = 1;
+  uint32 decimals = 2;
+  string name = 3;
+  string symbol = 4;
+  repeated TokenChainEntry chains = 5;
+  string reference_price = 6;
+}

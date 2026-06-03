@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package candle;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Candle {
+  // 查询服务器时间
+  rpc QueryServerTime(QueryServerTimeRequest)
+      returns (QueryServerTimeResponse) {
+    option (google.api.http) = {
+      get: "/v1/udf/time"
+    };
+  }
+
+  // 查询 K 线数据
+  rpc QueryUDFResult(QueryUDFResultRequest) returns (QueryUDFResultResponse) {
+    option (google.api.http) = {
+      get: "/v1/udf/history"
+    };
+  }
+
+  // 查询指数价格 K 线
+  rpc QueryIndexPriceResult(QueryUDFResultRequest)
+      returns (QueryUDFResultResponse) {
+    option (google.api.http) = {
+      get: "/v1/udf/index-history"
+    };
+  }
+
+  // 查询标记价格 K 线
+  rpc QueryMarkPriceResult(QueryUDFResultRequest)
+      returns (QueryUDFResultResponse) {
+    option (google.api.http) = {
+      get: "/v1/udf/mark-history"
+    };
+  }
+}
+
+message QueryServerTimeRequest {}
+
+message QueryServerTimeResponse {
+  int64 server_time_unix_milli = 1;
+}
+
+message QueryUDFResultRequest {
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+  int64 from = 2 [(gogoproto.moretags) = "form:\"from\""];
+  int64 to = 3 [(gogoproto.moretags) = "form:\"to\""];
+  // 1s, 1min, 3min, 5min, 15min, 30min, 1h, 2h, 4h, 6h, 12h, 1d, 2d, 3d, 5d,
+  // 1w, 1mon, 3mon
+  string resolution = 4
+      [(gogoproto.moretags) = "form:\"resolution\" binding:\"required\""];
+  int64 limit = 5 [(gogoproto.moretags) = "form:\"limit,default=100\""];
+}
+
+message QueryUDFResultResponse {
+  // Status of the response, `ok`, `no_data` or `error`
+  string s = 1;
+  // The error message if `s` is `error`
+  string errmsg = 2;
+  // Timestamps of the candles
+  repeated int64 t = 3;
+  // Close prices correspond to each timestamp
+  repeated string c = 4;
+  // Open prices correspond to each timestamp
+  repeated string o = 5;
+  // The highest price correspond to each timestamp
+  repeated string h = 6;
+  // The lowest price correspond to each timestamp
+  repeated string l = 7;
+  // Volume corresponds to each timestamp
+  repeated string v = 8;
+  // Valid if `s` is `no_data`, the next candle's timestamp
+  //  int64 nextTime = 9;
+}

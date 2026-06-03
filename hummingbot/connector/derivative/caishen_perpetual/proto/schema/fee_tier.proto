@@ -1,0 +1,47 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/base.proto";
+import "schema/extensions.proto";
+
+// FeeTierMessage defines one fee tier level.
+message FeeTierMessage {
+  // Tier index in [0, 255].
+  // Within one fee table, tiers must start at 0 and be continuous.
+  uint32 tier = 1;
+  // Taker fee rate in decimal string.
+  // Range: [0, 1]. Example: "0.0005".
+  string taker = 2 [(schema.decimal) = true];
+  // Maker fee rate in decimal string.
+  // Range: [-taker, 1]. Negative value means maker rebate.
+  // Example: "-0.0001".
+  string maker = 3 [(schema.decimal) = true];
+}
+
+// RegisterFeeTierMessage registers all fee tiers for one trading domain.
+message RegisterFeeTierMessage {
+  // Trading domain to configure.
+  // Must be Perp, Spot, or Prediction.
+  TradingDomain trading_domain = 1;
+  // Full ordered fee tier table for this domain.
+  // Must be non-empty, ordered by tier, and continuous from 0.
+  repeated FeeTierMessage fee_tiers = 2;
+}
+
+// AccountFeeTierMessage assigns one account to a specific fee tier.
+message AccountFeeTierMessage {
+  // Master account address (20 bytes). Subaccounts are rejected.
+  bytes account = 1 [(schema.address) = true];
+  // Tier level to assign.
+  // Must exist in registered fee tiers. 0 removes explicit mapping and uses
+  // the default tier.
+  uint32 tier = 2;
+}
+
+// RegisterAccountFeeTierMessage updates fee-tier assignments for accounts.
+message RegisterAccountFeeTierMessage {
+  // Account-to-tier mappings to apply.
+  repeated AccountFeeTierMessage account_fee_tiers = 2;
+}

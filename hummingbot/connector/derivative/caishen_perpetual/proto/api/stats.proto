@@ -1,0 +1,639 @@
+syntax = "proto3";
+
+package stats;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "schema/base.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 统计
+service Stats {
+  // 查询账户交易量历史
+  rpc QueryVolumeByAccount(QueryVolumeByAccountRequest)
+      returns (QueryVolumeByAccountResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/volume/by-account"
+    };
+  }
+
+  // 查询账户已实现盈亏
+  rpc QueryRealizedPnlByAccount(QueryRealizedPnlByAccountRequest)
+      returns (QueryRealizedPnlByAccountResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/realized-pnl/by-account"
+    };
+  }
+
+  // 查询账户总资产价值
+  rpc QueryAccountValueByAccount(QueryAccountValueByAccountRequest)
+      returns (QueryAccountValueByAccountResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/account-value/by-account"
+    };
+  }
+
+  // 查询所有交易对 24 小时价格趋势
+  rpc QueryPriceTrend24H(QueryPriceTrend24HRequest)
+      returns (QueryPriceTrend24HResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/price-trend-24h"
+    };
+  }
+
+  // 查询全站数据汇总
+  rpc QueryOverview(QueryOverviewRequest) returns (QueryOverviewResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/overview"
+    };
+  }
+
+  // 查询总成交额
+  rpc QueryTotalVolume(QueryTotalVolumeRequest)
+      returns (QueryTotalVolumeResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/total-volume"
+    };
+  }
+
+  // 查询总未平仓合约价值
+  rpc QueryOpenInterest(QueryOpenInterestRequest)
+      returns (QueryOpenInterestResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/open-interest"
+    };
+  }
+
+  // 查询用户交易量排行榜
+  rpc QueryRankingsAccountVolume(QueryRankingsAccountVolumeRequest)
+      returns (QueryRankingsAccountVolumeResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/rankings/account-volume"
+    };
+  }
+
+  // 查询年化资金费率
+  rpc QueryAnnualizedFundingRate(QueryAnnualizedFundingRateRequest)
+      returns (QueryAnnualizedFundingRateResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/annualized-funding-rate"
+    };
+  }
+
+  // 查询强平历史
+  rpc QueryLiquidation(QueryLiquidationRequest)
+      returns (QueryLiquidationResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/liquidations"
+    };
+  }
+
+  // 查询手续费收入
+  rpc QueryFees(QueryFeesRequest) returns (QueryFeesResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/fees"
+    };
+  }
+
+  // 查询全站资金流入/流出
+  rpc QueryInflows(QueryInflowsRequest) returns (QueryInflowsResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/inflows"
+    };
+  }
+}
+
+// 查询账户交易量请求
+message QueryVolumeByAccountRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 统计周期，取值：1d、7d、14d、15d、30d、60d、90d、all
+  string resolution = 2
+      [(gogoproto.moretags) = "form:\"resolution\" binding:\"required\""];
+  // 交易域过滤，可选。为空或未传时返回全部交易域数据；"0"=Perp（永续合约）；"1"=Spot（现货）
+  string trading_domain = 3 [(gogoproto.moretags) = "form:\"trading_domain\""];
+  // 是否为子账户，传 true 时会查询并使用主账户的交易量数据，默认 false
+  bool is_subaccount = 4 [(gogoproto.moretags) = "form:\"is_subaccount\""];
+}
+
+// 查询账户已实现盈亏请求
+message QueryRealizedPnlByAccountRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 统计周期，取值：1d、7d、14d、15d、30d、60d、90d、all
+  string resolution = 2
+      [(gogoproto.moretags) = "form:\"resolution\" binding:\"required\""];
+  // 交易域过滤，可选。为空或未传时返回全部交易域数据；"0"=Perp（永续合约）；"1"=Spot（现货）
+  string trading_domain = 3 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询账户总资产价值请求
+message QueryAccountValueByAccountRequest {
+  // 账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  // 统计周期，取值：1d、7d、14d、15d、30d、60d、90d、all
+  string resolution = 2
+      [(gogoproto.moretags) = "form:\"resolution\" binding:\"required\""];
+  // 交易域过滤，可选。为空或未传时返回全部交易域数据；"0"=Perp（永续合约）；"1"=Spot（现货）
+  string trading_domain = 3 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 账户交易量响应
+message QueryVolumeByAccountResponse {
+  // 交易量详情列表
+  repeated VolumeResponse volume = 1;
+}
+
+// 交易量详情信息
+message VolumeResponse {
+  // 时间戳 (Unix 毫秒)
+  int64 time = 1 [(gogoproto.jsontag) = "time"];
+  // 该账户在该时间点的总成交量；现货（Spot）域成交量按 2 倍加权计入；计价币种
+  // USDC
+  string total_volume = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 该账户在该时间点作为 maker 的成交量；现货（Spot）域成交量按 2
+  // 倍加权计入；计价币种 USDC
+  string maker_volume = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 全站在该时间点的总成交量；现货（Spot）域成交量按 2 倍加权计入；计价币种
+  // USDC
+  string chain_volume = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 交易域：0=Perp（永续合约），1=Spot（现货）
+  share.schema.TradingDomain trading_domain = 5
+      [(gogoproto.jsontag) = "trading_domain"];
+  // 子账户地址；为空字符串时表示主账户直接交易（即子账户地址为零地址）
+  string subaccount = 6 [(gogoproto.jsontag) = "subaccount"];
+}
+
+// 查询 24H 价格趋势请求
+message QueryPriceTrend24HRequest {
+  // 交易域，必填。"0"=Perp（永续合约）；"1"=Spot（现货）
+  string trading_domain = 1
+      [(gogoproto.moretags) = "form:\"trading_domain\" binding:\"required\""];
+}
+
+// 查询 24H 价格趋势响应
+message QueryPriceTrend24HResponse {
+  // 价格趋势列表
+  repeated PriceTrend24HItem items = 1;
+}
+
+// 交易对 24H 价格趋势项
+message PriceTrend24HItem {
+  // 交易对符号
+  string symbol = 1;
+  // 基础代币 ID
+  uint32 base_token = 2;
+  // 计价代币 ID
+  uint32 quote_token = 3;
+  // 趋势点列表
+  repeated PriceTrendPoint points = 4;
+  // 交易域：0=Perp（永续合约），1=Spot（现货）
+  share.schema.TradingDomain trading_domain = 32
+      [(gogoproto.jsontag) = "trading_domain"];
+}
+
+// 价格趋势点
+message PriceTrendPoint {
+  // 时间戳 (Unix 毫秒)
+  int64 time = 1 [(gogoproto.jsontag) = "time"];
+  // 该时间点的成交价
+  string price = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// 查询已实现盈亏响应
+message QueryRealizedPnlByAccountResponse {
+  // 历史盈亏数据
+  repeated RealizedPnlResponse data = 1 [(gogoproto.jsontag) = "data"];
+  // 当前累计盈亏（按 trading_domain 分组，每个 domain 一条）；
+  // 盈亏不含手续费/资金费；时间戳取自请求时刻
+  repeated RealizedPnlResponse now = 2 [(gogoproto.jsontag) = "now"];
+}
+
+// 已实现盈亏详情
+message RealizedPnlResponse {
+  // 时间戳 (Unix 毫秒)
+  int64 time = 1 [(gogoproto.jsontag) = "time"];
+  // 已实现盈亏，不含手续费与资金费；计价币种 USDC
+  string realized_pnl = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 手续费
+  string fee = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 资金费
+  string funding_fee = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 交易域：0=Perp（永续合约），1=Spot（现货）
+  share.schema.TradingDomain trading_domain = 5
+      [(gogoproto.jsontag) = "trading_domain"];
+}
+
+// 查询账户价值响应
+message QueryAccountValueByAccountResponse {
+  // 账户价值历史数据
+  repeated AccountValueResponse data = 1;
+}
+
+// 账户价值详情
+message AccountValueResponse {
+  // 时间戳 (Unix 毫秒)
+  int64 time = 1 [(gogoproto.jsontag) = "time"];
+  // 未实现盈亏
+  string unrealized_pnl = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 账户余额
+  string balance = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 交易域：0=Perp（永续合约），1=Spot（现货）
+  share.schema.TradingDomain trading_domain = 4
+      [(gogoproto.jsontag) = "trading_domain"];
+}
+
+// 查询概览请求
+message QueryOverviewRequest {}
+
+// 查询概览响应
+message QueryOverviewResponse {
+  // 当前概览
+  Overview now = 1 [(gogoproto.nullable) = false];
+  // 24 小时前概览
+  Overview before_24h = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "before_24h",
+    (gogoproto.customname) = "Before24H"
+  ];
+}
+
+// 全站概览数据
+message Overview {
+  // 各交易对统计（含 Perp 与 Spot）
+  repeated SymbolStats symbols = 1 [(gogoproto.jsontag) = "symbols"];
+  // 按交易域分组的充提统计
+  repeated DomainDepositWithdrawal deposit_withdrawal = 2
+      [(gogoproto.jsontag) = "deposit_withdrawal"];
+  // 平台累计用户数（去重地址数）
+  int64 total_user = 3 [(gogoproto.jsontag) = "total_user"];
+}
+
+// 按交易域统计的充提数据
+message DomainDepositWithdrawal {
+  // 交易域：0=Perp（永续合约），1=Spot（现货）
+  share.schema.TradingDomain trading_domain = 1
+      [(gogoproto.jsontag) = "trading_domain"];
+  // 累计充值额
+  string total_deposit = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 累计提现额
+  string total_withdrawal = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// 交易对统计信息
+message SymbolStats {
+  // 交易域：0=Perp（永续合约），1=Spot（现货）
+  share.schema.TradingDomain trading_domain = 1
+      [(gogoproto.jsontag) = "trading_domain"];
+  // 交易对符号
+  string symbol = 2;
+  // 基础代币 ID
+  uint32 base_token = 3;
+  // 计价代币 ID
+  uint32 quote_token = 4;
+  // 总成交额
+  string total_volume = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 开仓量详情（仅 Perp 有实际数据，Spot 固定返回零值）
+  OpenInterest open_interest = 6 [(gogoproto.jsontag) = "open_interest"];
+}
+
+// 开仓量信息
+message OpenInterest {
+  // 总持仓量
+  string amount = 1 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 多头持仓数量
+  int32 long_positions = 2 [(gogoproto.jsontag) = "long_positions"];
+  // 空头持仓数量
+  int32 short_positions = 3 [(gogoproto.jsontag) = "short_positions"];
+}
+
+// 查询总成交额请求
+message QueryTotalVolumeRequest {
+  // 统计周期，取值：1d、7d、14d、15d、30d、60d、90d、all
+  string resolution = 1
+      [(gogoproto.moretags) = "form:\"resolution\" binding:\"required\""];
+  // 交易域过滤，可选。为空或未传时返回全部交易域数据；"0"=Perp（永续合约）；"1"=Spot（现货）
+  string trading_domain = 2 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询总成交额响应
+message QueryTotalVolumeResponse {
+  // 各交易对成交额列表
+  repeated SymbolVolume symbols = 1 [(gogoproto.jsontag) = "symbols"];
+}
+
+// 交易对成交额统计
+message SymbolVolume {
+  // 交易对符号
+  string symbol = 1 [(gogoproto.jsontag) = "symbol"];
+  // 基础代币 ID
+  uint32 base_token = 2 [(gogoproto.jsontag) = "base_token"];
+  // 计价代币 ID
+  uint32 quote_token = 3 [(gogoproto.jsontag) = "quote_token"];
+  // 成交额结果列表
+  repeated SymbolVolumeResponse result = 4 [(gogoproto.jsontag) = "result"];
+  // 交易域：0=Perp（永续合约），1=Spot（现货）
+  share.schema.TradingDomain trading_domain = 5
+      [(gogoproto.jsontag) = "trading_domain"];
+}
+
+// 交易对成交额项
+message SymbolVolumeResponse {
+  // 时间戳 (Unix 毫秒)
+  int64 time = 1 [(gogoproto.jsontag) = "time"];
+  // 成交额
+  string volume = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// 查询总开仓量请求
+message QueryOpenInterestRequest {
+  // 统计周期，取值：7d、14d、30d、90d、all
+  string resolution = 1
+      [(gogoproto.moretags) = "form:\"resolution\" binding:\"required\""];
+}
+
+// 查询总开仓量响应
+message QueryOpenInterestResponse {
+  // 各交易对开仓量列表
+  repeated SymbolOpenInterest symbols = 1 [(gogoproto.jsontag) = "symbols"];
+}
+
+// 交易对开仓量统计
+message SymbolOpenInterest {
+  // 交易对符号
+  string symbol = 1 [(gogoproto.jsontag) = "symbol"];
+  // 基础代币 ID
+  uint32 base_token = 2 [(gogoproto.jsontag) = "base_token"];
+  // 计价代币 ID
+  uint32 quote_token = 3 [(gogoproto.jsontag) = "quote_token"];
+  // 开仓量结果列表
+  repeated OpenInterestResponse result = 4 [(gogoproto.jsontag) = "result"];
+}
+
+// 交易对开仓量项
+message OpenInterestResponse {
+  // 时间戳 (Unix 毫秒)
+  int64 time = 1 [(gogoproto.jsontag) = "time"];
+  // 总持仓量
+  string amount = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 多头持仓数量
+  int32 long_positions = 3 [(gogoproto.jsontag) = "long_positions"];
+  // 空头持仓数量
+  int32 short_positions = 4 [(gogoproto.jsontag) = "short_positions"];
+}
+
+// 查询交易量排行请求
+message QueryRankingsAccountVolumeRequest {
+  // 返回数量限制
+  int64 limit = 1 [(gogoproto.moretags) = "form:\"limit,default=1000\""];
+  // 交易域过滤，可选。为空或未传时返回 Perp 与 Spot 合计交易量排行；
+  // "0" 返回 Perp（永续合约）交易量排行；"1" 返回 Spot（现货）交易量排行。
+  // 响应中 volume 字段的口径随此参数变化：合计量、Perp 量或 Spot 量。
+  string trading_domain = 2 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询交易量排行响应
+message QueryRankingsAccountVolumeResponse {
+  // 交易量排行列表，按请求 trading_domain 指定维度的交易量降序排列
+  repeated AccountVolumeRankResponse rankings = 1
+      [(gogoproto.jsontag) = "rankings"];
+}
+
+// 账户交易量排行项
+message AccountVolumeRankResponse {
+  // 账户地址
+  string account = 1 [(gogoproto.jsontag) = "account"];
+  // 交易量
+  string volume = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "volume"
+  ];
+}
+
+// 查询年化资金费率请求
+message QueryAnnualizedFundingRateRequest {
+  // 统计周期，取值：1d、7d、14d、15d、30d、60d、90d、all
+  string resolution = 1
+      [(gogoproto.moretags) = "form:\"resolution\" binding:\"required\""];
+}
+
+// 查询年化资金费率响应
+message QueryAnnualizedFundingRateResponse {
+  // 各交易对年化资金费率列表
+  repeated SymbolAnnualizedFundingRate symbols = 1
+      [(gogoproto.jsontag) = "symbols"];
+}
+
+// 交易对年化资金费率统计
+message SymbolAnnualizedFundingRate {
+  // 交易对符号
+  string symbol = 1 [(gogoproto.jsontag) = "symbol"];
+  // 基础代币 ID
+  uint32 base_token = 2 [(gogoproto.jsontag) = "base_token"];
+  // 计价代币 ID
+  uint32 quote_token = 3 [(gogoproto.jsontag) = "quote_token"];
+  // 费率结果列表
+  repeated AnnualizedFundingRateResponse result = 4
+      [(gogoproto.jsontag) = "result"];
+}
+
+// 年化资金费率项
+message AnnualizedFundingRateResponse {
+  // 时间戳 (Unix 毫秒)
+  int64 time = 1 [(gogoproto.jsontag) = "time"];
+  // 年化资金费率
+  string funding_rate = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "funding_rate"
+  ];
+}
+
+// 查询强平历史请求
+message QueryLiquidationRequest {
+  // 统计周期，取值：1d、7d、14d、15d、30d、60d、90d、all
+  string resolution = 1
+      [(gogoproto.moretags) = "form:\"resolution\" binding:\"required\""];
+}
+
+// 查询强平历史响应
+message QueryLiquidationResponse {
+  // 各交易对强平列表
+  repeated SymbolLiquidation symbols = 1 [(gogoproto.jsontag) = "symbols"];
+}
+
+// 交易对强平统计
+message SymbolLiquidation {
+  // 交易对符号
+  string symbol = 1 [(gogoproto.jsontag) = "symbol"];
+  // 基础代币 ID
+  uint32 base_token = 2 [(gogoproto.jsontag) = "base_token"];
+  // 计价代币 ID
+  uint32 quote_token = 3 [(gogoproto.jsontag) = "quote_token"];
+  // 强平结果列表
+  repeated LiquidationResponse result = 4 [(gogoproto.jsontag) = "result"];
+}
+
+// 强平详情项
+message LiquidationResponse {
+  // 时间戳 (Unix 毫秒)
+  int64 time = 1 [(gogoproto.jsontag) = "time"];
+  // 强平总数量
+  string liquidated_size = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "liquidated_size"
+  ];
+  // 强平总价值
+  string liquidated_notional = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "liquidated_notional"
+  ];
+}
+
+// 查询手续费请求
+message QueryFeesRequest {
+  // 统计周期，取值：1d、7d、14d、15d、30d、60d、90d、all
+  string resolution = 1
+      [(gogoproto.moretags) = "form:\"resolution\" binding:\"required\""];
+  // 交易域过滤，可选。为空或未传时返回全部交易域数据；"0"=Perp（永续合约）；"1"=Spot（现货）
+  string trading_domain = 2 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询手续费响应
+message QueryFeesResponse {
+  // 各交易对手续费列表
+  repeated SymbolFees symbols = 1 [(gogoproto.jsontag) = "symbols"];
+}
+
+// 交易对手续费统计
+message SymbolFees {
+  // 交易对符号
+  string symbol = 1 [(gogoproto.jsontag) = "symbol"];
+  // 基础代币 ID
+  uint32 base_token = 2 [(gogoproto.jsontag) = "base_token"];
+  // 计价代币 ID
+  uint32 quote_token = 3 [(gogoproto.jsontag) = "quote_token"];
+  // 手续费结果列表
+  repeated FeeResponse result = 4 [(gogoproto.jsontag) = "result"];
+  // 交易域：0=Perp（永续合约），1=Spot（现货）
+  share.schema.TradingDomain trading_domain = 5
+      [(gogoproto.jsontag) = "trading_domain"];
+}
+
+// 手续费详情项
+message FeeResponse {
+  // 时间戳 (Unix 毫秒)
+  int64 time = 1 [(gogoproto.jsontag) = "time"];
+  // 交易手续费
+  string fee = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "fee"
+  ];
+  // 资金费
+  string funding_fee = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "funding_fee"
+  ];
+}
+
+// 查询资金流入流出请求
+message QueryInflowsRequest {
+  // 统计周期，取值：1d、7d、14d、15d、30d、60d、90d、all
+  string resolution = 1
+      [(gogoproto.moretags) = "form:\"resolution\" binding:\"required\""];
+  // 交易域过滤，可选。为空或未传时返回全部交易域数据；"0"=Perp（永续合约）；"1"=Spot（现货）
+  string trading_domain = 2 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 查询资金流入流出响应
+message QueryInflowsResponse {
+  // 资金流入流出列表
+  repeated InflowResponse inflows = 1 [(gogoproto.jsontag) = "inflows"];
+}
+
+// 资金流入流出项
+message InflowResponse {
+  // 时间戳 (Unix 毫秒)
+  int64 time = 1 [(gogoproto.jsontag) = "time"];
+  // 充值额
+  string deposit = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "deposit"
+  ];
+  // 提现额
+  string withdraw = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "withdraw"
+  ];
+  // 累计充值额
+  string cumulative_deposit = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "cumulative_deposit"
+  ];
+  // 累计提现额
+  string cumulative_withdraw = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "cumulative_withdraw"
+  ];
+  // 交易域：0=Perp（永续合约），1=Spot（现货）
+  share.schema.TradingDomain trading_domain = 6
+      [(gogoproto.jsontag) = "trading_domain"];
+}

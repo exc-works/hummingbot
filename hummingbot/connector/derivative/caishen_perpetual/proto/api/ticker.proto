@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package ticker;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "schema/order.proto";
+import "schema/base.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 行情
+service Ticker {
+  // 获取行情列表
+  rpc ListTickers(ListTickersRequest) returns (ListTickersResponse) {
+    option (google.api.http).get = "/v1/tickers";
+  }
+
+  // 获取指定交易对行情
+  rpc GetTickerBySymbol(GetTickerBySymbolRequest) returns (TickerResponse) {
+    option (google.api.http).get = "/v1/tickers/by-symbol";
+  }
+}
+
+// 获取行情列表请求
+message ListTickersRequest {
+  // 交易域，可选。不传或为空时返回全部交易域；取值 0=Perp, 1=Spot；不支持
+  // Prediction。
+  string trading_domain = 1 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 获取行情列表响应
+message ListTickersResponse {
+  // 行情列表
+  repeated TickerResponse tickers = 1;
+}
+
+// 获取指定交易对行情请求
+message GetTickerBySymbolRequest {
+  // 交易对符号，例如 "BTC-USDC"，必填。
+  string symbol = 1
+      [(gogoproto.moretags) = "form:\"symbol\" binding:\"required\""];
+  // 交易域，可选。不传或为空时默认为 Perp；取值 0=Perp, 1=Spot；不支持
+  // Prediction。
+  string trading_domain = 2 [(gogoproto.moretags) = "form:\"trading_domain\""];
+}
+
+// 行情信息响应
+message TickerResponse {
+  // 基础代币 ID
+  uint32 base_token = 1;
+  // 计价代币 ID
+  uint32 quote_token = 2;
+  // 交易对符号，例如 "BTC-USDC"。
+  string symbol = 3;
+  // 最新成交价，以计价代币计价。
+  string price = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 24 小时开盘价，即 24 小时窗口内第一笔成交价，以计价代币计价。
+  string open_price_24h = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "OpenPrice24H"
+  ];
+  // 24 小时价格变化额，即最新成交价减去 24 小时开盘价，以计价代币计价。
+  string price_change_24h = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "PriceChange24H"
+  ];
+  // 24 小时价格变动比值（如 0.05 表示 +5%），非百分数；开盘价为 0 时返回 0。
+  string price_change_percentage_24h = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "PriceChangePercentage24H"
+  ];
+  // 标记价格，仅 Perp 交易域返回；其余交易域或无价格数据时为 null。
+  string mark_price = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "mark_price,omitempty"
+  ];
+  // 指数价格，仅 Perp 交易域返回；其余交易域或无价格数据时为 null。
+  string index_price = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag) = "index_price,omitempty"
+  ];
+  // 24 小时最高成交价，以计价代币计价。
+  string high_24h = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "High24H"
+  ];
+  // 24 小时最低成交价，以计价代币计价。
+  string low_24h = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "Low24H"
+  ];
+  // 24 小时成交量，以基础代币计量。
+  string base_volume_24h = 12 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "BaseVolume24H"
+  ];
+  // 24 小时成交额，以计价代币计量。
+  string quote_volume_24h = 13 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "QuoteVolume24H"
+  ];
+  // 24 小时成交笔数。
+  uint64 tx_count_24h = 14 [(gogoproto.customname) = "TxCount24H"];
+  // 24 小时买入成交笔数。
+  uint64 buy_tx_count_24h = 15 [(gogoproto.customname) = "BuyTxCount24H"];
+  // 最后成交时间，Unix 毫秒；无成交时为 0。
+  int64 last_tx_at = 16 [(gogoproto.jsontag) = "last_tx_at"];
+
+  // 交易域，取值 0=Perp, 1=Spot；不支持 Prediction 数据。
+  share.schema.TradingDomain trading_domain = 17
+      [(gogoproto.jsontag) = "trading_domain"];
+  // 基础代币的总供应量。
+  string total_supply = 18 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "TotalSupply"
+  ];
+}

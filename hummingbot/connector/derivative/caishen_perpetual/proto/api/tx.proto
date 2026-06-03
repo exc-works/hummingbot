@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package tx;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "schema/tx.proto";
+import "schema/error.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 交易
+service Tx {
+  // 提交交易
+  rpc SubmitTx(SubmitTxRequest) returns (SubmitTxResponse) {
+    option (google.api.http) = {
+      post: "/v1/tx"
+      body: "*"
+    };
+  }
+}
+
+// 提交交易请求
+message SubmitTxRequest {
+  // Base64 编码的 protobuf TxMessage
+  bytes message = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  // 是否异步提交。为 true 时立即返回，不等待交易结果
+  bool async = 2;
+  // 是否返回 base64 编码的原始 protobuf 交易结果
+  bool include_raw_tx_result = 3;
+}
+
+// 提交交易响应
+message SubmitTxResponse {
+  oneof result {
+    // 交易错误详情
+    TxError error = 1;
+    // 区块打包结果
+    BlockResult block_result = 2;
+  }
+  // 序列化的完整 TxResult 负载
+  bytes raw_tx_result = 3;
+}
+
+// 交易错误详情
+message TxError {
+  // 错误码
+  share.schema.ErrorCode code = 1;
+  // 错误码文本描述
+  string code_text = 2;
+  // 详细错误消息
+  string message = 3;
+}
+
+// 区块打包结果
+message BlockResult {
+  // 包含该交易的区块高度
+  uint64 number = 1;
+}

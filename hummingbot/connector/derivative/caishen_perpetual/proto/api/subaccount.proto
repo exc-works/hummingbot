@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package subaccount;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "schema/subaccount.proto";
+import "balance.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 子账户
+service Subaccount {
+  // 查询指定主账户下的子账户列表，仅返回用户创建的子账户。
+  rpc ListSubaccountsByMaster(ListSubaccountsByMasterRequest)
+      returns (ListSubaccountsByMasterResponse) {
+    option (google.api.http).get = "/v1/subaccounts";
+  }
+}
+
+// 查询子账户列表请求
+message ListSubaccountsByMasterRequest {
+  // 主账户地址（必填）。
+  string master_account = 1
+      [(gogoproto.moretags) = "form:\"master_account\" binding:\"required\""];
+}
+
+// 查询子账户列表响应
+message ListSubaccountsByMasterResponse {
+  // 子账户列表
+  repeated SubaccountResponse subaccounts = 1;
+}
+
+// 子账户信息响应
+message SubaccountResponse {
+  // 子账户地址。
+  bytes subaccount = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 子账户序号，同时用作地址派生索引。
+  int32 index = 2 [(gogoproto.jsontag) = "index"];
+  // 子账户名称。
+  string name = 3;
+  // 子账户创建时间，Unix 毫秒。
+  int64 created_at = 4 [(gogoproto.jsontag) = "created_at"];
+  // 子账户的各交易域代币余额列表。
+  repeated balance.BalanceResponse balances = 5
+      [(gogoproto.jsontag) = "balances"];
+}

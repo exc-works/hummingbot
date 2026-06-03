@@ -1,0 +1,26 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+// SubaccountType classifies subaccount categories.
+enum SubaccountType {
+  // User-created subaccount.
+  USER_CREATED = 0;
+  // Grid-strategy subaccount category.
+  GRID = 1;
+  // Martingale-strategy subaccount category.
+  MARTINGALE = 2;
+}
+
+// CreateSubaccountMessage creates a subaccount under the target master account.
+message CreateSubaccountMessage {
+  // User-defined subaccount name (required).
+  // UTF-8 byte length must be in [1, 16].
+  // The name must be unique under the same master account and type.
+  string name = 1;
+  // Requested subaccount category.
+  // For CREATE_SUBACCOUNT, this must be USER_CREATED.
+  // A master account can create at most 5 USER_CREATED subaccounts.
+  SubaccountType type = 2;
+}

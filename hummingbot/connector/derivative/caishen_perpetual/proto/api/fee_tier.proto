@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package fee_tier;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 手续费等级，提供各交易域的手续费等级费率配置查询。
+service FeeTier {
+  // 获取指定交易域的手续费等级配置。
+  rpc GetFeeTierProfile(GetFeeTierProfileRequest)
+      returns (GetFeeTierProfileResponse) {
+    option (google.api.http).get = "/v1/fee-tiers";
+  }
+}
+
+// 获取手续费等级配置请求
+message GetFeeTierProfileRequest {
+  // 待查询的交易域列表，取值 0=Perp, 1=Spot, 2=Prediction。为空时默认查询
+  // Perp。
+  repeated int32 trading_domains = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.TradingDomain",
+    (gogoproto.nullable) = false,
+    (gogoproto.moretags) = "form:\"trading_domains\""
+  ];
+}
+
+// 获取手续费等级配置响应
+message GetFeeTierProfileResponse {
+  // 按交易域返回的手续费等级配置，键为交易域，取值 0=Perp, 1=Spot,
+  // 2=Prediction。 仅包含已配置手续费等级的交易域。
+  map<uint32, FeeTierProfileResponse> profiles = 1;
+}
+
+// 单个交易域的手续费等级配置
+message FeeTierProfileResponse {
+  // 该交易域的手续费等级列表，按等级从 0 起连续递增排列。
+  repeated FeeTierResponse fee_tiers = 1;
+}
+
+// 手续费等级信息响应
+message FeeTierResponse {
+  // 手续费等级序号，取值范围 [0, 255]。
+  uint32 tier = 1 [(gogoproto.jsontag) = "tier"];
+  // 吃单（taker）手续费率，十进制字符串，取值范围 [0, 1]，例如 "0.0005"。
+  string taker = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 挂单（maker）手续费率，十进制字符串，取值范围 [-taker,
+  // 1]，负值表示挂单返佣，例如 "-0.0001"。
+  string maker = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}

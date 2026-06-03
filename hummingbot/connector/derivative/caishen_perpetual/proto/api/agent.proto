@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package agent;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// 代理账号
+service Agent {
+  // 查询指定账户下未过期的代理账号列表
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse) {
+    option (google.api.http).get = "/v1/agents";
+  }
+}
+
+// 查询代理账号列表请求
+message ListAgentsRequest {
+  // 待查询代理账号的账户地址
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+}
+
+// 查询代理账号列表响应
+message ListAgentsResponse {
+  // 未过期的代理账号列表
+  repeated AgentResponse agents = 1;
+}
+
+// 代理账号信息
+message AgentResponse {
+  // 代理账号的账号地址
+  bytes agent = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 代理账号名称
+  string name = 2;
+  // 过期时间，Unix 毫秒
+  int64 expired_time = 3 [(gogoproto.jsontag) = "expired_time"];
+}

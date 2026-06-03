@@ -1,0 +1,80 @@
+// Code generated DO NOT EDIT.
+// source: protoc-gen-snapshot
+
+syntax = "proto3";
+package share.schema.snapshot;
+
+option go_package = "github.com/exc-works/caishen/share/schema/snapshot";
+
+import "schema/base.proto";
+import "schema/order.proto";
+import "schema/strategy.proto";
+import "schema/subaccount.proto";
+
+message AccountAgentConfigRow {
+  bytes account_id = 1;
+  bytes agent = 2;
+  AgentConfigSnapshot config = 3;
+}
+
+message AccountFeeTierRow {
+  bytes account_id = 1;
+  uint32 tier = 2;
+}
+
+message AccountMultisigConfigRow {
+  bytes account_id = 1;
+  MultisigConfigSnapshot config = 2;
+}
+
+message AccountPositionConfigRow {
+  bytes account = 1;
+  uint64 symbol_id = 2;
+  AccountPositionConfigSnapshot config = 3;
+}
+
+message AccountPositionConfigSnapshot {
+  share.schema.PositionMode mode = 1;
+  uint32 isolated_leverage = 2;
+  uint32 cross_leverage = 3;
+}
+
+message AccountSetEntry {
+  bytes account_id = 1;
+}
+
+message AgentConfigSnapshot {
+  string name = 1;
+  bytes agent = 2;
+  int64 expired_time = 3;
+}
+
+message MultisigConfigSnapshot {
+  repeated AccountSetEntry signers = 1;
+  uint32 threshold = 2;
+}
+
+message OpenInterestRow {
+  uint64 symbol_id = 1;
+  string open_interest = 2;
+}
+
+message StrategyInstanceRow {
+  uint64 strategy_id = 1;
+  repeated uint64 child_order_ids = 2;
+  bytes account = 3;
+  bytes master_account = 4;
+  share.schema.StrategyInstanceStatus status = 5;
+  share.schema.StrategyTemplateType template_type = 6;
+  uint32 base_token = 7;
+  uint32 quote_token = 8;
+  share.schema.TradingDomain trading_domain = 9;
+}
+
+message SubaccountRow {
+  bytes master_account = 1;
+  bytes subaccount = 2;
+  string name = 3;
+  share.schema.SubaccountType type = 4;
+  int64 index = 5;
+}

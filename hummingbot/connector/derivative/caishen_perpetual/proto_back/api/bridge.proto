@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package bridge;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+service Bridge {
+  rpc Deposit(DepositRequest) returns (DepositResponse) {
+    option (google.api.http) = {
+      post: "/v1/internal/bridges/deposit"
+      body: "*"
+    };
+  }
+
+  rpc Withdraw(WithdrawRequst) returns (withdrawResponse) {
+    option (google.api.http) = {
+      post: "/v1/internal/bridges/withdraw"
+      body: "*"
+    };
+  }
+}
+
+message DepositRequest {
+  // Signed TxMessage data (already signed by bridge/deposit service)
+  bytes tx_message = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+message DepositResponse {}
+
+message WithdrawRequst {
+ 
+}
+
+message withdrawResponse {
+
+}

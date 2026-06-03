@@ -1,0 +1,128 @@
+// Code generated DO NOT EDIT.
+// source: protoc-gen-snapshot
+
+syntax = "proto3";
+package share.schema.snapshot;
+
+option go_package = "github.com/exc-works/caishen/share/schema/snapshot";
+
+import "schema/base.proto";
+import "schema/snapshot/base_metadata_custom.proto";
+
+message FeeTierSnapshot {
+  uint32 tier = 1;
+  string taker = 2;
+  string maker = 3;
+}
+
+message FeeTierStateFile {
+  bytes tier_levels = 1;
+  repeated SnapshotFeeTierDomain domains = 2;
+}
+
+message LastBlock {
+  uint64 number = 1;
+  int64 time = 2;
+  uint64 start_sequence = 3;
+  bool finalized = 4;
+}
+
+message SnapshotBaseFile {
+  uint64 chain_id = 1;
+  string chain_name = 2;
+  repeated SnapshotEnabledChain enabled_chains = 3;
+  uint64 sequence_id = 4;
+  LastBlock block = 5;
+  uint64 last_pending_id = 6;
+  uint64 perp_last_order_id = 7;
+  uint64 spot_last_order_id = 8;
+  uint64 prediction_last_order_id = 9;
+  uint64 perp_last_position_id = 10;
+  uint64 prediction_last_position_id = 11;
+  uint64 last_strategy_instance_id = 12;
+  uint64 last_vault_index = 13;
+  int64 vault_withdraw_min_hold_duration_ms = 14;
+  uint64 last_spot_strategy_instance_id = 15;
+}
+
+message SnapshotEnabledChain {
+  uint64 chain_id = 1;
+  string chain_name = 2;
+}
+
+message SnapshotFeeTierDomain {
+  share.schema.TradingDomain trading_domain = 1;
+  repeated FeeTierSnapshot fee_tiers = 2;
+}
+
+message SnapshotMetadataFile {
+  uint64 version = 1;
+  int64 token_count = 2;
+  int64 symbol_count = 3;
+  int64 risk_limit_count = 4;
+  int64 account_count = 5;
+  int64 token_balance_count = 6;
+  int64 token_total_supply_count = 7;
+  int64 spot_account_count = 8;
+  int64 spot_token_balance_count = 9;
+  int64 spot_token_total_supply_count = 10;
+  int64 prediction_account_count = 11;
+  int64 prediction_token_balance_count = 12;
+  int64 prediction_token_total_supply_count = 13;
+  int64 idempotency_key_count = 14;
+  int64 pending_withdraw_count = 15;
+  int64 order_book_count = 16;
+  int64 order_count = 17;
+  int64 conditional_order_count = 18;
+  int64 spot_order_book_count = 19;
+  int64 spot_order_count = 20;
+  int64 spot_conditional_order_count = 21;
+  int64 prediction_order_book_count = 22;
+  int64 prediction_order_count = 23;
+  int64 position_count = 24;
+  int64 account_position_config_count = 25;
+  int64 open_interest_count = 26;
+  int64 prediction_position_count = 27;
+  int64 symbol_state_count = 28;
+  int64 fee_tier_count = 29;
+  int64 account_fee_tier_count = 30;
+  int64 agent_config_count = 31;
+  int64 multisig_config_count = 32;
+  int64 subaccount_count = 33;
+  int64 permission_domain_config_count = 34;
+  int64 strategy_instance_count = 35;
+  int64 prediction_event_count = 36;
+  int64 prediction_symbol_count = 37;
+  int64 prediction_slashed_bond_count = 38;
+  int64 prediction_token_id_count = 39;
+  int64 spot_strategy_instance_count = 40;
+}
+
+message SnapshotVaultRow {
+  bytes account = 1;
+  string name = 2;
+  string description = 3;
+  string leader_fee_rate = 4;
+  int64 epoch = 5;
+  bytes leader = 6;
+  string total_shares = 7;
+  string close_equity = 8;
+  string close_share_price = 9;
+  bool deposit_enabled = 10;
+  bool auto_close_on_withdraw = 11;
+  int32 status = 12;
+  string net_deposit = 13;
+  repeated VaultDepositorEntry depositors = 14;
+  string close_total_shares = 15;
+}
+
+message VaultDepositSnapshot {
+  string shares = 1;
+  string cost_per_share = 2;
+  int64 entry_timestamp = 3;
+}
+
+message VaultDepositorEntry {
+  bytes account_id = 1;
+  VaultDepositSnapshot deposit = 2;
+}

@@ -1,0 +1,2719 @@
+syntax = "proto3";
+
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/base.proto";
+import "schema/extensions.proto";
+import "schema/order.proto";
+import "schema/prediction.proto";
+import "schema/symbol.proto";
+import "schema/fee_tier.proto";
+import "schema/error.proto";
+import "schema/tx.proto";
+import "schema/chain.proto";
+import "schema/subaccount.proto";
+import "schema/strategy.proto";
+import "schema/vault.proto";
+import "google/protobuf/timestamp.proto";
+
+// Reason for a forced vault withdrawal.
+enum VaultForcedWithdrawReason {
+  // Not forced.
+  VAULT_FORCED_WITHDRAW_REASON_NONE = 0;
+  // Forced because the vault is closing.
+  VAULT_FORCED_WITHDRAW_REASON_CLOSE = 1;
+  // Forced because vault maintenance is settling depositor shares.
+  VAULT_FORCED_WITHDRAW_REASON_MAINTENANCE = 2;
+}
+
+// Aggregates all state changes emitted while processing a single transaction.
+message ChangesCollector {
+  // Block time of the command that produced this collector entry.
+  google.protobuf.Timestamp time = 1;
+  // Block number of the command that produced this collector entry.
+  uint64 number = 2;
+  // Transaction hash (32-byte) for the processed command.
+  bytes tx_hash = 3 [(schema.hash) = true];
+  // Primary target account address (20-byte) of the command.
+  bytes target_address = 4 [(schema.address) = true];
+  reserved 5 to 7;
+
+  // Asset change.
+  AssetChange asset_change = 8;
+  reserved 9;
+  // Funding change.
+  FundingChange funding_change = 10;
+  // Metadata change.
+  MetadataChange metadata_change = 11;
+  // Order change.
+  OrderChange order_change = 12;
+  // Position change.
+  PositionChange position_change = 13;
+  // Price change.
+  PriceChange price_change = 14;
+  // Block change.
+  BlockChange block_change = 15;
+  // Vault change.
+  VaultChange vault_change = 16;
+}
+
+// Block-level change list.
+message BlockChange {
+  // Ordered list of change entries.
+  repeated BlockChangeEntry changes = 1;
+}
+
+// One block-level change entry.
+message BlockChangeEntry {
+  // BlockStarted payload.
+  message BlockStarted {
+    // Block number.
+    uint64 number = 1;
+    // Unix time in milliseconds unless otherwise specified.
+    int64 time = 2;
+  }
+  // BlockEnded payload.
+  message BlockEnded {
+    // Block number.
+    uint64 number = 1;
+    // Block hash bytes (32-byte).
+    bytes hash = 2 [(schema.hash) = true];
+    // The number of transactions included in the block.
+    uint32 tx_count = 3;
+  }
+  // TxProcessed payload.
+  message TxProcessed {
+    // Action type processed in this transaction.
+    TxActionType action = 1;
+    // Error payload for failed processing, if any.
+    Error error = 2;
+  }
+
+  // Union of concrete change variants.
+  oneof change {
+    // Oneof variant for change: block started.
+    BlockStarted block_started = 1;
+    // Oneof variant for change: block ended.
+    BlockEnded block_ended = 2;
+    // Oneof variant for change: tx processed.
+    TxProcessed tx_processed = 3;
+  }
+}
+
+// Asset balance and frozen-balance change list.
+message AssetChange {
+  // Ordered list of change entries.
+  repeated AssetChangeEntry changes = 1;
+}
+
+// One asset change entry for one account/token view.
+message AssetChangeEntry {
+  // Reason why frozen funds/size are released from an order.
+  enum OrderReleaseReason {
+    // Default zero value.
+    REASON_UNSPECIFIED = 0;
+    // Released because the order was cancelled.
+    CANCELLED = 1;
+    // Released because the order expired by matching rules/time-in-force.
+    EXPIRED = 2;
+    // Released because the order expired due to self-trade prevention (STP).
+    STP_EXPIRED = 3;
+  }
+  // Reason category of prediction-market bond freeze/release/slash.
+  enum PredictionBondReason {
+    // Default zero value.
+    PREDICTION_BOND_REASON_UNSPECIFIED = 0;
+    // Bond used when creating a prediction event/market.
+    CREATE_EVENT = 1;
+    // Bond used for proposing an outcome.
+    PROPOSAL = 2;
+    // Bond used for disputing a proposed outcome.
+    DISPUTE = 3;
+  }
+  // Union of concrete change variants.
+  oneof change {
+    // Oneof variant for change: deposited.
+    Deposited deposited = 1;
+    // Oneof variant for change: withdrew.
+    Withdrew withdrew = 2;
+    // Oneof variant for change: position funding settled.
+    PositionFundingSettled position_funding_settled = 3;
+    // Oneof variant for change: order placed.
+    OrderPlaced order_placed = 5;
+    // Oneof variant for change: position increased.
+    PositionIncreased position_increased = 7;
+    // Oneof variant for change: position decreased.
+    PositionDecreased position_decreased = 8;
+    // Oneof variant for change: insurance fund pnl loss covered.
+    InsuranceFundPnLLossCovered insurance_fund_pnl_loss_covered = 9;
+    // Oneof variant for change: position margin increased.
+    PositionMarginIncreased position_margin_increased = 10;
+    // Oneof variant for change: position margin decreased.
+    PositionMarginDecreased position_margin_decreased = 11;
+    // Oneof variant for change: transfer in.
+    TransferIn transfer_in = 12;
+    // Oneof variant for change: transfer out.
+    TransferOut transfer_out = 13;
+    // Oneof variant for change: withdrew confirmed.
+    WithdrewConfirmed withdrew_confirmed = 14;
+    // Oneof variant for change: withdrew rejected.
+    WithdrewRejected withdrew_rejected = 15;
+    // Oneof variant for change: order frozen released.
+    OrderFrozenReleased order_frozen_released = 16;
+    // Oneof variant for change: position leverage changed.
+    PositionLeverageChanged position_leverage_changed = 17;
+    // Oneof variant for change: account bankruptcy loss covered.
+    AccountBankruptcyLossCovered account_bankruptcy_loss_covered = 18;
+    InsuranceFundBankruptcyLossCovered insurance_fund_bankruptcy_loss_covered =
+        19;
+    // Oneof variant for change: risk account margin transferred.
+    RiskAccountMarginTransferred risk_account_margin_transferred = 20;
+    // Oneof variant for change: order amended.
+    OrderAmended order_amended = 21;
+    // Oneof variant for change: risk account covered.
+    RiskAccountCovered risk_account_covered = 22;
+    // Oneof variant for change: insurance fund covered.
+    InsuranceFundCovered insurance_fund_covered = 23;
+    // Oneof variant for change: vault creation fee paid.
+    VaultCreationFeePaid vault_creation_fee_paid = 24;
+    // Oneof variant for change: vault deposited.
+    VaultDeposited vault_deposited = 25;
+    VaultDepositorDeposited vault_depositor_deposited = 26;
+    // Oneof variant for change: vault withdrew.
+    VaultWithdrew vault_withdrew = 27;
+    VaultDepositorWithdrew vault_depositor_withdrew = 28;
+    // Oneof variant for change: vault leader fee paid.
+    VaultLeaderFeePaid vault_leader_fee_paid = 29;
+    VaultLeaderFeeReceived vault_leader_fee_received = 30;
+    VaultCloseDustTransferred dust_transferred = 31;
+    // reserved 32 to 36;
+    SpotOrderPlaced spot_order_placed = 37;
+    // Oneof variant for change: spot order amended.
+    SpotOrderAmended spot_order_amended = 38;
+    // Oneof variant for change: spot order frozen released.
+    SpotOrderFrozenReleased spot_order_frozen_released = 39;
+    // Oneof variant for change: spot order executed.
+    SpotOrderExecuted spot_order_executed = 40;
+    // Oneof variant for change: transfer account in.
+    TransferAccountIn transfer_account_in = 41;
+    // Oneof variant for change: transfer account out.
+    TransferAccountOut transfer_account_out = 42;
+    // Oneof variant for change: prediction market bond frozen.
+    PredictionMarketBondFrozen prediction_market_bond_frozen = 43;
+    // Oneof variant for change: prediction split.
+    PredictionSplit prediction_split = 44;
+    // Oneof variant for change: prediction merge.
+    PredictionMerge prediction_merge = 45;
+    // Oneof variant for change: prediction order placed.
+    PredictionOrderPlaced prediction_order_placed = 46;
+    // Oneof variant for change: prediction order frozen released.
+    PredictionOrderFrozenReleased prediction_order_frozen_released = 47;
+    // Oneof variant for change: prediction order executed.
+    PredictionOrderExecuted prediction_order_executed = 48;
+    // Oneof variant for change: prediction market bond released.
+    PredictionMarketBondReleased prediction_market_bond_released = 49;
+    // Oneof variant for change: prediction market bond slashed.
+    PredictionMarketBondSlashed prediction_market_bond_slashed = 50;
+    // Oneof variant for change: prediction market bond distributed.
+    PredictionMarketBondDistributed prediction_market_bond_distributed = 51;
+    // Oneof variant for change: prediction outcome settled.
+    PredictionOutcomeSettled prediction_outcome_settled = 52;
+  }
+
+  // PredictionMarketBondFrozen payload.
+  message PredictionMarketBondFrozen {
+    // Prediction event id.
+    uint64 event_id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 3;
+    // Bond amount frozen by this action. Always positive.
+    string amount = 4 [(schema.decimal) = true];
+    // Wallet after this change (decimal string).
+    string wallet_after = 5 [(schema.decimal) = true];
+    // Order frozen after this change (decimal string).
+    string order_frozen_after = 6 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 7 [(schema.address) = true];
+    // Reason string or enum for this event.
+    PredictionBondReason reason = 8;
+  }
+
+  // PredictionMarketBondReleased payload.
+  message PredictionMarketBondReleased {
+    // Prediction event id.
+    uint64 event_id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 3;
+    // Bond amount released by this action. Always positive.
+    string amount = 4 [(schema.decimal) = true];
+    // Wallet after this change (decimal string).
+    string wallet_after = 5 [(schema.decimal) = true];
+    // Order frozen after this change (decimal string).
+    string order_frozen_after = 6 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 7 [(schema.address) = true];
+    // Reason string or enum for this event.
+    PredictionBondReason reason = 8;
+  }
+
+  // PredictionMarketBondSlashed payload.
+  message PredictionMarketBondSlashed {
+    // Prediction event id.
+    uint64 event_id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 3;
+    // Bond amount slashed by this action. Always positive.
+    string amount = 4 [(schema.decimal) = true];
+    // Wallet after this change (decimal string).
+    string wallet_after = 5 [(schema.decimal) = true];
+    // Order frozen after this change (decimal string).
+    string order_frozen_after = 6 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 7 [(schema.address) = true];
+    // Reason string or enum for this event.
+    PredictionBondReason reason = 8;
+    // YES token id.
+    uint32 yes_token_id = 9;
+    // NO token id.
+    uint32 no_token_id = 10;
+  }
+
+  // PredictionMarketBondDistributed payload.
+  message PredictionMarketBondDistributed {
+    // Prediction event id.
+    uint64 event_id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 3;
+    // Bond amount distributed by this action. Always positive.
+    string amount = 4 [(schema.decimal) = true];
+    // Wallet after this change (decimal string).
+    string wallet_after = 5 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 6 [(schema.address) = true];
+    // YES token id.
+    uint32 yes_token_id = 7;
+    // NO token id.
+    uint32 no_token_id = 8;
+  }
+
+  // PredictionSplit payload.
+  message PredictionSplit {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // YES token id.
+    uint32 yes_token_id = 2;
+    // NO token id.
+    uint32 no_token_id = 3;
+    // Quote token id.
+    uint32 quote_token_id = 4;
+    // Split size. Always positive; YES and NO positions increase by this
+    // amount.
+    string size = 5 [(schema.decimal) = true];
+    // Quote wallet after this change (decimal string).
+    string quote_wallet_after = 6 [(schema.decimal) = true];
+    // Yes entry price after this change (decimal string).
+    string yes_entry_price_after = 7 [(schema.decimal) = true];
+    // Yes size after this change (decimal string).
+    string yes_size_after = 8 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 9 [(schema.address) = true];
+    // Prediction event id.
+    uint64 event_id = 10;
+    // No entry price after this change (decimal string).
+    string no_entry_price_after = 11 [(schema.decimal) = true];
+    // No size after this change (decimal string).
+    string no_size_after = 12 [(schema.decimal) = true];
+    // YES position id.
+    uint64 yes_position_id = 13;
+    // NO position id.
+    uint64 no_position_id = 14;
+  }
+
+  // PredictionMerge payload.
+  message PredictionMerge {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // YES token id.
+    uint32 yes_token_id = 2;
+    // NO token id.
+    uint32 no_token_id = 3;
+    // Quote token id.
+    uint32 quote_token_id = 4;
+    // Merge size in event sign convention. Always negative; YES and NO
+    // positions decrease by abs(size).
+    string size = 5 [(schema.decimal) = true];
+    // Quote wallet after this change (decimal string).
+    string quote_wallet_after = 6 [(schema.decimal) = true];
+    // Yes size after this change (decimal string).
+    string yes_size_after = 7 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 8 [(schema.address) = true];
+    // Prediction event id.
+    uint64 event_id = 9;
+    // Yes realized pnl as decimal string.
+    string yes_realized_pnl = 10 [(schema.decimal) = true];
+    // Yes realized pnl after this change (decimal string).
+    string yes_realized_pnl_after = 11 [(schema.decimal) = true];
+    // No size after this change (decimal string).
+    string no_size_after = 12 [(schema.decimal) = true];
+    // No realized pnl as decimal string.
+    string no_realized_pnl = 13 [(schema.decimal) = true];
+    // No realized pnl after this change (decimal string).
+    string no_realized_pnl_after = 14 [(schema.decimal) = true];
+    // YES position id.
+    uint64 yes_position_id = 15;
+    // NO position id.
+    uint64 no_position_id = 16;
+  }
+
+  // PredictionOutcomeSettled payload.
+  message PredictionOutcomeSettled {
+    // Prediction event id.
+    uint64 event_id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // YES token id.
+    uint32 yes_token_id = 3;
+    // NO token id.
+    uint32 no_token_id = 4;
+    // Quote token id.
+    uint32 quote_token_id = 5;
+    // Prediction outcome value.
+    PredictionOutcome outcome = 6;
+    // Settled position size. Always positive.
+    string size = 7 [(schema.decimal) = true];
+    // Quote received in settlement. Winners > 0, losers = 0.
+    string quote_amount = 8 [(schema.decimal) = true];
+    // Quote wallet after this change (decimal string).
+    string quote_wallet_after = 9 [(schema.decimal) = true];
+    // Realized pnl as decimal string.
+    string realized_pnl = 10 [(schema.decimal) = true];
+    // Realized pnl after this change (decimal string).
+    string realized_pnl_after = 11 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 12 [(schema.address) = true];
+    // Position id.
+    uint64 position_id = 13;
+  }
+
+  // Deposited payload.
+  message Deposited {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 2;
+    // Wallet delta from deposit. Always positive.
+    string wallet_delta = 3 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 4 [(schema.decimal) = true];
+    // Chain id.
+    uint64 chain_id = 5;
+    // Deposit transaction hash bytes.
+    bytes deposit_hash = 6;
+    // Idempotency key bytes for deduplicating deposit requests.
+    bytes idempotency_key = 7;
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 8 [(schema.address) = true];
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 9;
+    // Entry price after this change (decimal string).
+    optional string entry_price_after = 10 [(schema.decimal) = true];
+    // USD price snapshot used for valuation (decimal string).
+    optional string usd_price = 11 [(schema.decimal) = true];
+  }
+
+  // Withdrew payload.
+  message Withdrew {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 2;
+    // Wallet delta for withdrawal request. Always negative (debited at request
+    // time). Example: withdraw 10 => "-10".
+    string wallet_delta = 3 [(schema.decimal) = true];
+    // Wallet after this change (decimal string).
+    string wallet_after = 4 [(schema.decimal) = true];
+    // Pending withdraw request id.
+    uint64 pending_id = 5;
+    // Configured withdrawal fee (non-negative decimal). Example: fee 1 => "1".
+    string withdraw_fee = 6 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 7 [(schema.address) = true];
+    // Chain id.
+    uint64 chain_id = 8;
+    // Receiver bytes (chain-specific address format).
+    bytes receiver = 9;
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 10;
+  }
+
+  // WithdrewConfirmed payload.
+  message WithdrewConfirmed {
+    // Pending withdraw request id.
+    uint64 pending_id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 3;
+    // Confirmed withdrawal amount in event sign convention. Always negative.
+    string amount = 4 [(schema.decimal) = true];
+    // On-chain withdrawal transaction hash bytes (32-byte).
+    bytes hash = 5 [(schema.hash) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 6 [(schema.address) = true];
+    // Wallet after this change (decimal string).
+    string wallet_after = 7 [(schema.decimal) = true];
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 8;
+    // Realized pnl delta. Positive = profit, negative = loss.
+    optional string realized_pnl = 9 [(schema.decimal) = true];
+    // Cumulative realized pnl after this change.
+    optional string realized_pnl_after = 10 [(schema.decimal) = true];
+    // Usd price as decimal string.
+    optional string usd_price = 11 [(schema.decimal) = true];
+  }
+
+  // WithdrewRejected payload.
+  message WithdrewRejected {
+    // Pending withdraw request id.
+    uint64 pending_id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 3;
+    // Returned amount on rejection. Always positive.
+    string amount = 4 [(schema.decimal) = true];
+    // Wallet after this change (decimal string).
+    string wallet_after = 5 [(schema.decimal) = true];
+    // Reason string or enum for this event.
+    string reason = 6;
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 7 [(schema.address) = true];
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 8;
+  }
+
+  // TransferOut payload.
+  message TransferOut {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Dst account address (20-byte EVM address).
+    bytes dst_account = 2 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 3;
+    // Transferred-out amount in event sign convention. Always negative.
+    string amount = 4 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 5 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 6 [(schema.address) = true];
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 7;
+    // Realized pnl delta. Positive = profit, negative = loss.
+    optional string realized_pnl = 8 [(schema.decimal) = true];
+    // Cumulative realized pnl after this change.
+    optional string realized_pnl_after = 9 [(schema.decimal) = true];
+  }
+
+  // TransferIn payload.
+  message TransferIn {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Src account address (20-byte EVM address).
+    bytes src_account = 2 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 3;
+    // Transferred-in amount in event sign convention. Always positive.
+    string amount = 4 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 5 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 6 [(schema.address) = true];
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 7;
+    // Entry price after this change (decimal string).
+    optional string entry_price_after = 8 [(schema.decimal) = true];
+  }
+
+  // TransferAccountOut payload.
+  message TransferAccountOut {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 2;
+    // Cross-domain transfer-out amount in event sign convention. Always
+    // negative.
+    string amount = 3 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 4 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 5 [(schema.address) = true];
+    // Source trading domain.
+    TradingDomain from_domain = 6;
+    // Destination trading domain.
+    TradingDomain to_domain = 7;
+  }
+
+  // TransferAccountIn payload.
+  message TransferAccountIn {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 2;
+    // Cross-domain transfer-in amount in event sign convention. Always
+    // positive.
+    string amount = 3 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 4 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 5 [(schema.address) = true];
+    // Source trading domain.
+    TradingDomain from_domain = 6;
+    // Destination trading domain.
+    TradingDomain to_domain = 7;
+  }
+
+  // PositionFundingSettled payload.
+  message PositionFundingSettled {
+    // Position id.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Funding fee delta for this account. Positive = received, negative = paid.
+    string amount = 7 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 8 [(schema.decimal) = true];
+    // Isolated position frozen as decimal string.
+    string isolated_position_frozen = 9 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 10 [(schema.address) = true];
+  }
+
+  // OrderPlaced payload.
+  message OrderPlaced {
+    // Order id.
+    uint64 id = 1;
+    // Base token id.
+    uint32 base_token = 2;
+    // Quote token id.
+    uint32 quote_token = 3;
+    // Position mode.
+    PositionMode mode = 4;
+    // Position/order side.
+    PositionSide side = 5;
+    // Frozen margin increase for order placement. Always positive.
+    string amount = 6 [(schema.decimal) = true];
+    // Cross order frozen as decimal string.
+    optional string cross_order_frozen = 7 [(schema.decimal) = true];
+    // Isolated order frozen as decimal string.
+    optional string isolated_order_frozen = 8 [(schema.decimal) = true];
+    // Account address (20-byte EVM address).
+    bytes account = 9 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 10 [(schema.address) = true];
+  }
+
+  // PositionIncreased payload.
+  message PositionIncreased {
+    // Position id.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Fee delta. Positive = rebate/credit, negative = fee paid.
+    string fee = 7 [(schema.decimal) = true];
+    // Isolated position frozen as decimal string.
+    optional string isolated_position_frozen = 8 [(schema.decimal) = true];
+    // Isolated order frozen as decimal string.
+    optional string isolated_order_frozen = 9 [(schema.decimal) = true];
+    // Cross order frozen as decimal string.
+    optional string cross_order_frozen = 10 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 11 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 12 [(schema.address) = true];
+  }
+
+  // PositionDecreased payload.
+  message PositionDecreased {
+    // Position id.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Fee delta. Positive = rebate/credit, negative = fee paid.
+    string fee = 7 [(schema.decimal) = true];
+    // Realized pnl delta. Positive = profit, negative = loss.
+    string realized_pnl = 8 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 9 [(schema.decimal) = true];
+    // Isolated position frozen as decimal string.
+    optional string isolated_position_frozen = 10 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 11 [(schema.address) = true];
+  }
+
+  // InsuranceFundPnLLossCovered payload.
+  message InsuranceFundPnLLossCovered {
+    // position id
+    uint64 id = 1;
+    // Base token id.
+    uint32 base_token = 2;
+    // Quote token id.
+    uint32 quote_token = 3;
+    // Position mode.
+    PositionMode mode = 4;
+    // Position/order side.
+    PositionSide side = 5;
+    // Insurance-fund PnL delta for liquidation settlement. Negative =
+    // subsidized loss, positive = gain.
+    string amount = 6 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 7 [(schema.decimal) = true];
+    // Account address (20-byte EVM address).
+    bytes account = 8 [(schema.address) = true];
+  }
+
+  // PositionMarginIncreased payload.
+  message PositionMarginIncreased {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position/order side.
+    PositionSide side = 5;
+    // Isolated margin increase amount. Always positive.
+    string amount = 6 [(schema.decimal) = true];
+    // Isolated position frozen as decimal string.
+    string isolated_position_frozen = 7 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 8 [(schema.address) = true];
+  }
+
+  // PredictionOrderPlaced payload.
+  message PredictionOrderPlaced {
+    // Entity identifier.
+    uint64 id = 1;
+    // YES token id.
+    uint32 yes_token_id = 2;
+    // NO token id.
+    uint32 no_token_id = 3;
+    // Token id.
+    uint32 token_id = 4;
+    // Prediction outcome value.
+    PredictionOutcome outcome = 5;
+    // Frozen amount increase. BUY: USD amount. SELL: outcome position size.
+    // Always positive.
+    string amount = 6 [(schema.decimal) = true];
+    // Wallet after this change (decimal string).
+    string wallet_after = 7 [(schema.decimal) = true];
+    // Order frozen after this change (decimal string).
+    string order_frozen_after = 8 [(schema.decimal) = true];
+    // Account address (20-byte EVM address).
+    bytes account = 9 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 10 [(schema.address) = true];
+    // Prediction event id.
+    uint64 event_id = 11;
+    // Size after this change (decimal string).
+    optional string size_after = 12 [(schema.decimal) = true];
+    // Size frozen after this change (decimal string).
+    optional string size_frozen_after = 13 [(schema.decimal) = true];
+    // Position id.
+    optional uint64 position_id = 14;
+  }
+
+  // PredictionOrderFrozenReleased payload.
+  message PredictionOrderFrozenReleased {
+    // Entity identifier.
+    uint64 id = 1;
+    // YES token id.
+    uint32 yes_token_id = 2;
+    // NO token id.
+    uint32 no_token_id = 3;
+    // Token id.
+    uint32 token_id = 4;
+    // Prediction outcome value.
+    PredictionOutcome outcome = 5;
+    // Released frozen amount. BUY: USD amount. SELL: outcome position size.
+    // Always positive.
+    string amount = 6 [(schema.decimal) = true];
+    // Wallet after this change (decimal string).
+    string wallet_after = 7 [(schema.decimal) = true];
+    // Order frozen after this change (decimal string).
+    string order_frozen_after = 8 [(schema.decimal) = true];
+    // Account address (20-byte EVM address).
+    bytes account = 9 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 10 [(schema.address) = true];
+    // Reason string or enum for this event.
+    OrderReleaseReason reason = 11;
+    // Prediction event id.
+    uint64 event_id = 12;
+    // Size after this change (decimal string).
+    optional string size_after = 13 [(schema.decimal) = true];
+    // Size frozen after this change (decimal string).
+    optional string size_frozen_after = 14 [(schema.decimal) = true];
+    // Position id.
+    optional uint64 position_id = 15;
+  }
+
+  // PredictionOrderExecuted payload.
+  message PredictionOrderExecuted {
+    // Order id.
+    uint64 id = 1;
+    // Prediction event id.
+    uint64 event_id = 2;
+    // YES token id.
+    uint32 yes_token_id = 3;
+    // NO token id.
+    uint32 no_token_id = 4;
+    // Account address (20-byte EVM address).
+    bytes account = 5 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 6 [(schema.address) = true];
+    // Prediction outcome value.
+    PredictionOutcome outcome = 7;
+    // True when this event row is from the taker perspective.
+    bool taker = 8;
+    // Prediction match type.
+    PredictionMatchType match_type = 9;
+    // Price as decimal string.
+    string price = 10 [(schema.decimal) = true];
+    // Size as decimal string.
+    string size = 11 [(schema.decimal) = true];
+
+    // Net USD delta from this trade excluding fees. >0 receive, <0 spend.
+    string quote_amount = 12 [(schema.decimal) = true];
+    // Net USD fee delta. <0 fee paid, >0 rebate, 0 when fee is charged in
+    // outcome token.
+    string quote_fee = 13 [(schema.decimal) = true];
+    // Quote wallet after this change (decimal string).
+    string quote_wallet_after = 14 [(schema.decimal) = true];
+    // Quote order frozen after this change (decimal string).
+    string quote_order_frozen_after = 15 [(schema.decimal) = true];
+
+    // Net delta on the order's outcome token excluding fees. >0 receive, <0
+    // spend.
+    string outcome_amount = 16 [(schema.decimal) = true];
+    // Net fee delta on the order's outcome token. <0 fee paid, >0 rebate, 0
+    // when fee is charged in USD.
+    string outcome_fee = 17 [(schema.decimal) = true];
+    // Entry price after this change (decimal string).
+    optional string entry_price_after = 18 [(schema.decimal) = true];
+    // Size after this change (decimal string).
+    string size_after = 19 [(schema.decimal) = true];
+    // Size frozen after this change (decimal string).
+    string size_frozen_after = 20 [(schema.decimal) = true];
+
+    // Counter-outcome token fee delta. <0 fee paid, >0 rebate, 0 when fee is
+    // charged in USD.
+    optional string counter_outcome_fee = 21 [(schema.decimal) = true];
+    // Counter entry price after this change (decimal string).
+    optional string counter_entry_price_after = 22 [(schema.decimal) = true];
+    // Counter size after this change (decimal string).
+    optional string counter_size_after = 23 [(schema.decimal) = true];
+
+    // Close-only realized PnL from execution price movement; fees are excluded.
+    optional string realized_pnl = 24 [(schema.decimal) = true];
+    // Position id.
+    uint64 position_id = 25;
+    // Counter position id.
+    optional uint64 counter_position_id = 26;
+    // Realized pnl after this change (decimal string).
+    optional string realized_pnl_after = 27 [(schema.decimal) = true];
+    // Position/order side.
+    PositionSide side = 28;
+  }
+
+  // PositionMarginDecreased payload.
+  message PositionMarginDecreased {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position/order side.
+    PositionSide side = 5;
+    // Isolated margin decrease amount in event sign convention. Always
+    // negative.
+    string amount = 6 [(schema.decimal) = true];
+    // Isolated position frozen as decimal string.
+    string isolated_position_frozen = 7 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 8 [(schema.address) = true];
+  }
+
+  // OrderFrozenReleased payload.
+  message OrderFrozenReleased {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 2;
+    // Quote token id.
+    uint32 quote_token = 3;
+    // Position mode.
+    PositionMode mode = 4;
+    // Released order margin after recalculating required initial margin. Always
+    // positive.
+    string amount = 5 [(schema.decimal) = true];
+    // Cross order frozen as decimal string.
+    optional string cross_order_frozen = 6 [(schema.decimal) = true];
+    // Isolated order frozen as decimal string.
+    optional string isolated_order_frozen = 7 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 8 [(schema.address) = true];
+    // Reason string or enum for this event.
+    OrderReleaseReason reason = 9;
+  }
+
+  // PositionLeverageChanged payload.
+  message PositionLeverageChanged {
+    // Position id if an open position exists on this symbol; omitted when only
+    // account-level leverage/frozen values changed.
+    optional uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Isolated position frozen as decimal string.
+    optional string isolated_position_frozen = 5 [(schema.decimal) = true];
+    // Isolated order frozen as decimal string.
+    optional string isolated_order_frozen = 6 [(schema.decimal) = true];
+    // Cross order frozen as decimal string.
+    optional string cross_order_frozen = 7 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 8 [(schema.address) = true];
+  }
+
+  // AccountBankruptcyLossCovered payload.
+  message AccountBankruptcyLossCovered {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 2;
+    // Subsidy amount credited to account wallet. Always positive.
+    string amount = 3 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 4 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 5 [(schema.address) = true];
+  }
+
+  // InsuranceFundBankruptcyLossCovered payload.
+  message InsuranceFundBankruptcyLossCovered {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Token id.
+    uint32 token_id = 2;
+    // Insurance-fund payout amount in event sign convention. Always negative.
+    string amount = 3 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 4 [(schema.decimal) = true];
+  }
+
+  // RiskAccountMarginTransferred payload.
+  message RiskAccountMarginTransferred {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Realized PnL delta to the risk account. Positive = risk account receives,
+    // negative = risk account pays.
+    string realized_pnl = 5 [(schema.decimal) = true];
+    // Fee delta to the risk account. Positive = risk account receives, negative
+    // = risk account pays.
+    string fee = 6 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 7 [(schema.decimal) = true];
+  }
+
+  // OrderAmended payload.
+  message OrderAmended {
+    // order id
+    uint64 id = 1;
+    // Base token id.
+    uint32 base_token = 2;
+    // Quote token id.
+    uint32 quote_token = 3;
+    // Position mode.
+    PositionMode mode = 4;
+    // Position/order side.
+    PositionSide side = 5;
+    // Net frozen margin delta from amend. > 0 increase, < 0 decrease.
+    string amount = 6 [(schema.decimal) = true];
+    // Cross order frozen as decimal string.
+    optional string cross_order_frozen = 7 [(schema.decimal) = true];
+    // Isolated order frozen as decimal string.
+    optional string isolated_order_frozen = 8 [(schema.decimal) = true];
+    // Account address (20-byte EVM address).
+    bytes account = 9 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 10 [(schema.address) = true];
+  }
+
+  // SpotOrderPlaced payload.
+  message SpotOrderPlaced {
+    // Entity identifier.
+    uint64 id = 1;
+    // Base token id.
+    uint32 base_token = 2;
+    // Quote token id.
+    uint32 quote_token = 3;
+    // Token id.
+    uint32 token_id = 4;
+    // Frozen amount increase for spot order placement. Always positive.
+    string amount = 5 [(schema.decimal) = true];
+    // Wallet after this change (decimal string).
+    string wallet_after = 6 [(schema.decimal) = true];
+    // Order frozen after this change (decimal string).
+    string order_frozen_after = 7 [(schema.decimal) = true];
+    // Account address (20-byte EVM address).
+    bytes account = 8 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 9 [(schema.address) = true];
+  }
+
+  // SpotOrderAmended payload.
+  message SpotOrderAmended {
+    // Entity identifier.
+    uint64 id = 1;
+    // Base token id.
+    uint32 base_token = 2;
+    // Quote token id.
+    uint32 quote_token = 3;
+    // Token id.
+    uint32 token_id = 4;
+    // Net frozen amount delta from amend. >0 increase, <0 decrease.
+    string amount = 5 [(schema.decimal) = true];
+    // Wallet after this change (decimal string).
+    string wallet_after = 6 [(schema.decimal) = true];
+    // Order frozen after this change (decimal string).
+    string order_frozen_after = 7 [(schema.decimal) = true];
+    // Account address (20-byte EVM address).
+    bytes account = 8 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 9 [(schema.address) = true];
+  }
+
+  // SpotOrderFrozenReleased payload.
+  message SpotOrderFrozenReleased {
+    // Entity identifier.
+    uint64 id = 1;
+    // Base token id.
+    uint32 base_token = 2;
+    // Quote token id.
+    uint32 quote_token = 3;
+    // Token id.
+    uint32 token_id = 4;
+    // Frozen amount released by cancel/expire/STP. Always positive.
+    string amount = 5 [(schema.decimal) = true];
+    // Wallet after this change (decimal string).
+    string wallet_after = 6 [(schema.decimal) = true];
+    // Order frozen after this change (decimal string).
+    string order_frozen_after = 7 [(schema.decimal) = true];
+    // Account address (20-byte EVM address).
+    bytes account = 8 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 9 [(schema.address) = true];
+    // Reason string or enum for this event.
+    OrderReleaseReason reason = 10;
+  }
+
+  // SpotOrderExecuted payload.
+  message SpotOrderExecuted {
+    // Entity identifier.
+    uint64 id = 1;
+    // Base token id.
+    uint32 base_token = 2;
+    // Quote token id.
+    uint32 quote_token = 3;
+    // Account address (20-byte EVM address).
+    bytes account = 4 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 5 [(schema.address) = true];
+    // Net token amount delta from this spot fill. >0 increase, <0 decrease.
+    string amount = 6 [(schema.decimal) = true];
+    // Fee delta on this token row. Non-zero only when token_id is the fee
+    // token; positive = rebate, negative = fee paid, otherwise "0".
+    string fee = 7 [(schema.decimal) = true];
+    // True when this event row is from the taker perspective.
+    bool taker = 8;
+    // Token id.
+    uint32 token_id = 9;
+    // Wallet after this change (decimal string).
+    string wallet_after = 10 [(schema.decimal) = true];
+    // Order frozen after this change (decimal string).
+    string order_frozen_after = 11 [(schema.decimal) = true];
+    // Entry price after this change (decimal string).
+    optional string entry_price_after = 12 [(schema.decimal) = true];
+    // Realized pnl.
+    optional string realized_pnl = 13 [(schema.decimal) = true];
+    // Realized pnl after.
+    optional string realized_pnl_after = 14 [(schema.decimal) = true];
+  }
+
+  // RiskAccountCovered payload.
+  message RiskAccountCovered {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 2;
+    // Quote token id.
+    uint32 quote_token = 3;
+    // Risk-account wallet delta. Positive = receives transfer from insurance
+    // fund; negative = pays insurance fund.
+    string amount = 4 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 5 [(schema.decimal) = true];
+  }
+
+  // InsuranceFundCovered payload.
+  message InsuranceFundCovered {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 2;
+    // Quote token id.
+    uint32 quote_token = 3;
+    // Insurance-fund wallet delta. Positive = receives transfer from risk
+    // account; negative = pays risk account.
+    string amount = 4 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 5 [(schema.decimal) = true];
+    InsuranceFundCoverProfitType profit_type = 6;
+  }
+
+  // Source classification for insurance-fund income events.
+  enum InsuranceFundCoverProfitType {
+    // Default zero value.
+    NOT_SET = 0;
+    // Income from risk-account place/close order flow.
+    RISK_ACCOUNT_PLACE_ORDER = 1;
+    // Income from risk-account ADL flow.
+    RISK_ACCOUNT_AUTO_DELEVERAGE = 2;
+  }
+
+  // VaultCreationFeePaid payload.
+  message VaultCreationFeePaid {
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 1 [(schema.address) = true];
+    // Leader address (20-byte EVM address).
+    bytes leader = 2 [(schema.address) = true];
+    // Charged vault-creation fee amount. Non-negative.
+    string fee = 3 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 4 [(schema.decimal) = true];
+  }
+
+  // VaultDeposited payload.
+  message VaultDeposited {
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 1 [(schema.address) = true];
+    // Depositor address (20-byte EVM address).
+    bytes depositor = 2 [(schema.address) = true];
+    // Deposit amount credited to the vault. Always positive.
+    string deposit_amount = 3 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 4 [(schema.decimal) = true];
+  }
+  // VaultDepositorDeposited payload.
+  message VaultDepositorDeposited {
+    // Depositor address (20-byte EVM address).
+    bytes depositor = 1 [(schema.address) = true];
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 2 [(schema.address) = true];
+    // Depositor wallet delta for vault deposit in event sign convention. Always
+    // negative.
+    string deposit_amount = 3 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 4 [(schema.decimal) = true];
+  }
+  // VaultWithdrew payload.
+  message VaultWithdrew {
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 1 [(schema.address) = true];
+    // Depositor address (20-byte EVM address).
+    bytes depositor = 2 [(schema.address) = true];
+    // Withdraw shares as decimal string.
+    string withdraw_shares = 3 [(schema.decimal) = true];
+    // Vault wallet delta for withdrawal in event sign convention. Always
+    // negative.
+    string withdraw_amount = 4 [(schema.decimal) = true];
+    // Shares after this change (decimal string).
+    string shares_after = 5 [(schema.decimal) = true];
+    reserved 6;
+    // Wallet as decimal string.
+    string wallet = 7 [(schema.decimal) = true];
+    // Reason for a forced withdrawal.
+    VaultForcedWithdrawReason forced_reason = 8;
+  }
+  // VaultDepositorWithdrew payload.
+  message VaultDepositorWithdrew {
+    // Depositor address (20-byte EVM address).
+    bytes depositor = 1 [(schema.address) = true];
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 2 [(schema.address) = true];
+    // Withdraw shares as decimal string.
+    string withdraw_shares = 3 [(schema.decimal) = true];
+    // Depositor received withdraw amount. Always positive.
+    string withdraw_amount = 4 [(schema.decimal) = true];
+    // Shares after this change (decimal string).
+    string shares_after = 5 [(schema.decimal) = true];
+    // Realized pnl as decimal string.
+    string realized_pnl = 6 [(schema.decimal) = true];
+    // Leader fee charged from this withdrawal. Non-negative.
+    string leader_fee = 7 [(schema.decimal) = true];
+    reserved 8;
+    // Wallet as decimal string.
+    string wallet = 9 [(schema.decimal) = true];
+    // Reason for a forced withdrawal.
+    VaultForcedWithdrawReason forced_reason = 10;
+  }
+  // VaultLeaderFeePaid payload.
+  message VaultLeaderFeePaid {
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 1 [(schema.address) = true];
+    // Leader address (20-byte EVM address).
+    bytes leader = 2 [(schema.address) = true];
+    // Depositor address (20-byte EVM address).
+    bytes depositor = 3 [(schema.address) = true];
+    // Vault wallet delta for leader fee payout in event sign convention. Always
+    // negative.
+    string amount = 4 [(schema.decimal) = true];
+    reserved 5;
+    // Wallet as decimal string.
+    string wallet = 6 [(schema.decimal) = true];
+    // Reason for a forced withdrawal.
+    VaultForcedWithdrawReason forced_reason = 7;
+  }
+  // VaultLeaderFeeReceived payload.
+  message VaultLeaderFeeReceived {
+    // Leader address (20-byte EVM address).
+    bytes leader = 1 [(schema.address) = true];
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 2 [(schema.address) = true];
+    // Depositor address (20-byte EVM address).
+    bytes depositor = 3 [(schema.address) = true];
+    // Leader wallet delta for leader fee receipt. Always positive.
+    string amount = 4 [(schema.decimal) = true];
+    reserved 5;
+    // Wallet as decimal string.
+    string wallet = 6 [(schema.decimal) = true];
+    // Reason for a forced withdrawal.
+    VaultForcedWithdrawReason forced_reason = 7;
+  }
+  // VaultCloseDustTransferred payload.
+  message VaultCloseDustTransferred {
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 1 [(schema.address) = true];
+    // Fee account address (20-byte EVM address).
+    bytes fee_account = 2 [(schema.address) = true];
+    // Dust amount transferred from vault to fee account. Always positive.
+    string amount = 3 [(schema.decimal) = true];
+    // Wallet as decimal string.
+    string wallet = 4 [(schema.decimal) = true];
+    // Reason for transferring the dust.
+    VaultForcedWithdrawReason forced_reason = 5;
+  }
+}
+
+// Resolved trigger parameters snapshot stored in change events.
+message TriggerParams {
+  // Trigger direction.
+  TriggerDirection trigger_direction = 1;
+  // Trigger price as decimal string.
+  string trigger_price = 2 [(schema.decimal) = true];
+  // Trigger order type.
+  OrderType trigger_order_type = 3;
+  // Price as decimal string.
+  string price = 4 [(schema.decimal) = true];
+}
+
+// Resolved trailing-order parameters snapshot stored in change events.
+message TrailingParams {
+  // Trigger direction.
+  TriggerDirection trigger_direction = 1;
+  // Activation price as decimal string.
+  string activation_price = 2 [(schema.decimal) = true];
+  // Trailing base price as decimal string.
+  string trailing_base_price = 3 [(schema.decimal) = true];
+  // Trailing delta type.
+  TrailingDeltaType trailing_delta_type = 4;
+  // Trailing delta as decimal string.
+  // DISTANCE: absolute quote-price offset.
+  // PERCENTAGE: ratio (for example, "0.01" means 1%).
+  string trailing_delta = 5 [(schema.decimal) = true];
+  // Resolved trigger price produced after trailing activation.
+  string trigger_price = 6 [(schema.decimal) = true];
+  // Trigger order type.
+  OrderType trigger_order_type = 7;
+}
+
+// Funding-rate and funding-settlement change list.
+message FundingChange {
+  // Ordered list of change entries.
+  repeated FundingRateChangeEntry changes = 1;
+}
+
+// Funding-rate update and optional settlement snapshot.
+message FundingRateChangeEntry {
+  // Base token id.
+  uint32 base_token = 1;
+  // Quote token id.
+  uint32 quote_token = 2;
+  // Funding rate as decimal string.
+  string funding_rate = 3 [(schema.decimal) = true];
+  // Update time (UTC).
+  google.protobuf.Timestamp update_time = 4;
+  // Funding interval in hours.
+  uint32 interval_hours = 5;
+  // Funding rate bound as decimal string.
+  string funding_rate_bound = 6 [(schema.decimal) = true];
+
+  // Whether settled.
+  bool settled = 7;
+  // Growth delta as decimal string.
+  optional string growth_delta = 8 [(schema.decimal) = true];
+  // Long growth after this change (decimal string).
+  optional string long_growth_after = 9 [(schema.decimal) = true];
+  // Short growth after this change (decimal string).
+  optional string short_growth_after = 10 [(schema.decimal) = true];
+}
+
+// Index/mark price change list.
+message PriceChange {
+  // Ordered list of change entries.
+  repeated PriceChangeEntry changes = 1;
+}
+
+// One index/mark price update.
+message PriceChangeEntry {
+  // Base token id.
+  uint32 base_token = 1;
+  // Quote token id.
+  uint32 quote_token = 2;
+  // Index price as decimal string.
+  string index_price = 3 [(schema.decimal) = true];
+  // Mark price as decimal string.
+  string mark_price = 4 [(schema.decimal) = true];
+  // Update time (UTC).
+  google.protobuf.Timestamp update_time = 5;
+}
+
+// Metadata mutation change list (symbols, chains, fee tiers, etc.).
+message MetadataChange {
+  // Ordered list of change entries.
+  repeated MetadataChangeEntry changes = 1;
+}
+
+// One metadata mutation entry.
+message MetadataChangeEntry {
+  // ChainEnabled payload.
+  message ChainEnabled {
+    // Chain id.
+    uint64 chain_id = 1;
+    // Chain name.
+    string chain_name = 2;
+  }
+  // ChainDisabled payload.
+  message ChainDisabled {
+    // Chain id.
+    uint64 chain_id = 1;
+  }
+  // TokenMetadataChanged payload.
+  message TokenMetadataChanged {
+    // Entity identifier.
+    uint32 id = 1;
+    // Name.
+    string name = 2;
+    // Symbol.
+    string symbol = 3;
+    // Decimals.
+    uint32 decimals = 4;
+    // Reference price as decimal string.
+    string reference_price = 5 [(schema.decimal) = true];
+  }
+  // RiskLimitsRegistered payload.
+  message RiskLimitsRegistered {
+    // Entity identifier.
+    uint32 id = 1;
+    // List of risk limits.
+    repeated RiskLimitMessage risk_limits = 2;
+  }
+  // SymbolMetadataChanged payload.
+  message SymbolMetadataChanged {
+    // Base token id.
+    uint32 base_token = 1;
+    // Quote token id.
+    uint32 quote_token = 2;
+    // Symbol open time in Unix milliseconds.
+    int64 open_time = 3;
+    // Symbol close time in Unix milliseconds.
+    int64 close_time = 4;
+    // Tick size as decimal string.
+    string tick_size = 5 [(schema.decimal) = true];
+    // Lot size as decimal string.
+    string lot_size = 6 [(schema.decimal) = true];
+    // Min size limit (decimal string).
+    string min_size = 7 [(schema.decimal) = true];
+    // Max number of order each match.
+    uint32 max_number_of_order_each_match = 8;
+    // Max number of order each account.
+    uint32 max_number_of_order_each_account = 9;
+    // Funding interval hours.
+    uint32 funding_interval_hours = 10;
+    // Funding rate bound as decimal string.
+    string funding_rate_bound = 11 [(schema.decimal) = true];
+    // Price-limit ratio for limit orders (decimal, e.g. "0.1" for 10%).
+    string price_limit_bound = 12 [(schema.decimal) = true];
+    // Default leverage.
+    uint32 default_leverage = 13;
+    // Risk limits id.
+    uint32 risk_limits_id = 14;
+    // Status enum/int value after change.
+    SymbolStatus status = 15;
+    // Min notional limit (decimal string).
+    string min_notional = 16 [(schema.decimal) = true];
+    // Max notional limit (decimal string).
+    string max_notional = 17 [(schema.decimal) = true];
+    // Conditional price limit bound as decimal string.
+    string conditional_price_limit_bound = 18 [(schema.decimal) = true];
+  }
+  // FeeTierChanged payload.
+  message FeeTierChanged {
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 1;
+    // List of fee tiers.
+    repeated FeeTierMessage fee_tiers = 2;
+  }
+  // AgentApproved payload.
+  message AgentApproved {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Agent address (20-byte EVM address).
+    bytes agent = 2 [(schema.address) = true];
+    // Name.
+    string name = 3;
+    // Expiration timestamp (UTC).
+    google.protobuf.Timestamp expired_time = 4;
+  }
+  // AgentRevoked payload.
+  message AgentRevoked {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Name.
+    string name = 2;
+  }
+  // AgentExpired payload.
+  message AgentExpired {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Names affected by this change.
+    repeated string names = 2;
+  }
+  // AccountFeeTierChanged payload.
+  message AccountFeeTierChanged {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Tier.
+    uint32 tier = 2;
+  }
+  // MultisigConverted payload.
+  message MultisigConverted {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // List of signers.
+    repeated bytes signers = 2;
+    // Threshold.
+    uint32 threshold = 3;
+  }
+  // MultisigConfigUpdated payload.
+  message MultisigConfigUpdated {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // List of signers.
+    repeated bytes signers = 2;
+    // Threshold.
+    uint32 threshold = 3;
+  }
+  // MultisigDisabled payload.
+  message MultisigDisabled {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+  }
+  // SubaccountCreated payload.
+  message SubaccountCreated {
+    // Master account address (20-byte EVM address).
+    bytes master_account = 1 [(schema.address) = true];
+    // Subaccount address (20-byte EVM address).
+    bytes subaccount = 2 [(schema.address) = true];
+    // Index.
+    uint32 index = 3;
+    // Name.
+    string name = 4;
+    // Requested subaccount category. Currently CREATE_SUBACCOUNT accepts
+    // USER_CREATED only.
+    SubaccountType type = 5;
+  }
+  // DepositWithdrawConfigUpdated payload.
+  message DepositWithdrawConfigUpdated {
+    // Token id.
+    uint32 token_id = 1;
+    // Chain id.
+    uint64 chain_id = 2;
+    // Contract address bytes for deposit/withdraw config.
+    bytes contract = 3;
+    // Min deposit limit (decimal string).
+    string min_deposit = 4 [(schema.decimal) = true];
+    // Block confirmations.
+    uint32 block_confirmations = 5;
+    // Deposit enabled at in Unix milliseconds.
+    int64 deposit_enabled_at = 6;
+    // Min withdraw limit (decimal string).
+    string min_withdraw = 7 [(schema.decimal) = true];
+    // Withdraw enabled at in Unix milliseconds.
+    int64 withdraw_enabled_at = 8;
+    // Configured withdraw fee (non-negative decimal string).
+    string withdraw_fee = 9 [(schema.decimal) = true];
+  }
+  // DomainProposerSetUpdated payload.
+  message DomainProposerSetUpdated {
+    // Domain.
+    PermissionDomain domain = 1;
+    // Config.
+    ProposerSetConfig config = 2;
+  }
+  // SpotSymbolMetadataChanged payload.
+  message SpotSymbolMetadataChanged {
+    // Base token id.
+    uint32 base_token = 1;
+    // Quote token id.
+    uint32 quote_token = 2;
+    // Spot symbol open time in Unix milliseconds.
+    int64 open_time = 3;
+    // Spot symbol close time in Unix milliseconds.
+    int64 close_time = 4;
+    // Tick size as decimal string.
+    string tick_size = 5 [(schema.decimal) = true];
+    // Lot size as decimal string.
+    string lot_size = 6 [(schema.decimal) = true];
+    // Min size limit (decimal string).
+    string min_size = 7 [(schema.decimal) = true];
+    // Max number of order each match.
+    uint32 max_number_of_order_each_match = 8;
+    // Max number of order each account.
+    uint32 max_number_of_order_each_account = 9;
+    // Price limit bound as decimal string.
+    string price_limit_bound = 10 [(schema.decimal) = true];
+    // Min notional limit (decimal string).
+    string min_notional = 11 [(schema.decimal) = true];
+    // Status enum/int value after change.
+    SymbolStatus status = 12;
+    // Max notional limit (decimal string).
+    string max_notional = 13 [(schema.decimal) = true];
+    // Conditional price limit bound as decimal string.
+    string conditional_price_limit_bound = 14 [(schema.decimal) = true];
+  }
+  // PredictionConfigUpdated payload.
+  message PredictionConfigUpdated {
+    // Create market bond amount as decimal string.
+    string create_market_bond_amount = 1 [(schema.decimal) = true];
+    // Proposal bond amount as decimal string.
+    string proposal_bond_amount = 2 [(schema.decimal) = true];
+    // Dispute bond amount as decimal string.
+    string dispute_bond_amount = 3 [(schema.decimal) = true];
+    // Dispute duration.
+    int64 dispute_duration = 4;
+    // Min event expire duration.
+    int64 min_event_expire_duration = 5;
+    // Max event expire duration.
+    int64 max_event_expire_duration = 6;
+    // Max number of order each match.
+    uint32 max_number_of_order_each_match = 7;
+    // Max orders per account.
+    uint32 max_orders_per_account = 8;
+    // Fee exponent.
+    uint32 fee_exponent = 9;
+  }
+  // PredictionEventCreated payload.
+  message PredictionEventCreated {
+    // Prediction event id.
+    uint64 event_id = 1;
+    // Created by address (20-byte EVM address).
+    bytes created_by = 2 [(schema.address) = true];
+    // List of yes token ids.
+    repeated uint32 yes_token_ids = 3;
+    // List of no token ids.
+    repeated uint32 no_token_ids = 4;
+    // Deadline in Unix milliseconds.
+    int64 deadline = 5;
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 6 [(schema.address) = true];
+  }
+  // PredictionMarketEnded payload.
+  message PredictionMarketEnded {
+    // Prediction event id.
+    uint64 event_id = 1;
+    // List of yes token ids.
+    repeated uint32 yes_token_ids = 2;
+    // List of no token ids.
+    repeated uint32 no_token_ids = 3;
+  }
+  // PredictionOutcomeProposed payload.
+  message PredictionOutcomeProposed {
+    // Prediction event id.
+    uint64 event_id = 1;
+    // YES token id.
+    uint32 yes_token_id = 2;
+    // NO token id.
+    uint32 no_token_id = 3;
+    // Proposal bond amount as decimal string.
+    string proposal_bond_amount = 4 [(schema.decimal) = true];
+    // Dispute deadline in Unix milliseconds.
+    int64 dispute_deadline = 5;
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 6 [(schema.address) = true];
+    // Proposed outcome.
+    PredictionOutcome proposed_outcome = 7;
+  }
+  // PredictionOutcomeDisputed payload.
+  message PredictionOutcomeDisputed {
+    // Prediction event id.
+    uint64 event_id = 1;
+    // YES token id.
+    uint32 yes_token_id = 2;
+    // NO token id.
+    uint32 no_token_id = 3;
+    // Dispute bond amount as decimal string.
+    string dispute_bond_amount = 4 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 5 [(schema.address) = true];
+  }
+  // PredictionDisputeResolved payload.
+  message PredictionDisputeResolved {
+    // Prediction event id.
+    uint64 event_id = 1;
+    // YES token id.
+    uint32 yes_token_id = 2;
+    // NO token id.
+    uint32 no_token_id = 3;
+    // Final candidate outcome.
+    PredictionOutcome final_candidate_outcome = 4;
+    // Proposal id hash bytes (32-byte where applicable).
+    bytes proposal_id = 5 [(schema.hash) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 6 [(schema.address) = true];
+  }
+  // PredictionEventResolved payload.
+  message PredictionEventResolved {
+    // MarketOutcome payload.
+    message MarketOutcome {
+      // YES token id.
+      uint32 yes_token_id = 1;
+      // NO token id.
+      uint32 no_token_id = 2;
+      // Prediction outcome value.
+      PredictionOutcome outcome = 3;
+    }
+    // Prediction event id.
+    uint64 event_id = 1;
+    // List of markets.
+    repeated MarketOutcome markets = 2;
+  }
+  // PredictionEventSettled payload.
+  message PredictionEventSettled {
+    // Prediction event id.
+    uint64 event_id = 1;
+  }
+  // PredictionMarketSettled payload.
+  message PredictionMarketSettled {
+    // Prediction event id.
+    uint64 event_id = 1;
+    // YES token id.
+    uint32 yes_token_id = 2;
+    // NO token id.
+    uint32 no_token_id = 3;
+    // Prediction outcome value.
+    PredictionOutcome outcome = 4;
+  }
+  // PredictionSlashedBondDistributionUpdated payload.
+  message PredictionSlashedBondDistributionUpdated {
+    // Prediction event id.
+    uint64 event_id = 1;
+    // YES token id.
+    uint32 yes_token_id = 2;
+    // NO token id.
+    uint32 no_token_id = 3;
+    // Remaining distributable amount. Non-negative decimal string.
+    string remaining_amount = 4 [(schema.decimal) = true];
+    // Eligible recipient count.
+    uint32 eligible_recipient_count = 5;
+    // Distributed recipient count.
+    uint32 distributed_recipient_count = 6;
+    // Whether completed.
+    bool completed = 7;
+  }
+  // Union of concrete change variants.
+  oneof change {
+    // Oneof variant for change: chain enabled.
+    ChainEnabled chain_enabled = 1;
+    // Oneof variant for change: chain disabled.
+    ChainDisabled chain_disabled = 2;
+    // Oneof variant for change: token metadata changed.
+    TokenMetadataChanged token_metadata_changed = 3;
+    // Oneof variant for change: risk limits registered.
+    RiskLimitsRegistered risk_limits_registered = 4;
+    // Oneof variant for change: symbol metadata changed.
+    SymbolMetadataChanged symbol_metadata_changed = 5;
+    // Oneof variant for change: fee tier changed.
+    FeeTierChanged fee_tier_changed = 6;
+    // Oneof variant for change: agent approved.
+    AgentApproved agent_approved = 7;
+    // Oneof variant for change: agent revoked.
+    AgentRevoked agent_revoked = 8;
+    // Oneof variant for change: agent expired.
+    AgentExpired agent_expired = 9;
+    // Oneof variant for change: account fee tier changed.
+    AccountFeeTierChanged account_fee_tier_changed = 10;
+    // Oneof variant for change: multisig converted.
+    MultisigConverted multisig_converted = 11;
+    // Oneof variant for change: multisig config updated.
+    MultisigConfigUpdated multisig_config_updated = 12;
+    // Oneof variant for change: multisig disabled.
+    MultisigDisabled multisig_disabled = 13;
+    // Oneof variant for change: deposit withdraw config updated.
+    DepositWithdrawConfigUpdated deposit_withdraw_config_updated = 14;
+    // Oneof variant for change: subaccount created.
+    SubaccountCreated subaccount_created = 15;
+    // Oneof variant for change: domain proposer set updated.
+    DomainProposerSetUpdated domain_proposer_set_updated = 16;
+    // Oneof variant for change: spot symbol metadata changed.
+    SpotSymbolMetadataChanged spot_symbol_metadata_changed = 17;
+    // Oneof variant for change: prediction config updated.
+    PredictionConfigUpdated prediction_config_updated = 18;
+    // Oneof variant for change: prediction event created.
+    PredictionEventCreated prediction_event_created = 19;
+    // Oneof variant for change: prediction market ended.
+    PredictionMarketEnded prediction_market_ended = 20;
+    // Oneof variant for change: prediction outcome proposed.
+    PredictionOutcomeProposed prediction_outcome_proposed = 21;
+    // Oneof variant for change: prediction outcome disputed.
+    PredictionOutcomeDisputed prediction_outcome_disputed = 22;
+    // Oneof variant for change: prediction dispute resolved.
+    PredictionDisputeResolved prediction_dispute_resolved = 23;
+    // Oneof variant for change: prediction event resolved.
+    PredictionEventResolved prediction_event_resolved = 24;
+    // Oneof variant for change: prediction event settled.
+    PredictionEventSettled prediction_event_settled = 25;
+    // Oneof variant for change: prediction market settled.
+    PredictionMarketSettled prediction_market_settled = 26;
+    // Oneof variant for change: prediction slashed-bond distribution updated.
+    PredictionSlashedBondDistributionUpdated
+        prediction_slashed_bond_distribution_updated = 27;
+  }
+}
+
+// Order lifecycle change list.
+message OrderChange {
+  // Ordered list of change entries.
+  repeated OrderChangeEntry changes = 1;
+}
+
+// One order lifecycle change entry.
+message OrderChangeEntry {
+  // Resolved trailing-order parameters snapshot stored in change events.
+  message TrailingParams {
+    // Trigger direction.
+    TriggerDirection trigger_direction = 1;
+    // Activation price as decimal string.
+    optional string activation_price = 2 [(schema.decimal) = true];
+    // Trailing base price as decimal string.
+    optional string trailing_base_price = 3 [(schema.decimal) = true];
+    // Trailing delta type.
+    TrailingDeltaType trailing_delta_type = 4;
+    // Trailing delta as decimal string.
+    string trailing_delta = 5 [(schema.decimal) = true];
+    // Trigger price as decimal string.
+    optional string trigger_price = 6 [(schema.decimal) = true];
+    // Trigger order type.
+    OrderType trigger_order_type = 7;
+    // Time in force.
+    OrderTimeInForce time_in_force = 8;
+    // Limit price used only when trigger_order_type = LIMIT.
+    optional string price = 9 [(schema.decimal) = true];
+    // Optional order size in base units. Must be > 0 when provided.
+    optional string size = 10 [(schema.decimal) = true];
+    // Whether reduce only.
+    bool reduce_only = 11;
+    // Stp mode.
+    SelfTradePreventionMode stp_mode = 12;
+    // Quote size as decimal string.
+    optional string quote_size = 13 [(schema.decimal) = true];
+  }
+  // OrderPlaced payload.
+  message OrderPlaced {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // TradingDomain=Perp: perpetual symbol base token.
+    // TradingDomain=Spot: spot trading pair base token.
+    // TradingDomain=Prediction: YES token id of the prediction market.
+    uint32 base_token = 3;
+    // TradingDomain=Perp: perpetual symbol quote token.
+    // TradingDomain=Spot: spot trading pair quote token.
+    // TradingDomain=Prediction: NO token id of the prediction market.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Type classification for this payload.
+    OrderType type = 7;
+    // Time in force.
+    OrderTimeInForce time_in_force = 8;
+    // Price as decimal string.
+    optional string price = 9 [(schema.decimal) = true];
+    // Size as decimal string.
+    optional string size = 10 [(schema.decimal) = true];
+    // Whether reduce only.
+    bool reduce_only = 11;
+    // Position id.
+    optional uint64 position_id = 12;
+    // Taker fee rate. Decimal ratio in [0, 1].
+    string taker_fee_rate = 13 [(schema.decimal) = true];
+    // Maker fee rate. Decimal ratio in [-taker_fee_rate, 1].
+    string make_fee_rate = 14 [(schema.decimal) = true];
+
+    // Trigger.
+    optional TriggerParamsMessage trigger = 15;
+    // Tp.
+    optional TriggerParamsMessage tp = 16;
+    // Sl.
+    optional TriggerParamsMessage sl = 17;
+    // Whether tp triggered.
+    bool tp_triggered = 18;
+    // Trailing.
+    optional TrailingParams trailing = 19;
+    // Stp mode.
+    SelfTradePreventionMode stp_mode = 20;
+    // Client order id.
+    optional bytes client_order_id = 21;
+    // Whether liquidation order.
+    bool liquidation_order = 22;
+    // Insurance fund cover as decimal string.
+    optional string insurance_fund_cover = 23 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 24 [(schema.address) = true];
+    // Strategy id.
+    uint64 strategy_id = 25;
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 26;
+    // Quote size as decimal string.
+    optional string quote_size = 27 [(schema.decimal) = true];
+    // Only valid when trading_domain = Prediction; indicates the traded
+    // outcome.
+    optional PredictionOutcome outcome = 28;
+    // Only valid when trading_domain = Prediction.
+    optional uint64 event_id = 29;
+  }
+  // OrderCancelled payload.
+  message OrderCancelled {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // TradingDomain=Perp: perpetual symbol base token.
+    // TradingDomain=Spot: spot trading pair base token.
+    // TradingDomain=Prediction: YES token id of the prediction market.
+    uint32 base_token = 3;
+    // TradingDomain=Perp: perpetual symbol quote token.
+    // TradingDomain=Spot: spot trading pair quote token.
+    // TradingDomain=Prediction: NO token id of the prediction market.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Type classification for this payload.
+    OrderType type = 7;
+    // Cancelled remaining size (positive decimal).
+    optional string size = 8 [(schema.decimal) = true];
+    // Client order id.
+    optional bytes client_order_id = 9;
+    // Price as decimal string.
+    optional string price = 10 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 11 [(schema.address) = true];
+    // Strategy id.
+    uint64 strategy_id = 12;
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 13;
+    // Only valid when trading_domain = Prediction; indicates the cancelled
+    // order's outcome.
+    optional PredictionOutcome outcome = 14;
+    // Only valid when trading_domain = Prediction.
+    optional uint64 event_id = 15;
+  }
+  // OrderExpired payload.
+  message OrderExpired {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // TradingDomain=Perp: perpetual symbol base token.
+    // TradingDomain=Spot: spot trading pair base token.
+    // TradingDomain=Prediction: YES token id of the prediction market.
+    uint32 base_token = 3;
+    // TradingDomain=Perp: perpetual symbol quote token.
+    // TradingDomain=Spot: spot trading pair quote token.
+    // TradingDomain=Prediction: NO token id of the prediction market.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Type classification for this payload.
+    OrderType type = 7;
+    // Expired remaining size (positive decimal).
+    optional string size = 8 [(schema.decimal) = true];
+    // Client order id.
+    optional bytes client_order_id = 9;
+    // Price as decimal string.
+    optional string price = 10 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 11 [(schema.address) = true];
+    // Strategy id.
+    uint64 strategy_id = 12;
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 13;
+    // Only valid when trading_domain = Prediction; indicates the expired
+    // order's outcome.
+    optional PredictionOutcome outcome = 14;
+    // Only valid when trading_domain = Prediction.
+    optional uint64 event_id = 15;
+  }
+  // OrderExecuted payload.
+  message OrderExecuted {
+    // TradingDomain=Perp: perpetual symbol base token.
+    // TradingDomain=Spot: spot trading pair base token.
+    // TradingDomain=Prediction: YES token id of the prediction market.
+    uint32 base_token = 1;
+    // TradingDomain=Perp: perpetual symbol quote token.
+    // TradingDomain=Spot: spot trading pair quote token.
+    // TradingDomain=Prediction: NO token id of the prediction market.
+    uint32 quote_token = 2;
+    // Taker order id.
+    uint64 taker_order_id = 3;
+    // Taker account address (20-byte EVM address).
+    bytes taker_account = 4 [(schema.address) = true];
+    // Taker mode.
+    PositionMode taker_mode = 5;
+    // Taker side.
+    PositionSide taker_side = 6;
+
+    // Execution price. Perp/spot use maker price. Prediction uses maker price
+    // except taker complementary leg may use 1-maker price.
+    string price = 7 [(schema.decimal) = true];
+    // Executed size (positive decimal).
+    string size = 8 [(schema.decimal) = true];
+
+    // Taker fee delta. Always <= 0.
+    string taker_fee = 9 [(schema.decimal) = true];
+    // Whether taker order filled.
+    bool taker_order_filled = 10;
+
+    // Maker-side order fields.
+    // Maker order id.
+    uint64 maker_order_id = 11;
+    // Maker account address (20-byte EVM address).
+    bytes maker_account = 12 [(schema.address) = true];
+    // Maker mode.
+    PositionMode maker_mode = 13;
+    // Maker fee delta. Positive = rebate received, negative = fee paid.
+    string maker_fee = 14 [(schema.decimal) = true];
+    // Whether maker order filled.
+    bool maker_order_filled = 15;
+    // Taker price as decimal string.
+    string taker_price = 16 [(schema.decimal) = true];
+    // Taker master account address (20-byte EVM address).
+    optional bytes taker_master_account = 17 [(schema.address) = true];
+    // Maker master account address (20-byte EVM address).
+    optional bytes maker_master_account = 18 [(schema.address) = true];
+    // True when this event row is from the taker perspective.
+    bool taker = 19;
+    // Taker strategy id.
+    uint64 taker_strategy_id = 20;
+    // Maker strategy id.
+    uint64 maker_strategy_id = 21;
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 22;
+    // Only valid when trading_domain = Prediction; indicates the outcome of the
+    // order represented by this executed event (taker event => taker outcome,
+    // maker event => maker outcome).
+    optional PredictionOutcome outcome = 23;
+    // Only valid when trading_domain = Prediction; indicates the prediction
+    // match type.
+    optional PredictionMatchType match_type = 24;
+    // Only valid when trading_domain = Prediction.
+    optional uint64 event_id = 25;
+  }
+  // OrderTriggerFailed payload.
+  message OrderTriggerFailed {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Type classification for this payload.
+    OrderType type = 7;
+    // Failure reason code for trigger processing.
+    ErrorCode error_code = 8;
+    // Client order id.
+    optional bytes client_order_id = 9;
+    // Whether tp triggered.
+    bool tp_triggered = 10;
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 11 [(schema.address) = true];
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 12;
+  }
+  // OrderTriggerSucceeded payload.
+  message OrderTriggerSucceeded {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Type classification for this payload.
+    OrderType type = 7;
+    // Triggered order id.
+    uint64 triggered_order_id = 8;
+    // Client order id.
+    optional bytes client_order_id = 9;
+    // Whether tp triggered.
+    bool tp_triggered = 10;
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 11 [(schema.address) = true];
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 12;
+  }
+  // OrderAmended payload.
+  message OrderAmended {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Type classification for this payload.
+    OrderType type = 7;
+    // Price after this change (decimal string).
+    string price_after = 8 [(schema.decimal) = true];
+    // Size after this change (decimal string).
+    string size_after = 9 [(schema.decimal) = true];
+    // Client order id.
+    optional bytes client_order_id = 10;
+    // Price as decimal string.
+    string price = 11 [(schema.decimal) = true];
+    // Size as decimal string.
+    string size = 12 [(schema.decimal) = true];
+    // Filled amount snapshot (base units). Meaningful for limit orders.
+    optional string filled = 13 [(schema.decimal) = true];
+    // Seq.
+    uint64 seq = 14;
+    // Trigger.
+    optional TriggerParamsMessage trigger = 15;
+    // Tp.
+    optional TriggerParamsMessage tp = 16;
+    // Sl.
+    optional TriggerParamsMessage sl = 17;
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 18 [(schema.address) = true];
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 19;
+  }
+  // OrderFeeRateChanged payload.
+  message OrderFeeRateChanged {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Type classification for this payload.
+    OrderType type = 7;
+    // Taker fee rate. Decimal ratio in [0, 1].
+    string taker_fee_rate = 8 [(schema.decimal) = true];
+    // Maker fee rate. Decimal ratio in [-taker_fee_rate, 1].
+    string maker_fee_rate = 9 [(schema.decimal) = true];
+    // Client order id.
+    optional bytes client_order_id = 10;
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 11 [(schema.address) = true];
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 12;
+  }
+  // StrategyCreated payload.
+  message StrategyCreated {
+    // Strategy id.
+    uint64 strategy_id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 3 [(schema.address) = true];
+    // Template type.
+    StrategyTemplateType template_type = 4;
+    // Status enum/int value after change.
+    StrategyInstanceStatus status = 5;
+    // Union of concrete params variants.
+    oneof params {
+      // Oneof variant for params: twap params.
+      TwapStrategyParamsMessage twap_params = 6;
+      // Oneof variant for params: iceberg params.
+      IcebergStrategyParamsMessage iceberg_params = 7;
+      // Oneof variant for params: spot twap params.
+      SpotTwapStrategyParamsMessage spot_twap_params = 11;
+      // Oneof variant for params: spot iceberg params.
+      SpotIcebergStrategyParamsMessage spot_iceberg_params = 12;
+    }
+    // Base token id.
+    uint32 base_token = 8;
+    // Quote token id.
+    uint32 quote_token = 9;
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 10;
+  }
+  // StrategyStatusChanged payload.
+  message StrategyStatusChanged {
+    // Strategy id.
+    uint64 strategy_id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 3 [(schema.address) = true];
+    // Status enum/int value after change.
+    StrategyInstanceStatus status = 4;
+    // Base token id.
+    uint32 base_token = 5;
+    // Quote token id.
+    uint32 quote_token = 6;
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 7;
+  }
+  // SymbolClosed payload.
+  message SymbolClosed {
+    // Trading domain where this change applies.
+    TradingDomain trading_domain = 1;
+    // Base token id.
+    uint32 base_token = 2;
+    // Quote token id.
+    uint32 quote_token = 3;
+    // Prediction event id.
+    uint64 event_id = 4;
+  }
+  // PredictionChanceChanged payload.
+  message PredictionChanceChanged {
+    // YES token id.
+    uint32 yes_token_id = 1;
+    // NO token id.
+    uint32 no_token_id = 2;
+    // Chance as decimal string.
+    string chance = 3 [(schema.decimal) = true];
+    // Prediction event id.
+    uint64 event_id = 4;
+  }
+
+  // Union of concrete change variants.
+  oneof change {
+    // Oneof variant for change: placed.
+    OrderPlaced placed = 1;
+    // Oneof variant for change: cancelled.
+    OrderCancelled cancelled = 2;
+    // Oneof variant for change: expired.
+    OrderExpired expired = 3;
+    // Oneof variant for change: executed.
+    OrderExecuted executed = 4;
+    // Oneof variant for change: trigger failed.
+    OrderTriggerFailed trigger_failed = 5;
+    // Oneof variant for change: trigger succeeded.
+    OrderTriggerSucceeded trigger_succeeded = 6;
+    // Oneof variant for change: amended.
+    OrderAmended amended = 7;
+    // Oneof variant for change: fee rate changed.
+    OrderFeeRateChanged fee_rate_changed = 8;
+    // Oneof variant for change: strategy created.
+    StrategyCreated strategy_created = 9;
+    // Oneof variant for change: strategy status changed.
+    StrategyStatusChanged strategy_status_changed = 10;
+    // Oneof variant for change: symbol closed.
+    SymbolClosed symbol_closed = 11;
+    // Oneof variant for change: prediction chance changed.
+    PredictionChanceChanged prediction_chance_changed = 12;
+  }
+}
+
+// Cause classification for spot position size changes.
+enum SpotPositionChangeType {
+  // Default zero value.
+  SPOT_CHANGE_UNSPECIFIED = 0;
+  // Spot increase caused by buy-side trade fill.
+  SPOT_CHANGE_LONG = 1;
+  // Spot decrease caused by sell-side trade fill.
+  SPOT_CHANGE_SHORT = 2;
+  // Spot increase caused by deposit.
+  SPOT_CHANGE_DEPOSIT = 3;
+  // Spot decrease caused by confirmed withdraw.
+  SPOT_CHANGE_WITHDRAW = 4;
+  // Spot increase caused by transfer-in.
+  SPOT_CHANGE_TRANSFER_IN = 5;
+  // Spot decrease caused by transfer-out.
+  SPOT_CHANGE_TRANSFER_OUT = 6;
+}
+
+// Position lifecycle change list.
+message PositionChange {
+  // Ordered list of change entries.
+  repeated PositionChangeEntry changes = 1;
+}
+
+// One position lifecycle change entry.
+message PositionChangeEntry {
+  // PositionIncreased payload.
+  message PositionIncreased {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Filled size as decimal string.
+    string filled_size = 7 [(schema.decimal) = true];
+    // Size after this change (decimal string).
+    string size_after = 8 [(schema.decimal) = true];
+    // Filled price as decimal string.
+    string filled_price = 9 [(schema.decimal) = true];
+    // Entry price after this change (decimal string).
+    string entry_price_after = 10 [(schema.decimal) = true];
+    // Fee delta for this fill. Positive = rebate/credit, negative = fee paid.
+    string fee = 11 [(schema.decimal) = true];
+    // Realized pnl after this change (decimal string).
+    string realized_pnl_after = 12 [(schema.decimal) = true];
+    // Isolated margin after this change (decimal string).
+    optional string isolated_margin_after = 13 [(schema.decimal) = true];
+    // Taker fee rate. Decimal ratio in [0, 1].
+    string taker_fee_rate = 14 [(schema.decimal) = true];
+    // Risk limits id.
+    uint32 risk_limits_id = 15;
+    // Funding growth as decimal string.
+    string funding_growth = 16 [(schema.decimal) = true];
+    // Leverage.
+    uint32 leverage = 17;
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 18 [(schema.address) = true];
+  }
+  // PositionDecreased payload.
+  message PositionDecreased {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Filled size as decimal string.
+    string filled_size = 7 [(schema.decimal) = true];
+    // Size after this change (decimal string).
+    string size_after = 8 [(schema.decimal) = true];
+    // Filled price as decimal string.
+    string filled_price = 9 [(schema.decimal) = true];
+    // Fee delta for this fill. Positive = rebate/credit, negative = fee paid.
+    string fee = 10 [(schema.decimal) = true];
+    // Close-only realized PnL from execution price movement; fees are excluded.
+    string realized_pnl = 11 [(schema.decimal) = true];
+    // Realized pnl after this change (decimal string).
+    string realized_pnl_after = 12 [(schema.decimal) = true];
+    // Isolated margin after this change (decimal string).
+    optional string isolated_margin_after = 13 [(schema.decimal) = true];
+    // True when the close is caused by liquidation flow.
+    bool liquidation_order = 14;
+    // Leverage.
+    uint32 leverage = 17;
+    // Whether adl.
+    bool adl = 18;
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 19 [(schema.address) = true];
+  }
+  // PositionFundingSettled payload.
+  message PositionFundingSettled {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Funding growth as decimal string.
+    string funding_growth = 10 [(schema.decimal) = true];
+    // Funding fee delta. Positive = received, negative = paid.
+    string funding_fee = 11 [(schema.decimal) = true];
+    // Isolated margin after this change (decimal string).
+    optional string isolated_margin_after = 12 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 13 [(schema.address) = true];
+    // Size as decimal string.
+    string size = 14 [(schema.decimal) = true];
+    // Leverage.
+    uint32 leverage = 15;
+    // Realized pnl after this change (decimal string).
+    string realized_pnl_after = 16 [(schema.decimal) = true];
+  }
+  // PositionModeChanged payload.
+  message PositionModeChanged {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 2;
+    // Quote token id.
+    uint32 quote_token = 3;
+    // Position mode.
+    PositionMode mode = 4;
+    // Isolated leverage.
+    uint32 isolated_leverage = 5;
+    // Cross leverage.
+    uint32 cross_leverage = 6;
+  }
+  // PositionMarginIncreased payload.
+  message PositionMarginIncreased {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position/order side.
+    PositionSide side = 5;
+    // Isolated margin increase amount. Always positive.
+    string amount = 6 [(schema.decimal) = true];
+    // Isolated margin after this change (decimal string).
+    string isolated_margin_after = 7 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 8 [(schema.address) = true];
+  }
+  // PositionMarginDecreased payload.
+  message PositionMarginDecreased {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position/order side.
+    PositionSide side = 5;
+    // Isolated margin decrease amount in event sign convention. Always
+    // negative.
+    string amount = 6 [(schema.decimal) = true];
+    // Isolated margin after this change (decimal string).
+    string isolated_margin_after = 7 [(schema.decimal) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 8 [(schema.address) = true];
+  }
+  // PositionLeverageChanged payload.
+  message PositionLeverageChanged {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Margin delta caused by leverage change. Positive = margin added, negative
+    // = margin released.
+    string amount = 5 [(schema.decimal) = true];
+    // Isolated margin after this change (decimal string).
+    string isolated_margin_after = 6 [(schema.decimal) = true];
+    // Position mode.
+    PositionMode mode = 7;
+    // Leverage.
+    uint32 leverage = 8;
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 9 [(schema.address) = true];
+  }
+  // PositionStatusChanged payload.
+  message PositionStatusChanged {
+    // Entity identifier.
+    uint64 id = 1;
+    // Account address (20-byte EVM address).
+    bytes account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id.
+    uint32 quote_token = 4;
+    // Position mode.
+    PositionMode mode = 5;
+    // Position/order side.
+    PositionSide side = 6;
+    // Status enum/int value after change.
+    PositionStatus status = 7;
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 8 [(schema.address) = true];
+  }
+
+  // Spot position increase (buy / deposit / transfer-in).
+  message SpotPositionIncreased {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 2 [(schema.address) = true];
+    // Base/target token id whose position increased.
+    uint32 base_token = 3;
+    // Quote token id of the trading pair. Zero for non-trade changes
+    // (deposit/transfer-in).
+    uint32 quote_token = 4;
+    // Type classification for this payload.
+    SpotPositionChangeType type = 5;
+    // Increase size (positive decimal).
+    string size = 6 [(schema.decimal) = true];
+    // USD reference price for valuation (if available).
+    string usd_price = 7 [(schema.decimal) = true];
+    // Fee delta for this spot position increase. Positive = rebate/credit,
+    // negative = fee paid.
+    optional string fee = 8 [(schema.decimal) = true];
+    // Fee token.
+    optional uint32 fee_token = 9;
+    // USD value of fee delta. Positive = rebate/credit, negative = fee paid.
+    optional string fee_usd_value = 10 [(schema.decimal) = true];
+  }
+
+  // Spot position decrease (sell / confirmed withdraw / transfer-out).
+  message SpotPositionDecreased {
+    // Account address (20-byte EVM address).
+    bytes account = 1 [(schema.address) = true];
+    // Master account address (20-byte) if this account is a subaccount; omitted
+    // otherwise.
+    optional bytes master_account = 2 [(schema.address) = true];
+    // Base token id.
+    uint32 base_token = 3;
+    // Quote token id of the trading pair. Zero for non-trade changes
+    // (confirmed withdraw / transfer-out).
+    uint32 quote_token = 4;
+    // Type classification for this payload.
+    SpotPositionChangeType type = 5;
+    // Decrease size (positive decimal).
+    string size = 6 [(schema.decimal) = true];
+    // USD reference price for valuation (if available).
+    string usd_price = 7 [(schema.decimal) = true];
+    // Realized PnL delta for this decrease. Positive = profit, negative = loss.
+    // Trade/transfer-out paths exclude
+    // fees; confirmed-withdraw includes withdraw-fee impact.
+    string realized_pnl = 8 [(schema.decimal) = true];
+    // Fee delta for this spot position decrease. Positive = rebate/credit,
+    // negative = fee paid.
+    optional string fee = 9 [(schema.decimal) = true];
+    // Fee token.
+    optional uint32 fee_token = 10;
+    // USD value of fee delta. Positive = rebate/credit, negative = fee paid.
+    optional string fee_usd_value = 11 [(schema.decimal) = true];
+  }
+
+  // Union of concrete change variants.
+  oneof change {
+    // Oneof variant for change: increased.
+    PositionIncreased increased = 1;
+    // Oneof variant for change: decreased.
+    PositionDecreased decreased = 2;
+    // Oneof variant for change: funding settled.
+    PositionFundingSettled funding_settled = 3;
+    // Oneof variant for change: mode changed.
+    PositionModeChanged mode_changed = 4;
+    // Oneof variant for change: margin increased.
+    PositionMarginIncreased margin_increased = 5;
+    // Oneof variant for change: margin decreased.
+    PositionMarginDecreased margin_decreased = 6;
+    // Oneof variant for change: leverage changed.
+    PositionLeverageChanged leverage_changed = 7;
+    // Oneof variant for change: status changed.
+    PositionStatusChanged status_changed = 8;
+    // Oneof variant for change: spot increased.
+    SpotPositionIncreased spot_increased = 9;
+    // Oneof variant for change: spot decreased.
+    SpotPositionDecreased spot_decreased = 10;
+  }
+}
+
+// Vault state change list.
+message VaultChange {
+  // Ordered list of change entries.
+  repeated VaultChangeEntry changes = 1;
+}
+
+// One vault state change entry.
+message VaultChangeEntry {
+  // VaultCreated payload.
+  message VaultCreated {
+    // Name.
+    string name = 1;
+    // Description.
+    string description = 2;
+    // Leader fee rate. Decimal ratio in [0, 1].
+    string leader_fee_rate = 3 [(schema.decimal) = true];
+    // Leader address (20-byte EVM address).
+    bytes leader = 4 [(schema.address) = true];
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 5 [(schema.address) = true];
+    // Whether deposit enabled.
+    bool deposit_enabled = 6;
+    // Auto-close-on-withdraw policy flag.
+    bool auto_close_on_withdraw = 7;
+  }
+  // VaultDeposited payload.
+  message VaultDeposited {
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 1 [(schema.address) = true];
+    // Shares after this change (decimal string).
+    string shares_after = 2 [(schema.decimal) = true];
+    // Net deposit after this change (decimal string).
+    string net_deposit_after = 3 [(schema.decimal) = true];
+  }
+  // VaultEpochUpdated payload.
+  message VaultEpochUpdated {
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 1 [(schema.address) = true];
+    // Epoch.
+    int64 epoch = 2;
+  }
+  // VaultDepositorDeposited payload.
+  message VaultDepositorDeposited {
+    // Depositor address (20-byte EVM address).
+    bytes depositor = 1 [(schema.address) = true];
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 2 [(schema.address) = true];
+    // Deposit amount (positive decimal).
+    string deposit_amount = 3 [(schema.decimal) = true];
+    // Shares after this change (decimal string).
+    string shares_after = 4 [(schema.decimal) = true];
+    // Cost per share after this change (decimal string).
+    string cost_per_share_after = 5 [(schema.decimal) = true];
+    // Depositor epoch after this change.
+    int64 epoch = 6;
+  }
+  // VaultDepositEnabledChanged payload.
+  message VaultDepositEnabledChanged {
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 1 [(schema.address) = true];
+    // Leader address (20-byte EVM address).
+    bytes leader = 2 [(schema.address) = true];
+    // Whether deposit enabled.
+    bool deposit_enabled = 3;
+  }
+  // Emits when the vault auto_close_on_withdraw flag is updated.
+  message VaultAutoCloseOnWithdrawChanged {
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 1 [(schema.address) = true];
+    // Leader address (20-byte EVM address).
+    bytes leader = 2 [(schema.address) = true];
+    // Auto-close-on-withdraw policy flag.
+    bool auto_close_on_withdraw = 3;
+  }
+  // VaultStatusChanged payload.
+  message VaultStatusChanged {
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 1 [(schema.address) = true];
+    // Leader address (20-byte EVM address).
+    bytes leader = 2 [(schema.address) = true];
+    // Status after change.
+    VaultStatus status = 3;
+    // Net deposit after status transition; populated when status becomes
+    // closed.
+    optional string net_deposit_after = 4 [(schema.decimal) = true];
+  }
+  // VaultDepositorWithdrew payload.
+  message VaultDepositorWithdrew {
+    // Depositor address (20-byte EVM address).
+    bytes depositor = 1 [(schema.address) = true];
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 2 [(schema.address) = true];
+    // Shares after this change (decimal string).
+    string shares_after = 3 [(schema.decimal) = true];
+    // Realized pnl delta. Positive = profit, negative = loss.
+    string realized_pnl = 4 [(schema.decimal) = true];
+    // Depositor epoch after this change.
+    int64 epoch = 5;
+  }
+  // VaultWithdrew payload.
+  message VaultWithdrew {
+    // Vault account address (20-byte EVM address).
+    bytes vault_account = 1 [(schema.address) = true];
+    // Shares after this change (decimal string).
+    string shares_after = 2 [(schema.decimal) = true];
+    // Net deposit after this change (decimal string).
+    string net_deposit_after = 3 [(schema.decimal) = true];
+  }
+  // Union of concrete change variants.
+  oneof change {
+    // Oneof variant for change: created.
+    VaultCreated created = 1;
+    // Oneof variant for change: deposited.
+    VaultDeposited deposited = 2;
+    // Oneof variant for change: epoch updated.
+    VaultEpochUpdated epoch_updated = 3;
+    // Oneof variant for change: depositor deposited.
+    VaultDepositorDeposited depositor_deposited = 4;
+    // Oneof variant for change: deposit enabled changed.
+    VaultDepositEnabledChanged deposit_enabled_changed = 5;
+    // Oneof variant for change: auto close on withdraw changed.
+    VaultAutoCloseOnWithdrawChanged auto_close_on_withdraw_changed = 6;
+    // Oneof variant for change: status changed.
+    VaultStatusChanged status_changed = 7;
+    // Oneof variant for change: depositor withdrew.
+    VaultDepositorWithdrew depositor_withdrew = 8;
+    // Oneof variant for change: withdrew.
+    VaultWithdrew withdrew = 9;
+  }
+}

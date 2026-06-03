@@ -1,0 +1,44 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+import "schema/order.proto";
+
+// UpdateFundingRateMessage requests funding-rate recomputation for symbols.
+message UpdateFundingRateMessage {
+  // Symbol pairs to update.
+  // Each pair should reference an existing perp symbol.
+  // Empty list is treated as a no-op.
+  repeated BaseQuoteMessage base_quotes = 1;
+}
+
+// BaseQuoteMessage identifies one symbol by base/quote token ids.
+message BaseQuoteMessage {
+  // Base token id.
+  uint32 base_token = 1;
+  // Quote token id.
+  uint32 quote_token = 2;
+}
+
+// SettleFundingFeeMessage settles funding for one account position scope.
+message SettleFundingFeeMessage {
+  // Position mode to settle. Must be CROSS or ISOLATED.
+  PositionMode mode = 1;
+  // Target account address (20-byte EVM address).
+  bytes account = 2 [(schema.address) = true];
+}
+
+// SettleBatchFundingFeesMessage settles funding fees for one symbol in batch.
+message SettleBatchFundingFeesMessage {
+  // Base token id.
+  // Must be different from quote_token.
+  uint32 base_token = 1;
+  // Quote token id.
+  // Must be different from base_token.
+  uint32 quote_token = 2;
+  // Settlement targets.
+  // Maximum 10 entries per message.
+  repeated SettleFundingFeeMessage batch = 3;
+}

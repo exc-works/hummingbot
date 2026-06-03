@@ -1,0 +1,550 @@
+syntax = "proto3";
+
+package api;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "schema/base.proto";
+import "schema/order.proto";
+
+option go_package = "github.com/exc-works/caishen/engine/types";
+
+service Api {
+  // GetActionResult 获取指定序列号的指令执行结果
+  rpc GetActionResult(GetActionResultRequest)
+      returns (GetActionResultResponse) {
+    option (google.api.http) = {
+      get: "/v1/actions/{sequence}"
+    };
+  }
+
+  // GetActionResultBySequences 获取多个序列号的指令执行结果
+  rpc GetActionResultBySequences(GetActionResultBySequencesRequest)
+      returns (GetActionResultBySequencesResponse) {
+    option (google.api.http) = {
+      post: "/v1/actions/by-sequences"
+      body: "*"
+    };
+  }
+
+  // GetL2book returns the production internal L2 order book snapshot.
+  rpc GetL2book(GetL2bookRequest) returns (GetL2bookResponse) {
+    option (google.api.http) = {
+      get: "/v1/markets/l2book"
+    };
+  };
+
+  // ListTokens 列出所有代币信息
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {
+    option (google.api.http) = {
+      get: "/v1/debug/tokens"
+    };
+  };
+
+  // ListSymbols 列出所有交易对信息
+  rpc ListSymbols(ListSymbolsRequest) returns (ListSymbolsResponse) {
+    option (google.api.http) = {
+      get: "/v1/debug/symbols"
+    };
+  };
+
+  // GetOpenInterestBySymbol 获取指定交易对的持仓量（由 engine 内存 OI hook 的
+  // atomic 快照支撑）
+  rpc GetOpenInterestBySymbol(GetOpenInterestBySymbolRequest)
+      returns (GetOpenInterestBySymbolResponse) {
+    option (google.api.http) = {
+      get: "/v1/markets/open-interests/by-symbol"
+    };
+  };
+
+  // ListOpenInterest 列出所有交易对的持仓量（由 engine 内存 OI hook 的 atomic
+  // 快照支撑）
+  rpc ListOpenInterest(ListOpenInterestRequest)
+      returns (ListOpenInterestResponse) {
+    option (google.api.http) = {
+      get: "/v1/markets/open-interests"
+    };
+  };
+
+  // GetWalletBalance 查询指定地址，指定token id的钱包余额
+  rpc GetWalletBalance(GetWalletBalanceRequest)
+      returns (GetWalletBalanceResponse) {
+    option (google.api.http) = {
+      get: "/v1/debug/wallet-balance"
+    };
+  }
+
+  // ListPositions 查询指定地址的所有仓位（支持按照 base token, quote token
+  // 过滤）
+  rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/debug/positions"
+    };
+  }
+
+  // ListPositionConfigs 查询指定地址的所有仓位模式设置（支持按照 base token,
+  // quote token 过滤）
+  rpc ListPositionConfigs(ListPositionConfigsRequest)
+      returns (ListPositionConfigsResponse) {
+    option (google.api.http) = {
+      get: "/v1/debug/position-configs"
+    };
+  }
+
+  // ListOrders 查询指定地址的所有订单（支持按照 base token, quote token 过滤）
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse) {
+    option (google.api.http) = {
+      get: "/v1/debug/orders"
+    };
+  }
+
+  // GetFeeTier 查询指定地址的费率配置
+  rpc GetFeeTier(GetFeeTierRequest) returns (GetFeeTierResponse) {
+    option (google.api.http) = {
+      get: "/v1/debug/fee-tier"
+    };
+  }
+
+  // ListAgents 查询指定地址的所有agent
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse) {
+    option (google.api.http) = {
+      get: "/v1/debug/agents"
+    };
+  }
+
+  // ListSymbolPrices
+  // 查询所有交易对的最新成交价格、指数价格、标记价格、资金费率growth、总持仓
+  rpc ListSymbolPrices(ListSymbolPricesRequest)
+      returns (ListSymbolPricesResponse) {
+    option (google.api.http) = {
+      get: "/v1/debug/symbol-prices"
+    };
+  }
+
+  rpc DumpADLTreap(DumpADLRequest) returns (DumpADLResponse) {
+    option (google.api.http) = {
+      get: "/v1/debug/adl/dump"
+    };
+  }
+}
+
+message ResultContext {
+  uint64 sequence = 1;
+}
+
+message DumpADLRequest {
+  uint32 base_token = 1 [(gogoproto.moretags) = "form:\"base_token\""];
+  uint32 quote_token = 2 [(gogoproto.moretags) = "form:\"quote_token\""];
+}
+
+message DumpADLResponse {}
+
+message GetActionResultRequest {
+  uint64 sequence = 1
+      [(gogoproto.moretags) = "uri:\"sequence\" binding:\"required\""];
+  // 序列化格式，默认为 raw
+  //  - json: json 序列化
+  //  - raw: base64 编码
+  string format = 2 [(gogoproto.moretags) = "form:\"format\""];
+}
+
+message GetActionResultResponse {
+  ResultContext context = 1;
+  bytes result = 2
+      [(gogoproto.customtype) = "any", (gogoproto.nullable) = false];
+}
+
+message GetActionResultBySequencesRequest {
+  repeated uint64 sequences = 1 [(gogoproto.jsontag) = "sequences"];
+  // 序列化格式，默认为 raw
+  //  - json: json 序列化
+  //  - raw: base64 编码
+  string format = 2 [(gogoproto.moretags) = "form:\"format\""];
+}
+
+message GetActionResultBySequencesResponse {
+  map<uint64, GetActionResultResponse> results = 1
+      [(gogoproto.jsontag) = "results"];
+  ResultContext context = 2;
+}
+
+message GetL2bookRequest {
+  share.schema.TradingDomain trading_domain = 1
+      [(gogoproto.moretags) = "form:\"trading_domain\""];
+  uint32 base_token = 2
+      [(gogoproto.moretags) = "form:\"base_token\" binding:\"required\""];
+  uint32 quote_token = 3
+      [(gogoproto.moretags) = "form:\"quote_token\" binding:\"required\""];
+  string aggregation_level = 4
+      [(gogoproto.moretags) = "form:\"aggregation_level\""];
+  uint32 limit = 5 [(gogoproto.moretags) =
+                        "form:\"limit\" binding:\"omitempty,min=1,max=400\""];
+}
+
+message GetL2bookResponse {
+  uint64 sequence = 1;
+  google.protobuf.Timestamp timestamp = 2 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.moretags) = "json:\"timestamp,omitzero\""
+  ];
+  repeated L2bookLevel asks = 3
+      [(gogoproto.jsontag) = "asks", (gogoproto.nullable) = false];
+  repeated L2bookLevel bids = 4
+      [(gogoproto.jsontag) = "bids", (gogoproto.nullable) = false];
+  ResultContext context = 5;
+}
+
+message L2bookLevel {
+  string price = 1 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string size = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message ListTokensRequest {}
+
+message ListTokensResponse {
+  map<uint32, TokenResponse> tokens = 1;
+  ResultContext context = 2;
+}
+
+message TokenResponse {
+  uint32 token_id = 1;
+  uint32 decimals = 2;
+}
+
+message ListSymbolsRequest {};
+
+message ListSymbolsResponse {
+  repeated SymbolResponse symbols = 1;
+  ResultContext context = 2;
+}
+
+message SymbolResponse {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  google.protobuf.Timestamp open_time = 3
+      [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+  google.protobuf.Timestamp close_time = 4 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "close_time,omitzero"
+  ];
+  uint32 max_number_of_order_each_match = 5;
+  uint32 max_number_of_order_each_account = 6;
+  string tick_size = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string lot_size = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string min_size = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string min_notional = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string max_notional = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message GetOpenInterestBySymbolRequest {
+  uint32 base_token = 1
+      [(gogoproto.moretags) = "form:\"base_token\" binding:\"required\""];
+  uint32 quote_token = 2
+      [(gogoproto.moretags) = "form:\"quote_token\" binding:\"required\""];
+}
+
+message GetOpenInterestBySymbolResponse {
+  ResultContext context = 1;
+  uint32 base_token = 2;
+  uint32 quote_token = 3;
+  // amount 是多头总持仓 size（空头恒等）
+  string amount = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // long_positions / short_positions 是该交易对当前的多 / 空持仓笔数
+  int32 long_positions = 5;
+  int32 short_positions = 6;
+  // sequence 是产生该值的 engine 序列号
+  uint64 sequence = 7;
+  google.protobuf.Timestamp updated_at = 8 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.moretags) = "json:\"updated_at,omitzero\""
+  ];
+}
+
+message ListOpenInterestRequest {}
+
+message ListOpenInterestResponse {
+  ResultContext context = 1;
+  repeated GetOpenInterestBySymbolResponse open_interests = 2;
+}
+
+message GetWalletBalanceRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  uint32 token_id = 2
+      [(gogoproto.moretags) = "form:\"token_id\" binding:\"required\""];
+}
+
+message GetWalletBalanceResponse {
+  ResultContext context = 1;
+  string account = 2;
+  uint32 token_id = 3;
+  WalletBalance balance = 4;
+}
+
+message WalletBalance {
+  string wallet = 1 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string isolated_position_frozen = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string isolated_order_frozen = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string cross_order_frozen = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message ListPositionsRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  uint32 base_token = 2 [(gogoproto.moretags) = "form:\"base_token\""];
+  uint32 quote_token = 3 [(gogoproto.moretags) = "form:\"quote_token\""];
+}
+
+message ListPositionsResponse {
+  ResultContext context = 1;
+  repeated PositionResponse positions = 2;
+}
+
+message PositionResponse {
+  uint64 id = 1;
+  share.schema.PositionMode mode = 2;
+  share.schema.PositionSide side = 3;
+  string account = 4;
+  uint32 base_token = 5;
+  uint32 quote_token = 6;
+  string entry_price = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string size = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string isolated_margin = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string realized_pnl = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string taker_fee_rate = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string funding_growth = 12 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  uint32 risk_limits_id = 13;
+  share.schema.PositionStatus status = 14;
+  bool liquidation_order = 15;
+  google.protobuf.Timestamp created_at = 16
+      [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+}
+
+message ListPositionConfigsRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  uint32 base_token = 2 [(gogoproto.moretags) = "form:\"base_token\""];
+  uint32 quote_token = 3 [(gogoproto.moretags) = "form:\"quote_token\""];
+}
+
+message ListPositionConfigsResponse {
+  ResultContext context = 1;
+  repeated PositionConfigResponse configs = 2;
+}
+
+message PositionConfigResponse {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  share.schema.PositionMode mode = 3;
+  uint32 isolated_leverage = 4;
+  uint32 cross_leverage = 5;
+}
+
+message ListOrdersRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  uint32 base_token = 2 [(gogoproto.moretags) = "form:\"base_token\""];
+  uint32 quote_token = 3 [(gogoproto.moretags) = "form:\"quote_token\""];
+}
+
+message ListOrdersResponse {
+  ResultContext context = 1;
+  repeated OrderResponse orders = 2;
+}
+
+message OrderResponse {
+  uint64 id = 1;
+  string account_id = 2;
+  uint64 seq = 3;
+  uint32 base_token = 4;
+  uint32 quote_token = 5;
+  share.schema.OrderType type = 6;
+  string price = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string filled_price = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string size = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string filled = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string taker_fee_rate = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string maker_fee_rate = 12 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  google.protobuf.Timestamp time = 13
+      [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+  share.schema.OrderTimeInForce time_in_force = 14;
+  string client_order_id = 15;
+  int32 status = 16 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.OrderStatus",
+    (gogoproto.nullable) = false
+  ];
+  share.schema.PositionMode mode = 17;
+  share.schema.PositionSide side = 18;
+}
+
+message GetFeeTierRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+  repeated share.schema.TradingDomain tradingDomains = 2
+      [(gogoproto.moretags) = "form:\"trading_domains\""];
+}
+
+message GetFeeTierResponse {
+  ResultContext context = 1;
+  string account = 2;
+  uint32 tier = 3;
+  map<uint32, AccountFeeTierByDomainResponse> profiles = 4;
+}
+
+message AccountFeeTierByDomainResponse {
+  string taker = 1 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string maker = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  repeated FeeTierResponse fee_tiers = 3;
+}
+
+message FeeTierResponse {
+  uint32 tier = 1;
+  string taker = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string maker = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message ListAgentsRequest {
+  string account = 1
+      [(gogoproto.moretags) = "form:\"account\" binding:\"required\""];
+}
+
+message ListAgentsResponse {
+  ResultContext context = 1;
+  repeated AgentResponse agents = 2;
+}
+
+message AgentResponse {
+  string agent = 1;
+  string name = 2;
+  google.protobuf.Timestamp expired_time = 3
+      [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+}
+
+message ListSymbolPricesRequest {}
+
+message ListSymbolPricesResponse {
+  ResultContext context = 1;
+  repeated SymbolPriceResponse prices = 2;
+}
+
+message SymbolPriceResponse {
+  uint32 base_token = 1;
+  uint32 quote_token = 2;
+  string last_trade_price = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string index_price = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string mark_price = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string funding_rate = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string long_growth = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string short_growth = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  string open_interest = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}

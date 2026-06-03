@@ -1,0 +1,786 @@
+syntax = "proto3";
+package websocket;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "l2book.proto";
+import "open_interest.proto";
+import "ticker.proto";
+import "schema/base.proto";
+import "schema/tx.proto";
+import "order.proto";
+import "schema/order.proto";
+import "balance.proto";
+import "position.proto";
+import "prediction.proto";
+import "schema/prediction.proto";
+import "strategy.proto";
+
+option go_package = "github.com/exc-works/caishen/api/types";
+
+// K线订阅
+message CandleSubscribeRequest {
+  // 交易对符号
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  // K线周期
+  string resolution = 2 [(gogoproto.moretags) = "binding:\"required\""];
+  // 交易域，可选。不传或为空时默认为 Perp。取值：0=Perp, 1=Spot
+  string trading_domain = 3;
+}
+
+// K线订阅批量更新通知
+message CandleSubscribeBatchNotification {
+  // 交易对符号
+  string symbol = 1;
+  // K线周期
+  string resolution = 2;
+  // 更新项列表
+  repeated CandleSubscribeNotification updates = 3
+      [(gogoproto.nullable) = false];
+  // 交易域。取值：0=Perp, 1=Spot, 2=Prediction
+  share.schema.TradingDomain trading_domain = 4
+      [(gogoproto.jsontag) = "trading_domain"];
+}
+
+// K线订阅更新通知项
+message CandleSubscribeNotification {
+  // 时间戳（Unix 毫秒），对应该 resolution（K 线周期）的时间
+  int64 ts = 1;
+  // 开盘价
+  string open = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 最高价
+  string high = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 最低价
+  string low = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 收盘价
+  string close = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 成交量
+  string volume = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// 行情订阅
+message TickerSubscribeRequest {
+  // 交易对符号
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  // 交易域，可选。不传或为空时默认为 Perp。取值：0=Perp, 1=Spot
+  string trading_domain = 2;
+}
+
+// 行情订阅批量更新通知
+message TickerSubscribeBatchNotification {
+  // 更新项列表
+  repeated ticker.TickerResponse updates = 2 [(gogoproto.nullable) = false];
+}
+
+// 所有行情订阅
+message TickerAllSubscribeRequest {
+  // 订阅所有交易对的行情更新
+}
+
+// 指数价格订阅
+message IndexPriceSubscribeRequest {
+  // 交易对符号
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// 指数价格批量更新通知
+message IndexPriceSubscribeBatchNotification {
+  // 交易对符号
+  string symbol = 1;
+  // 更新项列表
+  repeated IndexPriceSubscribeNotification updates = 2
+      [(gogoproto.nullable) = false];
+}
+
+// 指数价格更新通知项
+message IndexPriceSubscribeNotification {
+  // 指数价格
+  string index_price = 1 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 时间戳 (Unix 毫秒)
+  int64 ts = 2;
+}
+
+// 标记价格订阅
+message MarkPriceSubscribeRequest {
+  // 交易对符号
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// 标记价格批量更新通知
+message MarkPriceSubscribeBatchNotification {
+  // 交易对符号
+  string symbol = 1;
+  // 更新项列表
+  repeated MarkPriceSubscribeNotification updates = 2
+      [(gogoproto.nullable) = false];
+}
+
+// 标记价格更新通知项
+message MarkPriceSubscribeNotification {
+  // 标记价格
+  string mark_price = 1 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 时间戳 (Unix 毫秒)
+  int64 ts = 2;
+}
+
+// 价格 K 线订阅
+message PriceCandleSubscribeRequest {
+  // 交易对符号
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  // K线周期
+  string resolution = 2 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// 交易对成交订阅
+message SymbolTradeSubscribeRequest {
+  // 交易对符号
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  // 交易域，可选。不传或为空时默认为 Perp。取值：0=Perp, 1=Spot
+  string trading_domain = 2;
+}
+
+// 交易对成交更新通知
+message SymbolTradeSubscribeNotification {
+  // 交易对符号
+  string symbol = 1;
+  // 成交方向。取值：LONG=买入, SHORT=卖出
+  string side = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.PositionSide",
+    (gogoproto.nullable) = false
+  ];
+  // 成交数量
+  string size = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 成交价格
+  string price = 4 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 时间戳（Unix 毫秒）
+  int64 time = 5;
+  // 交易哈希
+  bytes tx_hash = 6 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  // 交易域。取值：0=Perp, 1=Spot
+  share.schema.TradingDomain trading_domain = 7
+      [(gogoproto.jsontag) = "trading_domain"];
+}
+
+// L2 挂单簿订阅
+message L2bookSubscribeRequest {
+  // 交易对符号（例如 "BTC-USDC"）
+  string symbol = 1 [(gogoproto.moretags) = "binding:\"required\""];
+
+  // 价格聚合精度
+  string aggregation_level = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/caishen/repo/types/"
+                             "order.TickBasedAggregationLevel",
+    (gogoproto.nullable) = false
+  ];
+
+  // 交易域，可选。不传或为空时默认为 Perp。取值：0=Perp, 1=Spot
+  string trading_domain = 3;
+}
+
+// L2 挂单簿更新通知（包含买卖盘）
+message L2bookSubscribeNotification {
+  // 序列号
+  uint64 sequence = 1;
+
+  // 时间戳（Unix 毫秒）
+  int64 ts = 2;
+
+  // 卖单列表（按价格升序排列）
+  repeated l2book.L2bookLevel asks = 3 [(gogoproto.nullable) = false];
+
+  // 买单列表（按价格降序排列）
+  repeated l2book.L2bookLevel bids = 4 [(gogoproto.nullable) = false];
+}
+
+// L2 挂单簿批量更新通知
+message L2bookSubscribeBatchNotification {
+  // 交易对符号
+  string symbol = 1;
+
+  // 价格聚合精度
+  string aggregation_level = 2 [
+    (gogoproto.customtype) = "github.com/exc-works/caishen/repo/types/"
+                             "order.TickBasedAggregationLevel",
+    (gogoproto.nullable) = false
+  ];
+
+  // 更新项列表
+  repeated L2bookSubscribeNotification updates = 3
+      [(gogoproto.nullable) = false];
+
+  // 交易域。取值：0=Perp, 1=Spot
+  share.schema.TradingDomain trading_domain = 4
+      [(gogoproto.jsontag) = "trading_domain"];
+}
+
+// 开仓量订阅
+message OpenInterestSubscribeRequest {
+  // 订阅所有交易对的开仓量更新
+}
+
+// 指定交易对开仓量订阅
+message OpenInterestSubscribeBySymbolRequest {
+  // 交易对符号
+  string symbol = 1;
+}
+
+// 开仓量订阅通知项
+message OpenInterestSubscribeNotification {
+  // 基础代币 ID
+  uint32 base_token = 1;
+  // 计价代币 ID
+  uint32 quote_token = 2;
+  // 总量
+  string amount = 3 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 交易对符号
+  string symbol = 4;
+  // 多头持仓数量
+  int32 long_positions = 5 [(gogoproto.jsontag) = "long_positions"];
+  // 空头持仓数量
+  int32 short_positions = 6 [(gogoproto.jsontag) = "short_positions"];
+}
+
+// 开仓量批量更新通知
+message OpenInterestSubscribeBatchNotification {
+  // 结果上下文
+  open_interest.ResultContext context = 1 [(gogoproto.nullable) = false];
+  // 更新项列表
+  repeated OpenInterestSubscribeNotification updates = 2
+      [(gogoproto.nullable) = false];
+}
+
+// 区块订阅
+message BlockSubscribeRequest {}
+
+// 区块订阅通知
+message BlockSubscribeNotification {
+  // 区块高度
+  uint64 number = 1;
+  // 时间戳 (Unix 毫秒)
+  int64 time = 2;
+  // 交易数量
+  uint64 num_tx = 3 [(gogoproto.jsontag) = "num_tx"];
+  // 提议者地址
+  bytes proposer = 4 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  // 区块哈希
+  bytes hash = 5 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// 交易订阅
+message TxSubscribeRequest {}
+
+// 交易订阅通知
+message TxSubscribeNotification {
+  // 交易哈希
+  bytes hash = 1 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  // 区块高度
+  uint64 number = 2;
+  // 时间戳 (Unix 毫秒)
+  int64 time = 3;
+  // 账户地址
+  bytes account = 4 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Address",
+    (gogoproto.nullable) = false
+  ];
+  // 交易动作
+  share.schema.TxActionType action = 5;
+}
+
+// 资金费率订阅
+message FundingRateSubscribeRequest {}
+
+// 指定交易对资金费率订阅
+message FundingRateSubscribeBySymbolRequest {
+  // 交易对符号
+  string symbol = 1;
+}
+
+// 资金费率订阅通知
+message FundingRateSubscribeNotification {
+  // 基础代币 ID
+  uint32 base_token = 1;
+  // 计价代币 ID
+  uint32 quote_token = 2;
+  // 交易对符号
+  string symbol = 3;
+  // 结算间隔 (小时)
+  uint32 funding_interval_hours = 4;
+  // 资金费率下限
+  string funding_rate_lower_bound = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 资金费率上限
+  string funding_rate_upper_bound = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 当前资金费率
+  string funding_rate = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 结果上下文
+  open_interest.ResultContext context = 8 [(gogoproto.nullable) = false];
+  // 更新时间（Unix 毫秒）
+  int64 ts = 9;
+}
+
+// 成交订阅
+message TradeSubscribeRequest {
+  // 账户地址
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  // 交易域，可选。不传或为空时表示订阅所有交易域。取值：0=Perp, 1=Spot
+  string trading_domain = 2;
+}
+
+// 成交更新通知 (个人)
+message TradeSubscribeNotification {
+  // 账户 ID
+  bytes account = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 基础代币 ID
+  uint32 base_token = 2;
+  // 计价代币 ID
+  uint32 quote_token = 3;
+  // 交易对符号
+  string symbol = 4;
+  // 关联订单 ID
+  uint64 order_id = 5 [(gogoproto.jsontag) = "order_id,string"];
+  // 成交价格
+  string price = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 成交数量
+  string size = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 基础币种手续费；Perp 域恒为 0，Spot 域有意义
+  string base_fee = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "base_fee"
+  ];
+  // 计价币种手续费；Perp 域恒为 USD 计价手续费，Spot 域为计价代币计的手续费
+  string quote_fee = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "quote_fee"
+  ];
+  // 交易域。取值：0=Perp, 1=Spot
+  share.schema.TradingDomain trading_domain = 10
+      [(gogoproto.jsontag) = "trading_domain"];
+  // 是否为挂单（Maker）成交
+  bool is_maker = 11;
+  // 时间戳（Unix 毫秒）
+  int64 time = 12;
+  // 交易哈希
+  bytes tx_hash = 13 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// 订单变更订阅
+message OrderChangedSubscribeRequest {
+  // 账户地址
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  // 交易域，可选。不传或为空时表示订阅所有交易域。取值：0=Perp, 1=Spot
+  string trading_domain = 2;
+}
+
+// 订单变更更新通知。
+// order 与 trigger_price_changed 互斥，每条通知仅其中之一非空，
+// 分别表示两种不同的订单变更类型。两类通知不保证按事件发生时间顺序推送，
+// 消费者不应依赖跨类型的时序。
+message OrderChangedSubscribeNotification {
+  // 变更后的订单详情。仅订单状态变更类通知时存在，否则为 null
+  order.OrderResponse order = 1 [(gogoproto.nullable) = true];
+  // 触发价格变更详情。仅触发价格变更类通知时存在，否则为 null
+  OrderChangedTriggerPriceChanged trigger_price_changed = 2
+      [(gogoproto.nullable) = true];
+}
+
+// 跟踪委托（trailing）订单触发价格变更详情
+message OrderChangedTriggerPriceChanged {
+  // 账户 ID
+  bytes account = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 订单 ID
+  uint64 order_id = 2 [(gogoproto.jsontag) = "order_id,string"];
+  // 基础代币 ID
+  uint32 base_token = 3 [(gogoproto.jsontag) = "base_token"];
+  // 计价代币 ID
+  uint32 quote_token = 4 [(gogoproto.jsontag) = "quote_token"];
+  // 交易对符号
+  string symbol = 5;
+  // 变更后的触发价格
+  string trigger_price = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "trigger_price"
+  ];
+  // 变更后的跟踪基准价格
+  string trailing_base_price = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "trailing_base_price"
+  ];
+  // 时间戳（Unix 毫秒）
+  int64 ts = 8 [(gogoproto.jsontag) = "ts"];
+}
+
+// 持仓订阅
+message PositionSubscribeRequest {
+  // 账户地址
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// 持仓更新通知
+message PositionSubscribeNotification {
+  // 持仓 ID
+  uint64 position_id = 1;
+  // 账户 ID
+  bytes account = 2 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 持仓模式。取值：0=全仓, 1=逐仓
+  share.schema.PositionMode mode = 3 [(gogoproto.jsontag) = "mode"];
+  // 持仓方向。取值：0=多头, 1=空头
+  share.schema.PositionSide side = 4 [(gogoproto.jsontag) = "side"];
+  // 基础代币 ID
+  uint32 base_token = 5;
+  // 计价代币 ID
+  uint32 quote_token = 6;
+  // 交易对符号
+  string symbol = 7;
+  // 开仓价格
+  string entry_price = 8 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 仓位大小
+  string size = 9 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 逐仓保证金
+  string isolated_margin = 10 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 已实现盈亏
+  string realized_pnl = 11 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // Taker 手续费率
+  string taker_fee_rate = 13 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 资金费用
+  string funding_fee = 14 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 风险限额 ID
+  uint32 risk_limits_id = 15;
+  // 链上创建时间
+  int64 on_chain_created_at = 16 [(gogoproto.jsontag) = "on_chain_created_at"];
+  // 是否为强平单
+  bool liquidation_order = 17 [(gogoproto.jsontag) = "liquidation_order"];
+  // 持仓状态。取值：0=正常, 1=强平中, 2=已平仓, 3=已强平
+  share.schema.PositionStatus status = 18 [(gogoproto.jsontag) = "status"];
+  // 杠杆倍数
+  uint32 leverage = 19 [(gogoproto.jsontag) = "leverage"];
+  // 通知类型。取值：1=加仓, 2=减仓, 3=资金费结算, 4=增加保证金, 5=减少保证金,
+  // 6=调整杠杆, 7=状态变更
+  int32 notification_type = 20 [(gogoproto.jsontag) = "notification_type"];
+  // 结果上下文
+  open_interest.ResultContext context = 21 [(gogoproto.nullable) = false];
+}
+
+// 余额订阅
+message BalancesSubscribeRequest {
+  // 账户地址
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  // 交易域，可选。不传或为空时表示订阅所有交易域。取值：0=Perp, 1=Spot
+  string trading_domain = 2;
+}
+
+// 余额更新通知
+message BalancesSubscribeNotification {
+  // 变更后的余额信息
+  balance.BalanceResponse balance = 1 [(gogoproto.nullable) = false];
+}
+
+// ADL 指示灯订阅
+message ADLLightsSubscribeRequest {
+  // 账户地址
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// ADL 指示灯更新通知
+message ADLLightsSubscribeNotification {
+  // 账户 ID
+  bytes account = 1 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/common/base.AccountId",
+    (gogoproto.nullable) = false
+  ];
+  // 持仓 ID
+  uint64 position_id = 2;
+  // ADL 指示灯级别
+  uint32 adl_light = 3;
+  // 更新时间（Unix 毫秒）
+  int64 ts = 4;
+}
+
+// 持仓流水历史订阅
+message PositionLedgerHistorySubscribeRequest {
+  // 账户地址
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// 持仓流水历史更新通知
+message PositionLedgerHistorySubscribeNotification {
+  // 流水历史记录
+  position.PositionLedgerHistory history = 1 [(gogoproto.nullable) = false];
+}
+
+// 资产流水历史订阅
+message AssetLedgerHistorySubscribeRequest {
+  // 账户地址
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  // 交易域，可选。不传或为空时表示订阅所有交易域。取值：0=Perp, 1=Spot
+  string trading_domain = 2;
+}
+
+// 资产流水历史更新通知
+message AssetLedgerHistorySubscribeNotification {
+  // 交易响应详情
+  balance.TransactionResponse history = 1 [(gogoproto.nullable) = false];
+}
+
+// 历史仓位订阅
+message PositionHistorySubscribeRequest {
+  // 账户地址
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// 历史仓位更新通知
+message PositionHistorySubscribeNotification {
+  // 历史持仓详情
+  position.PositionHistory history = 1 [(gogoproto.nullable) = false];
+}
+
+// 预测市场余额订阅（与 balances_subscribe 分离，仅 Prediction 域）
+message PredictionBalanceSubscribeRequest {
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// 预测市场余额更新通知
+message PredictionBalanceSubscribeNotification {
+  balance.BalanceResponse balance = 1 [(gogoproto.nullable) = false];
+}
+
+// 预测市场 ticker 订阅
+message PredictionTickerSubscribeRequest {
+  // 预测事件 ID
+  uint64 event_id = 1 [(gogoproto.jsontag) = "event_id"];
+  // YES 结果代币 ID
+  uint32 yes_token = 2 [(gogoproto.jsontag) = "yes_token"];
+}
+
+// 预测市场 ticker 更新通知
+message PredictionTickerSubscribeNotification {
+  // 预测事件 ID
+  uint64 event_id = 1 [(gogoproto.jsontag) = "event_id"];
+  // YES 结果代币 ID
+  uint32 yes_token = 2 [(gogoproto.jsontag) = "yes_token"];
+  // NO 结果代币 ID
+  uint32 no_token = 3 [(gogoproto.jsontag) = "no_token"];
+  // 时间戳（Unix 毫秒）
+  int64 ts = 4;
+  // YES 当前概率，取值区间 [0, 1]；无最新报价时默认 0.5
+  string chance = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "chance"
+  ];
+  // 成交量
+  string volume = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "volume"
+  ];
+  // 24 小时成交量
+  string volume_24h = 7 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "volume_24h"
+  ];
+}
+
+// 预测挂单订阅
+message PredictionOrderSubscribeRequest {
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// 预测挂单更新通知
+message PredictionOrderSubscribeNotification {
+  prediction.PredictionOpenOrderResponse order = 1
+      [(gogoproto.nullable) = false];
+}
+
+// 预测仓位订阅
+message PredictionPositionSubscribeRequest {
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// 预测开仓更新通知
+message PredictionPositionSubscribeNotification {
+  prediction.PredictionOpenPositionResponse position = 1
+      [(gogoproto.nullable) = false];
+}
+
+// 预测市场资金流水订阅
+message PredictionAssetLedgerHistorySubscribeRequest {
+  string account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+}
+
+// 预测市场资金流水更新通知
+message PredictionAssetLedgerHistorySubscribeNotification {
+  prediction.PredictionAccountLedgerHistoryResponse history = 1
+      [(gogoproto.nullable) = false];
+}
+
+// 预测新市场 symbol 创建订阅
+message PredictionSymbolCreatedSubscribeRequest {}
+
+// 预测新市场 symbol 创建通知
+message PredictionSymbolCreatedSubscribeNotification {
+  prediction.SymbolResponse symbol = 1 [(gogoproto.nullable) = false];
+  // 事件截止时间（Unix 毫秒），与 prediction.EventResponse.end_at 一致
+  int64 end_at = 2 [(gogoproto.jsontag) = "end_at,string"];
+  // 事件标题
+  string event_title = 3 [(gogoproto.jsontag) = "event_title"];
+}
+
+// 预测市场交易对成交订阅
+message PredictionSymbolTradeSubscribeRequest {
+  // YES 结果代币 ID
+  uint32 yes_token = 1 [
+    (gogoproto.jsontag) = "yes_token",
+    (gogoproto.moretags) = "binding:\"required\""
+  ];
+  // 预测事件 ID
+  uint64 event_id = 2 [
+    (gogoproto.jsontag) = "event_id",
+    (gogoproto.moretags) = "binding:\"required\""
+  ];
+}
+
+// 策略实例变更订阅
+message StrategySubscribeRequest {
+  // 主账户地址，必填
+  string master_account = 1 [(gogoproto.moretags) = "binding:\"required\""];
+  // 交易域，可选。不传或为空时表示订阅该账户在所有交易域下的策略。
+  // 取值：0=Perp, 1=Spot, 2=Prediction
+  string trading_domain = 2;
+}
+
+// 策略实例变更推送通知
+message StrategySubscribeNotification {
+  // 变更后的策略实例快照
+  strategy.StrategyResponse strategy = 1 [(gogoproto.nullable) = true];
+}
+
+// 预测市场成交更新通知
+message PredictionSymbolTradeSubscribeNotification {
+  // 预测事件 ID
+  uint64 event_id = 1 [(gogoproto.jsontag) = "event_id"];
+  // YES 结果代币 ID
+  uint32 yes_token = 2 [(gogoproto.jsontag) = "yes_token"];
+  // NO 结果代币 ID
+  uint32 no_token = 3 [(gogoproto.jsontag) = "no_token"];
+  // 成交方向。取值：LONG=买入, SHORT=卖出
+  string side = 4 [
+    (gogoproto.customtype) =
+        "github.com/exc-works/caishen/share/schema.PositionSide",
+    (gogoproto.nullable) = false
+  ];
+  // 成交数量
+  string size = 5 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 成交价格
+  string price = 6 [
+    (gogoproto.customtype) = "github.com/exc-works/decimal.Decimal",
+    (gogoproto.nullable) = false
+  ];
+  // 时间戳（Unix 毫秒）
+  int64 time = 7;
+  // 交易哈希
+  bytes tx_hash = 8 [
+    (gogoproto.customtype) = "github.com/ethereum/go-ethereum/common.Hash",
+    (gogoproto.nullable) = false
+  ];
+  // 本条成交对应的结果方向。取值：0=YES, 1=NO
+  share.schema.PredictionOutcome outcome = 9 [(gogoproto.jsontag) = "outcome"];
+}

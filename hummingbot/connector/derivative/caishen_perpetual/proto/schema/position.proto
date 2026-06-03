@@ -1,0 +1,110 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+import "schema/order.proto";
+
+// SetPositionModeMessage updates the account position mode for one perp symbol.
+message SetPositionModeMessage {
+  // Base token id of the target perp symbol.
+  uint32 base_token = 1;
+  // Quote token id of the target perp symbol.
+  uint32 quote_token = 2;
+  // Target mode. Must be CROSS or ISOLATED.
+  PositionMode mode = 3;
+}
+
+// SetPositionLeverageMessage updates account leverage for one symbol and mode.
+message SetPositionLeverageMessage {
+  // Base token id of the target perp symbol.
+  uint32 base_token = 1;
+  // Quote token id of the target perp symbol.
+  uint32 quote_token = 2;
+  // Target leverage multiplier.
+  // Must be in [1, 65535].
+  // Effective cap also depends on the symbol's linked risk limits.
+  // Example: 10 means 10x.
+  uint32 leverage = 3;
+  // Position mode whose leverage config is updated.
+  // Must be CROSS or ISOLATED.
+  PositionMode mode = 4;
+}
+
+// IncreaseMarginMessage adds isolated margin to an existing isolated position.
+message IncreaseMarginMessage {
+  // Base token id of the target perp symbol.
+  uint32 base_token = 1;
+  // Quote token id of the target perp symbol.
+  uint32 quote_token = 2;
+  // Margin amount in quote asset.
+  // Must be > 0.
+  // Decimal places must not exceed symbol quote precision.
+  // Example: "25.5".
+  string amount = 3 [(schema.decimal) = true];
+}
+
+// DecreaseMarginMessage removes isolated margin from an existing isolated
+// position.
+message DecreaseMarginMessage {
+  // Base token id of the target perp symbol.
+  uint32 base_token = 1;
+  // Quote token id of the target perp symbol.
+  uint32 quote_token = 2;
+  // Margin amount in quote asset.
+  // Must be > 0.
+  // Decimal places must not exceed symbol quote precision.
+  // Example: "10".
+  string amount = 3 [(schema.decimal) = true];
+}
+
+// EnterLiquidationModeMessage marks positions as LIQUIDATING.
+message EnterLiquidationModeMessage {
+  // Target account address (20-byte EVM address).
+  bytes account = 1 [(schema.address) = true];
+  // Scope mode: CROSS for all cross positions, ISOLATED for one symbol.
+  PositionMode mode = 2;
+  // Symbol selector for ISOLATED mode.
+  // Required and non-zero when mode=ISOLATED.
+  // Must be omitted (or zero) when mode=CROSS.
+  optional uint32 base_token = 3;
+  // Symbol selector for ISOLATED mode.
+  // Required and non-zero when mode=ISOLATED.
+  // Must be omitted (or zero) when mode=CROSS.
+  optional uint32 quote_token = 4;
+}
+
+// ExitLiquidationModeMessage attempts to restore LIQUIDATING positions to
+// NORMAL.
+message ExitLiquidationModeMessage {
+  // Target account address (20-byte EVM address).
+  bytes account = 1 [(schema.address) = true];
+  // Scope mode: CROSS for all cross positions, ISOLATED for one symbol.
+  PositionMode mode = 2;
+  // Symbol selector for ISOLATED mode.
+  // Required and non-zero when mode=ISOLATED.
+  // Must be omitted (or zero) when mode=CROSS.
+  optional uint32 base_token = 3;
+  // Symbol selector for ISOLATED mode.
+  // Required and non-zero when mode=ISOLATED.
+  // Must be omitted (or zero) when mode=CROSS.
+  optional uint32 quote_token = 4;
+}
+
+// LiquidatePositionMessage starts liquidation execution for positions in
+// liquidation mode.
+message LiquidatePositionMessage {
+  // Target account address (20-byte EVM address).
+  bytes account = 1 [(schema.address) = true];
+  // Scope mode: CROSS for all cross positions, ISOLATED for one symbol.
+  PositionMode mode = 2;
+  // Symbol selector for ISOLATED mode.
+  // Required and non-zero when mode=ISOLATED.
+  // Must be omitted (or zero) when mode=CROSS.
+  optional uint32 base_token = 3;
+  // Symbol selector for ISOLATED mode.
+  // Required and non-zero when mode=ISOLATED.
+  // Must be omitted (or zero) when mode=CROSS.
+  optional uint32 quote_token = 4;
+}

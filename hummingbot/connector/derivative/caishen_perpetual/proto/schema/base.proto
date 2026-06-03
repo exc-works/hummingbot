@@ -1,0 +1,18 @@
+syntax = "proto3";
+package share.schema;
+
+option go_package = "github.com/exc-works/caishen/share/schema";
+
+import "schema/extensions.proto";
+
+// TradingDomain selects the trading ledger and matching namespace used by a
+// command.
+// Valid request values are exactly Perp (0), Spot (1), and Prediction (2).
+enum TradingDomain {
+  // Perpetual futures domain.
+  Perp = 0;
+  // Spot domain.
+  Spot = 1;
+  // Prediction market domain.
+  Prediction = 2;
+}
