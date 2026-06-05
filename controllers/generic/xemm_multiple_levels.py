@@ -145,7 +145,15 @@ class XEMMMultipleLevels(ControllerBase):
 
     def determine_executor_actions(self) -> List[ExecutorAction]:
         executor_actions = []
-        mid_price = self.market_data_provider.get_price_by_type(self.config.maker_connector, self.config.maker_trading_pair, PriceType.MidPrice)
+        mid_price = self.market_data_provider.get_price_by_type(
+            self.config.maker_connector, self.config.maker_trading_pair, PriceType.MidPrice
+        )
+        if mid_price is None or mid_price.is_nan() or mid_price <= 0:
+            self.logger().warning(
+                f"Mid price unavailable for {self.config.maker_trading_pair} on "
+                f"{self.config.maker_connector}; skipping XEMM executor creation."
+            )
+            return executor_actions
         active_buy_executors = self.filter_executors(
             executors=self.executors_info,
             filter_func=lambda e: not e.is_done and e.config.maker_side == TradeType.BUY
@@ -173,9 +181,11 @@ class XEMMMultipleLevels(ControllerBase):
         sell_side_quote = self.config.total_amount_quote * Decimal("0.5")
 
         for target_profitability, amount in self.buy_levels_targets_amount:
-            active_buy_executors_target = [e.config.target_profitability == target_profitability for e in active_buy_executors]
+            has_active_buy_at_target = any(
+                e.config.target_profitability == target_profitability for e in active_buy_executors
+            )
 
-            if len(active_buy_executors_target) == 0 and imbalance < self.config.max_executors_imbalance:
+            if not has_active_buy_at_target and imbalance < self.config.max_executors_imbalance:
                 # Calculate proportional amount: (level_amount / total_side_amount) * (total_quote * 0.5)
                 proportional_amount_quote = (amount / total_buy_amount) * buy_side_quote
                 min_profitability = target_profitability - self.config.min_profitability
@@ -195,8 +205,10 @@ class XEMMMultipleLevels(ControllerBase):
                 )
                 executor_actions.append(CreateExecutorAction(executor_config=config, controller_id=self.config.id))
         for target_profitability, amount in self.sell_levels_targets_amount:
-            active_sell_executors_target = [e.config.target_profitability == target_profitability for e in active_sell_executors]
-            if len(active_sell_executors_target) == 0 and imbalance > -self.config.max_executors_imbalance:
+            has_active_sell_at_target = any(
+                e.config.target_profitability == target_profitability for e in active_sell_executors
+            )
+            if not has_active_sell_at_target and imbalance > -self.config.max_executors_imbalance:
                 # Calculate proportional amount: (level_amount / total_side_amount) * (total_quote * 0.5)
                 proportional_amount_quote = (amount / total_sell_amount) * sell_side_quote
                 min_profitability = target_profitability - self.config.min_profitability
@@ -215,6 +227,11 @@ class XEMMMultipleLevels(ControllerBase):
                     max_profitability=max_profitability
                 )
                 executor_actions.append(CreateExecutorAction(executor_config=config, controller_id=self.config.id))
+        if executor_actions:
+            self.logger().info(
+                f"Proposing {len(executor_actions)} XEMM executor(s) for {self.config.maker_trading_pair} "
+                f"(mid={mid_price})."
+            )
         return executor_actions
 
     def to_format_status(self) -> List[str]:

@@ -304,6 +304,9 @@ class StrategyV2Base(StrategyPyBase):
             if not self.ready_to_trade:
                 for con in [c for c in self.connectors.values() if not c.ready]:
                     self.logger().warning(f"{con.name} is not ready. Please wait...")
+                # Controllers may have queued CreateExecutorAction before connectors are ready;
+                # keep their update events set so actions are retried after the listener runs.
+                self._refresh_controller_executor_events()
                 return
         else:
             self.on_tick()
@@ -314,6 +317,11 @@ class StrategyV2Base(StrategyPyBase):
         Simple scripts override this method for custom logic.
         """
         if self.controllers:
+            if self.listen_to_executor_actions_task is None or self.listen_to_executor_actions_task.done():
+                self.logger().warning(
+                    "listen_to_executor_actions is not running; restarting executor action listener."
+                )
+                self.listen_to_executor_actions_task = asyncio.create_task(self.listen_to_executor_actions())
             self.update_executors_info()
             self.update_controllers_configs()
             if self.market_data_provider.ready and not self._is_stop_triggered:
@@ -616,12 +624,17 @@ class StrategyV2Base(StrategyPyBase):
         :param timestamp: Current time.
         """
         self._last_timestamp = timestamp
+        self._is_stop_triggered = False
         self.apply_initial_setting()
         # Check if MQTT is enabled at runtime
         from hummingbot.client.hummingbot_application import HummingbotApplication
         if HummingbotApplication.main_application()._mqtt is not None:
             self.mqtt_enabled = True
             self._pub = ETopicPublisher("performance", use_bot_prefix=True)
+
+        # on_stop() cancels this task; recreate it on every strategy start
+        if self.listen_to_executor_actions_task is None or self.listen_to_executor_actions_task.done():
+            self.listen_to_executor_actions_task = asyncio.create_task(self.listen_to_executor_actions())
 
         # Start controllers
         for controller in self.controllers.values():
@@ -687,6 +700,11 @@ class StrategyV2Base(StrategyPyBase):
                 else:
                     self.add_controller(controller_config)
 
+    def _refresh_controller_executor_events(self):
+        for controller in self.controllers.values():
+            if controller.status == RunnableStatus.RUNNING:
+                controller.executors_update_event.set()
+
     async def listen_to_executor_actions(self):
         """
         Asynchronously listen to actions from the controllers and execute them.
@@ -694,16 +712,22 @@ class StrategyV2Base(StrategyPyBase):
         while True:
             try:
                 actions = await self.actions_queue.get()
+                controller_id = actions[0].controller_id if actions else None
+                self.logger().info(
+                    f"Processing {len(actions)} executor action(s)"
+                    + (f" for controller {controller_id}" if controller_id else "")
+                )
                 self.executor_orchestrator.execute_actions(actions)
                 self.update_executors_info()
-                controller_id = actions[0].controller_id
-                controller = self.controllers.get(controller_id)
-                controller.executors_info = self.get_executors_by_controller(controller_id)
-                controller.executors_update_event.set()
+                if controller_id and controller_id in self.controllers:
+                    controller = self.controllers[controller_id]
+                    controller.executors_info = self.get_executors_by_controller(controller_id)
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 self.logger().error(f"Error executing action: {e}", exc_info=True)
+            finally:
+                self._refresh_controller_executor_events()
 
     def update_executors_info(self):
         """
@@ -719,7 +743,7 @@ class StrategyV2Base(StrategyPyBase):
                 controller.executors_info = controller_report.get("executors", [])
                 controller.positions_held = controller_report.get("positions", [])
                 controller.performance_report = controller_report.get("performance", [])
-                controller.executors_update_event.set()
+            self._refresh_controller_executor_events()
         except Exception as e:
             self.logger().error(f"Error updating controller reports: {e}", exc_info=True)
 
