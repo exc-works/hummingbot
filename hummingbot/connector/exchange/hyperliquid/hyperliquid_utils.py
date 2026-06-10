@@ -6,10 +6,13 @@ from pydantic import ConfigDict, Field, SecretStr, field_validator
 from hummingbot.client.config.config_data_types import BaseConnectorConfigMap
 from hummingbot.core.data_type.trade_fee import TradeFeeSchema
 
-# Maker rebates(-0.02%) are paid out continuously on each trade directly to the trading wallet.(https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees)
+# Hyperliquid fee schedule (https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees)
+# Perpetual taker: 0.025% (2.5bps) — kept for reference, but XEMM uses spot.
+# Spot taker Tier 0 (<5M 14d volume): 0.070% (7bps). This is the correct value for
+# spot market orders used in XEMM hedging. Perp maker rebate does NOT apply to spot.
 DEFAULT_FEES = TradeFeeSchema(
     maker_percent_fee_decimal=Decimal("0"),
-    taker_percent_fee_decimal=Decimal("0.00025"),
+    taker_percent_fee_decimal=Decimal("0.0007"),  # spot Tier 0 taker = 7bps
     buy_percent_fee_deducted_from_returns=True
 )
 
