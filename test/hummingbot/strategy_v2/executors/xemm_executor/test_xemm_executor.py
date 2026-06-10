@@ -8,7 +8,13 @@ from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.core.data_type.common import OrderType, TradeType
 from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderState
 from hummingbot.core.data_type.order_candidate import OrderCandidate
-from hummingbot.core.event.events import BuyOrderCompletedEvent, BuyOrderCreatedEvent, MarketOrderFailureEvent
+from hummingbot.core.data_type.trade_fee import AddedToCostTradeFee
+from hummingbot.core.event.events import (
+    BuyOrderCompletedEvent,
+    BuyOrderCreatedEvent,
+    MarketOrderFailureEvent,
+    OrderFilledEvent,
+)
 from hummingbot.strategy.strategy_v2_base import StrategyV2Base
 from hummingbot.strategy_v2.executors.data_types import ConnectorPair
 from hummingbot.strategy_v2.executors.xemm_executor.data_types import XEMMExecutorConfig
@@ -81,32 +87,298 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
         self.assertFalse(self.executor.is_arbitrage_valid('ETH-USDT', 'BTC-USDT'))
         self.assertTrue(self.executor.is_arbitrage_valid('ETH-USDT', 'ETH-BTC'))
 
+    @staticmethod
+    def _mock_done_order(executed_base, avg_price, fees):
+        order = Mock(spec=TrackedOrder)
+        order.executed_amount_base = executed_base
+        order.average_executed_price = avg_price
+        order.cum_fees_quote = fees
+        order.is_done = True
+        return order
+
     def test_net_pnl_long(self):
         self.executor._status = RunnableStatus.TERMINATED
-        self.executor.maker_order = Mock(spec=TrackedOrder)
-        self.executor.taker_order = Mock(spec=TrackedOrder)
-        self.executor.maker_order.executed_amount_base = Decimal('1')
-        self.executor.taker_order.executed_amount_base = Decimal('1')
-        self.executor.maker_order.average_executed_price = Decimal('100')
-        self.executor.taker_order.average_executed_price = Decimal('200')
-        self.executor.maker_order.cum_fees_quote = Decimal('1')
-        self.executor.taker_order.cum_fees_quote = Decimal('1')
+        self.executor.maker_order = self._mock_done_order(Decimal('1'), Decimal('100'), Decimal('1'))
+        self.executor._maker_orders_by_id = {"OID-BUY-1": self.executor.maker_order}
+        self.executor.taker_orders = [self._mock_done_order(Decimal('1'), Decimal('200'), Decimal('1'))]
         self.assertEqual(self.executor.net_pnl_quote, Decimal('98'))
         self.assertEqual(self.executor.net_pnl_pct, Decimal('0.98'))
 
     def test_net_pnl_short(self):
         executor = XEMMExecutor(self.strategy, self.base_config_short, self.update_interval)
         executor._status = RunnableStatus.TERMINATED
-        executor.maker_order = Mock(spec=TrackedOrder)
-        executor.taker_order = Mock(spec=TrackedOrder)
-        executor.maker_order.executed_amount_base = Decimal('1')
-        executor.taker_order.executed_amount_base = Decimal('1')
-        executor.maker_order.average_executed_price = Decimal('100')
-        executor.taker_order.average_executed_price = Decimal('200')
-        executor.maker_order.cum_fees_quote = Decimal('1')
-        executor.taker_order.cum_fees_quote = Decimal('1')
+        executor.maker_order = self._mock_done_order(Decimal('1'), Decimal('100'), Decimal('1'))
+        executor._maker_orders_by_id = {"OID-BUY-1": executor.maker_order}
+        executor.taker_orders = [self._mock_done_order(Decimal('1'), Decimal('200'), Decimal('1'))]
         self.assertEqual(executor.net_pnl_quote, Decimal('98'))
         self.assertEqual(executor.net_pnl_pct, Decimal('0.98'))
+
+    @patch.object(XEMMExecutor, "get_in_flight_order", return_value=None)
+    def test_partial_fill_then_cancel_hedges_filled_amount(self, _in_flight_mock):
+        # maker 部分成交后因 profitability 撤单，已成交部分必须被对冲
+        self.executor._status = RunnableStatus.RUNNING
+        self.executor.maker_order = TrackedOrder(order_id="OID-BUY-1")
+        self.executor._maker_orders_by_id = {"OID-BUY-1": self.executor.maker_order}
+        fill_event = OrderFilledEvent(
+            timestamp=1234,
+            order_id="OID-BUY-1",
+            trading_pair="ETH-USDT",
+            trade_type=TradeType.BUY,
+            order_type=OrderType.LIMIT,
+            price=Decimal("100"),
+            amount=Decimal("40"),
+            trade_fee=AddedToCostTradeFee(flat_fees=[]),
+        )
+        self.executor.process_order_filled_event(1, MagicMock(), fill_event)
+        # 已提交对冲 40 的成交量，进入收尾
+        self.assertEqual(self.executor._maker_filled_base, Decimal("40"))
+        self.assertEqual(self.executor._submitted_hedge_base, Decimal("40"))
+        self.assertEqual(len(self.executor.taker_orders), 1)
+        self.assertEqual(self.executor.taker_orders[0].order_id, "OID-SELL-1")
+        self.assertEqual(self.executor._status, RunnableStatus.SHUTTING_DOWN)
+
+    @patch.object(XEMMExecutor, "get_in_flight_order", return_value=None)
+    def test_two_partial_fills_without_trade_id_hedge_both(self, _in_flight_mock):
+        # 两笔均无 exchange_trade_id（默认 ""）的 partial fill 不应被错误去重，应各自对冲
+        self.executor._status = RunnableStatus.RUNNING
+        self.executor.maker_order = TrackedOrder(order_id="OID-BUY-1")
+        self.executor._maker_orders_by_id = {"OID-BUY-1": self.executor.maker_order}
+
+        def make_fill(amount):
+            return OrderFilledEvent(
+                timestamp=1234,
+                order_id="OID-BUY-1",
+                trading_pair="ETH-USDT",
+                trade_type=TradeType.BUY,
+                order_type=OrderType.LIMIT,
+                price=Decimal("100"),
+                amount=amount,
+                trade_fee=AddedToCostTradeFee(flat_fees=[]),
+            )
+
+        self.executor.process_order_filled_event(1, MagicMock(), make_fill(Decimal("40")))
+        self.executor.process_order_filled_event(1, MagicMock(), make_fill(Decimal("30")))
+        self.assertEqual(self.executor._maker_filled_base, Decimal("70"))
+        self.assertEqual(self.executor._submitted_hedge_base, Decimal("70"))
+        self.assertEqual(len(self.executor.taker_orders), 2)
+        self.assertEqual(self.executor._taker_amounts.get("OID-SELL-1"), Decimal("40"))
+        self.assertEqual(self.executor._taker_amounts.get("OID-SELL-2"), Decimal("30"))
+
+    @patch.object(XEMMExecutor, "get_in_flight_order", return_value=None)
+    def test_cancel_race_fill_after_clear_still_hedges(self, _in_flight_mock):
+        # 撤单竞态：撤单清空 maker_order 后才收到成交回报，仍应对冲
+        self.executor._status = RunnableStatus.RUNNING
+        self.executor._maker_orders_by_id = {"OID-BUY-1": TrackedOrder(order_id="OID-BUY-1")}
+        self.executor.maker_order = None  # 模拟撤单已清空引用
+        fill_event = OrderFilledEvent(
+            timestamp=1234,
+            order_id="OID-BUY-1",
+            trading_pair="ETH-USDT",
+            trade_type=TradeType.BUY,
+            order_type=OrderType.LIMIT,
+            price=Decimal("100"),
+            amount=Decimal("25"),
+            trade_fee=AddedToCostTradeFee(flat_fees=[]),
+        )
+        self.executor.process_order_filled_event(1, MagicMock(), fill_event)
+        self.assertEqual(self.executor._submitted_hedge_base, Decimal("25"))
+        self.assertEqual(len(self.executor.taker_orders), 1)
+
+    @patch.object(XEMMExecutor, "get_in_flight_order", return_value=None)
+    def test_completed_event_before_fill_event_does_not_double_hedge(self, _in_flight_mock):
+        # 事件乱序：completed 先到，fill 后到，不能重复对冲
+        self.executor._status = RunnableStatus.RUNNING
+        self.executor.maker_order = TrackedOrder(order_id="OID-BUY-1")
+        self.executor._maker_orders_by_id = {"OID-BUY-1": self.executor.maker_order}
+        completed_event = BuyOrderCompletedEvent(
+            timestamp=1234,
+            order_id="OID-BUY-1",
+            base_asset="ETH",
+            quote_asset="USDT",
+            base_asset_amount=Decimal("100"),
+            quote_asset_amount=Decimal("10000"),
+            order_type=OrderType.LIMIT,
+        )
+        self.executor.process_order_completed_event(1, MagicMock(), completed_event)
+        # completed 触发一次对冲 100
+        self.assertEqual(self.executor._maker_filled_base, Decimal("100"))
+        self.assertEqual(self.executor._submitted_hedge_base, Decimal("100"))
+        self.assertEqual(len(self.executor.taker_orders), 1)
+        # 随后 fill 事件到达（同一笔成交），不得再次对冲
+        fill_event = OrderFilledEvent(
+            timestamp=1234,
+            order_id="OID-BUY-1",
+            trading_pair="ETH-USDT",
+            trade_type=TradeType.BUY,
+            order_type=OrderType.LIMIT,
+            price=Decimal("100"),
+            amount=Decimal("100"),
+            trade_fee=AddedToCostTradeFee(flat_fees=[]),
+        )
+        self.executor.process_order_filled_event(1, MagicMock(), fill_event)
+        self.assertEqual(self.executor._maker_filled_base, Decimal("100"))
+        self.assertEqual(self.executor._submitted_hedge_base, Decimal("100"))
+        self.assertEqual(len(self.executor.taker_orders), 1)
+
+    def test_taker_partial_fill_then_failure_retries_only_unfilled_delta(self):
+        # taker 市价单部分成交 60 后失败，只应补未成交的 40
+        self.executor._maker_filled_base = Decimal("100")
+        self.executor._maker_filled_floor = Decimal("100")
+        self.executor._submitted_hedge_base = Decimal("100")
+        taker = TrackedOrder(order_id="OID-SELL-0")
+        taker_in_flight = Mock()
+        taker_in_flight.executed_amount_base = Decimal("60")
+        taker_in_flight.is_done = True
+        taker.order = taker_in_flight
+        self.executor.taker_orders = [taker]
+        self.executor._taker_order_ids = {"OID-SELL-0"}
+        self.executor._taker_amounts = {"OID-SELL-0": Decimal("100")}
+        failure_event = MarketOrderFailureEvent(
+            timestamp=1234,
+            order_id="OID-SELL-0",
+            order_type=OrderType.MARKET,
+        )
+        # _update_tracked_order_with_order_id 会调 get_in_flight_order；
+        # 让它返回同一个 in-flight mock，保持 executed_amount_base=60 不变
+        with patch.object(self.executor, "get_in_flight_order", return_value=taker_in_flight):
+            self.executor.process_order_failed_event(1, MagicMock(), failure_event)
+        # 只重下未成交的 40
+        self.assertEqual(self.executor._taker_amounts.get("OID-SELL-1"), Decimal("40"))
+        self.assertEqual(self.executor.taker_order.order_id, "OID-SELL-1")
+        self.assertEqual(self.executor._submitted_hedge_base, Decimal("100"))
+        # 失败单标记完结，实际对冲量 = 已成交 60（失败单）
+        self.assertIn("OID-SELL-0", self.executor._failed_taker_ids)
+        self.assertEqual(self.executor._actual_hedged_base(), Decimal("60"))
+
+    @patch.object(XEMMExecutor, "get_in_flight_order", return_value=None)
+    def test_duplicate_taker_failure_event_does_not_double_retry(self, _in_flight_mock):
+        # 同一个 taker failure 事件重复到达，只应补一笔单（幂等）
+        self.executor._maker_filled_base = Decimal("100")
+        self.executor._submitted_hedge_base = Decimal("100")
+        self.executor.taker_orders = [TrackedOrder(order_id="OID-SELL-0")]
+        self.executor._taker_order_ids = {"OID-SELL-0"}
+        self.executor._taker_amounts = {"OID-SELL-0": Decimal("100")}
+        failure_event = MarketOrderFailureEvent(
+            timestamp=1234,
+            order_id="OID-SELL-0",
+            order_type=OrderType.MARKET,
+        )
+        self.executor.process_order_failed_event(1, MagicMock(), failure_event)
+        self.executor.process_order_failed_event(1, MagicMock(), failure_event)
+        # 第二次失败事件被幂等忽略：只生成一笔 retry，submitted 不被二次回退
+        retry_orders = [t for t in self.executor.taker_orders if t.order_id != "OID-SELL-0"]
+        self.assertEqual(len(retry_orders), 1)
+        self.assertEqual(retry_orders[0].order_id, "OID-SELL-1")
+        self.assertEqual(self.executor._submitted_hedge_base, Decimal("100"))
+
+    @patch.object(XEMMExecutor, "get_in_flight_order")
+    def test_taker_failure_with_unrefreshed_tracked_reads_actual_fill(self, in_flight_mock):
+        # taker 失败时 tracked.order 仍为 None（created 事件乱序），
+        # failure 分支需先调 _update_tracked_order_with_order_id 才能正确读到已成交量（60），
+        # 从而只补 40，而非按全量 100 重试
+        self.executor._maker_filled_base = Decimal("100")
+        self.executor._submitted_hedge_base = Decimal("100")
+        taker = TrackedOrder(order_id="OID-SELL-0")
+        # order 尚未挂上（模拟 created 事件缺失）
+        self.assertEqual(taker.order, None)
+        self.executor.taker_orders = [taker]
+        self.executor._taker_order_ids = {"OID-SELL-0"}
+        self.executor._taker_amounts = {"OID-SELL-0": Decimal("100")}
+
+        # get_in_flight_order 返回已部分成交 60 的 in-flight order
+        in_flight = Mock()
+        in_flight.executed_amount_base = Decimal("60")
+        in_flight_mock.return_value = in_flight
+
+        failure_event = MarketOrderFailureEvent(
+            timestamp=1234,
+            order_id="OID-SELL-0",
+            order_type=OrderType.MARKET,
+        )
+        self.executor.process_order_failed_event(1, MagicMock(), failure_event)
+        # tracked 已被刷新，filled 读到 60，只补未成交的 40
+        self.assertEqual(self.executor._taker_amounts.get("OID-SELL-1"), Decimal("40"))
+        self.assertEqual(self.executor.taker_order.order_id, "OID-SELL-1")
+        self.assertEqual(self.executor._submitted_hedge_base, Decimal("100"))
+
+    @patch.object(XEMMExecutor, "get_in_flight_order")
+    def test_fallback_key_collision_floor_prevents_missed_hedge(self, in_flight_mock):
+        # 无 exchange_trade_id 时两笔完全相同的 fill（同 ts/price/amount）fallback key 碰撞：
+        # 第二笔命中 dedup 后直接 return，不能再靠 fills_sum 计入。
+        # floor 必须在 dedup return 之前更新，确保第二笔 fill 时 floor 已抬升到真实累计量。
+        # get_in_flight_order side_effect 模拟真实顺序：第一笔时 tracked 累计 35，第二笔时累计 70
+        self.executor._status = RunnableStatus.RUNNING
+        maker_tracked = TrackedOrder(order_id="OID-BUY-1")
+        self.executor.maker_order = maker_tracked
+        self.executor._maker_orders_by_id = {"OID-BUY-1": maker_tracked}
+
+        in_flight_35 = Mock()
+        in_flight_35.executed_amount_base = Decimal("35")
+        in_flight_70 = Mock()
+        in_flight_70.executed_amount_base = Decimal("70")
+        # 每次 _update_tracked_order_with_order_id 调一次 get_in_flight_order
+        in_flight_mock.side_effect = [in_flight_35, in_flight_70]
+
+        def make_fill():
+            return OrderFilledEvent(
+                timestamp=1234,        # 相同 ts
+                order_id="OID-BUY-1",
+                trading_pair="ETH-USDT",
+                trade_type=TradeType.BUY,
+                order_type=OrderType.LIMIT,
+                price=Decimal("100"),  # 相同 price
+                amount=Decimal("35"),  # 相同 amount → fallback key 碰撞
+                trade_fee=AddedToCostTradeFee(flat_fees=[]),
+            )
+
+        self.executor.process_order_filled_event(1, MagicMock(), make_fill())
+        # 第一笔：floor 由 tracked(35) 抬升，fills_sum=35，_maker_filled_base = max(35,35) = 35
+        self.assertEqual(self.executor._maker_filled_base, Decimal("35"))
+
+        self.executor.process_order_filled_event(1, MagicMock(), make_fill())
+        # 第二笔：dedup return 前 floor 由 tracked(70) 抬升，_maker_filled_base = max(35,70) = 70
+        # 虽然 fills_sum 仍是 35，floor 兜住了真实累计量
+        self.assertEqual(self.executor._maker_filled_base, Decimal("70"))
+        self.assertEqual(self.executor._submitted_hedge_base, Decimal("70"))
+
+    @patch.object(XEMMExecutor, "get_in_flight_order")
+    def test_late_maker_fill_after_cancel_clear_preserves_pnl(self, in_flight_mock):
+        # 撤单时 filled==0 清空 maker_order，随后迟到的 maker fill 仍应计入 PnL/fee
+        self.executor._status = RunnableStatus.RUNNING
+        retained_maker = TrackedOrder(order_id="OID-BUY-1")
+        self.executor._maker_orders_by_id = {"OID-BUY-1": retained_maker}
+        self.executor.maker_order = None  # 撤单已清空当前引用
+
+        # 迟到的 maker fill：_update_tracked_order 会给 retained_maker 挂上真实 InFlightOrder
+        maker_in_flight = InFlightOrder(
+            client_order_id="OID-BUY-1",
+            creation_timestamp=1234,
+            trading_pair="ETH-USDT",
+            order_type=OrderType.LIMIT,
+            trade_type=TradeType.BUY,
+            amount=Decimal("1"),
+            price=Decimal("100"),
+            initial_state=OrderState.FILLED,
+        )
+        maker_in_flight.executed_amount_base = Decimal("1")
+        in_flight_mock.return_value = maker_in_flight
+        fill_event = OrderFilledEvent(
+            timestamp=1234,
+            order_id="OID-BUY-1",
+            trading_pair="ETH-USDT",
+            trade_type=TradeType.BUY,
+            order_type=OrderType.LIMIT,
+            price=Decimal("100"),
+            amount=Decimal("1"),
+            trade_fee=AddedToCostTradeFee(flat_fees=[]),
+        )
+        self.executor.process_order_filled_event(1, MagicMock(), fill_event)
+        # maker 仍被对冲
+        self.assertEqual(self.executor._maker_filled_base, Decimal("1"))
+        self.assertEqual(len(self.executor.taker_orders), 1)
+        # retained_maker 已被刷新出 tracked order（用于 PnL/fee），不再因 maker_order=None 而丢失
+        self.assertIsNotNone(retained_maker.order)
+        self.assertEqual(retained_maker.executed_amount_base, Decimal("1"))
 
     @patch.object(XEMMExecutor, 'get_trading_rules')
     @patch.object(XEMMExecutor, 'adjust_order_candidates')
@@ -178,6 +450,8 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
         self.executor._status = RunnableStatus.RUNNING
         self.executor.maker_order = Mock(spec=TrackedOrder)
         self.executor.maker_order.order_id = "OID-BUY-1"
+        self.executor.maker_order.is_done = False
+        self.executor.maker_order.executed_amount_base = Decimal("0")
         self.executor.maker_order.order = InFlightOrder(
             creation_timestamp=1234,
             trading_pair="ETH-USDT",
@@ -201,6 +475,8 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
         self.executor._status = RunnableStatus.RUNNING
         self.executor.maker_order = Mock(spec=TrackedOrder)
         self.executor.maker_order.order_id = "OID-BUY-1"
+        self.executor.maker_order.is_done = False
+        self.executor.maker_order.executed_amount_base = Decimal("0")
         self.executor.maker_order.order = InFlightOrder(
             creation_timestamp=1234,
             trading_pair="ETH-USDT",
@@ -217,9 +493,13 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
 
     async def test_control_task_shut_down_process(self):
         self.executor.maker_order = Mock(spec=TrackedOrder)
-        self.executor.maker_order.is_done = True
-        self.executor.taker_order = Mock(spec=TrackedOrder)
-        self.executor.taker_order.is_done = True
+        self.executor.maker_order.order = None  # 已不在挂单
+        taker = Mock(spec=TrackedOrder)
+        taker.is_done = True
+        taker.executed_amount_base = Decimal("1")  # 实际已对冲 1
+        self.executor.taker_orders = [taker]
+        self.executor._maker_filled_base = Decimal("1")
+        self.executor._submitted_hedge_base = Decimal("1")
         self.executor._status = RunnableStatus.SHUTTING_DOWN
         await self.executor.control_task()
         self.assertEqual(self.executor._status, RunnableStatus.TERMINATED)
@@ -258,7 +538,9 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
         ]
 
         self.executor.maker_order = TrackedOrder(order_id="OID-BUY-1")
-        self.executor.taker_order = TrackedOrder(order_id="OID-SELL-1")
+        self.executor._maker_orders_by_id = {"OID-BUY-1": self.executor.maker_order}
+        taker_tracked = TrackedOrder(order_id="OID-SELL-1")
+        self.executor.taker_orders = [taker_tracked]
         buy_order_created_event = BuyOrderCreatedEvent(
             timestamp=1234,
             type=OrderType.LIMIT,
@@ -278,15 +560,17 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
             price=Decimal("100"),
         )
         self.assertEqual(self.executor.maker_order.order, None)
-        self.assertEqual(self.executor.taker_order.order, None)
+        self.assertEqual(taker_tracked.order, None)
         self.executor.process_order_created_event(1, MagicMock(), buy_order_created_event)
         self.assertEqual(self.executor.maker_order.order.client_order_id, "OID-BUY-1")
         self.executor.process_order_created_event(1, MagicMock(), sell_order_created_event)
-        self.assertEqual(self.executor.taker_order.order.client_order_id, "OID-SELL-1")
+        self.assertEqual(taker_tracked.order.client_order_id, "OID-SELL-1")
 
-    def test_process_order_completed_event(self):
+    @patch.object(XEMMExecutor, "get_in_flight_order", return_value=None)
+    def test_process_order_completed_event(self, _in_flight_mock):
         self.executor._status = RunnableStatus.RUNNING
         self.executor.maker_order = TrackedOrder(order_id="OID-BUY-1")
+        self.executor._maker_orders_by_id = {"OID-BUY-1": self.executor.maker_order}
         self.assertEqual(self.executor.taker_order, None)
         buy_order_created_event = BuyOrderCompletedEvent(
             base_asset="ETH",
@@ -299,9 +583,12 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
         )
         self.executor.process_order_completed_event(1, MagicMock(), buy_order_created_event)
         self.assertEqual(self.executor.status, RunnableStatus.SHUTTING_DOWN)
-        self.assertEqual(self.executor.taker_order.order_id, "OID-SELL-1")
+        self.assertEqual(len(self.executor.taker_orders), 1)
+        self.assertEqual(self.executor.taker_orders[0].order_id, "OID-SELL-1")
+        self.assertEqual(self.executor._submitted_hedge_base, Decimal("100"))
 
-    def test_process_order_failed_event(self):
+    @patch.object(XEMMExecutor, "get_in_flight_order", return_value=None)
+    def test_process_order_failed_event(self, _in_flight_mock):
         self.executor.maker_order = TrackedOrder(order_id="OID-BUY-1")
         maker_failure_event = MarketOrderFailureEvent(
             timestamp=1234,
@@ -311,14 +598,20 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
         self.executor.process_order_failed_event(1, MagicMock(), maker_failure_event)
         self.assertEqual(self.executor.maker_order, None)
 
-        self.executor.taker_order = TrackedOrder(order_id="OID-SELL-0")
+        self.executor._maker_filled_base = Decimal("100")
+        self.executor._submitted_hedge_base = Decimal("100")
+        self.executor.taker_orders = [TrackedOrder(order_id="OID-SELL-0")]
+        self.executor._taker_order_ids = {"OID-SELL-0"}
+        self.executor._taker_amounts = {"OID-SELL-0": Decimal("100")}
         taker_failure_event = MarketOrderFailureEvent(
             timestamp=1234,
             order_id="OID-SELL-0",
             order_type=OrderType.MARKET,
         )
         self.executor.process_order_failed_event(1, MagicMock(), taker_failure_event)
+        # 失败单完全未成交，按原量 100 重下
         self.assertEqual(self.executor.taker_order.order_id, "OID-SELL-1")
+        self.assertEqual(self.executor._taker_amounts.get("OID-SELL-1"), Decimal("100"))
 
     def test_get_custom_info(self):
         self.assertEqual(self.executor.get_custom_info(), {'maker_connector': 'binance',

@@ -129,6 +129,8 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
 
         maker_base_bal = Decimal(str(maker_connector.get_balance(maker_base)))
         taker_base_bal = Decimal(str(taker_connector.get_balance(taker_base)))
+        maker_base_avail = Decimal(str(maker_connector.get_available_balance(maker_base)))
+        taker_base_avail = Decimal(str(taker_connector.get_available_balance(taker_base)))
         maker_quote_avail = Decimal(str(maker_connector.get_available_balance(maker_quote)))
         maker_quote_total = Decimal(str(maker_connector.get_balance(maker_quote)))
         taker_quote_avail = Decimal(str(taker_connector.get_available_balance(taker_quote)))
@@ -153,7 +155,9 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
 
         self.processed_data = {
             "maker_base_bal": maker_base_bal,
+            "maker_base_avail": maker_base_avail,
             "taker_base_bal": taker_base_bal,
+            "taker_base_avail": taker_base_avail,
             "taker_base_in_maker_units": taker_base_in_maker_units,
             "maker_diff": maker_diff,
             "taker_diff": taker_diff,
@@ -241,7 +245,7 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
         if taker_diff > drift and maker_diff <= -drift:
             sell_taker = self._sell_plan(
                 excess_maker_units=self._excess_beyond_band(taker_diff, drift),
-                available_base=self.processed_data["taker_base_bal"],
+                available_base=self.processed_data["taker_base_avail"],
                 base_rate=self.processed_data["base_rate"],
                 connector=self.config.taker_connector,
                 trading_pair=self.config.taker_trading_pair,
@@ -261,7 +265,7 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
         if maker_diff > drift and taker_diff <= -drift:
             sell_maker = self._sell_plan(
                 excess_maker_units=self._excess_beyond_band(maker_diff, drift),
-                available_base=self.processed_data["maker_base_bal"],
+                available_base=self.processed_data["maker_base_avail"],
                 base_rate=Decimal("1"),
                 connector=self.config.maker_connector,
                 trading_pair=self.config.maker_trading_pair,
@@ -279,14 +283,30 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
             return self._pick_cheaper(sell_maker, buy_taker)
 
         if maker_diff <= -drift:
-            return self._buy_plan(
-                deficit_maker_units=self._deficit_beyond_band(maker_diff, drift),
+            maker_deficit = self._deficit_beyond_band(maker_diff, drift)
+            buy_maker = self._buy_plan(
+                deficit_maker_units=maker_deficit,
                 quote_in_base=self.processed_data["maker_quote_in_base"],
                 connector=self.config.maker_connector,
                 trading_pair=self.config.maker_trading_pair,
                 min_amt=min_amt,
                 side_label="maker",
             )
+            if taker_diff > min_amt:
+                sell_taker = self._sell_plan(
+                    excess_maker_units=min(maker_deficit, taker_diff),
+                    available_base=self.processed_data["taker_base_avail"],
+                    base_rate=self.processed_data["base_rate"],
+                    connector=self.config.taker_connector,
+                    trading_pair=self.config.taker_trading_pair,
+                    min_amt=min_amt,
+                    side_label="taker",
+                )
+                plan = self._pick_cheaper(sell_taker, buy_maker)
+                if plan is not None:
+                    return plan
+            if buy_maker is not None:
+                return buy_maker
 
         if taker_diff <= -drift:
             return self._buy_plan(
@@ -301,7 +321,7 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
         if maker_diff > drift:
             return self._sell_plan(
                 excess_maker_units=self._excess_beyond_band(maker_diff, drift),
-                available_base=self.processed_data["maker_base_bal"],
+                available_base=self.processed_data["maker_base_avail"],
                 base_rate=Decimal("1"),
                 connector=self.config.maker_connector,
                 trading_pair=self.config.maker_trading_pair,
@@ -312,7 +332,7 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
         if taker_diff > drift:
             return self._sell_plan(
                 excess_maker_units=self._excess_beyond_band(taker_diff, drift),
-                available_base=self.processed_data["taker_base_bal"],
+                available_base=self.processed_data["taker_base_avail"],
                 base_rate=self.processed_data["base_rate"],
                 connector=self.config.taker_connector,
                 trading_pair=self.config.taker_trading_pair,
@@ -402,8 +422,8 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
         return [
             f"Cross-exchange rebalancer [{self.config.id}]",
             f"  Pair: {self.config.maker_trading_pair} / {self.config.taker_trading_pair}",
-            f"  Maker base: {d['maker_base_bal']} (diff {d['maker_diff']:+.6f})",
-            f"  Taker base: {d['taker_base_bal']} (diff {d['taker_diff']:+.6f})",
+            f"  Maker base: {d['maker_base_bal']} avail {d['maker_base_avail']} (diff {d['maker_diff']:+.6f})",
+            f"  Taker base: {d['taker_base_bal']} avail {d['taker_base_avail']} (diff {d['taker_diff']:+.6f})",
             f"  Quote buy power: {d['maker_quote_in_base']:.4f} base "
             f"(USDT avail/total {d.get('maker_quote_avail', '?')}/{d.get('maker_quote_total', '?')})",
             f"  Target: {self.config.target_base_per_exchange} | drift: {self.config.drift_threshold_base} | "

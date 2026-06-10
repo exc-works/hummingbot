@@ -11,6 +11,7 @@ from hummingbot.core.event.events import (
     BuyOrderCompletedEvent,
     BuyOrderCreatedEvent,
     MarketOrderFailureEvent,
+    OrderFilledEvent,
     SellOrderCompletedEvent,
     SellOrderCreatedEvent,
 )
@@ -98,6 +99,23 @@ class XEMMExecutor(ExecutorBase):
         self._current_trade_profitability = Decimal("0")
         self.maker_order = None
         self.taker_order = None
+        self.taker_orders = []
+        # 保留所有曾创建的 maker TrackedOrder（按 order_id），即使撤单清空了 self.maker_order
+        # 引用，迟到的成交仍能刷新 tracked 并正确计入 PnL/fee。
+        self._maker_orders_by_id = {}
+        self._taker_order_ids = set()
+        self._failed_taker_ids = set()
+        self._seen_trade_ids = set()
+        # maker 成交量取两路来源的 max，避免 completed 与 fill 事件重复累加：
+        #   _maker_fills_sum   —— OrderFilledEvent 按 trade_id 去重后的累计成交
+        #   _maker_filled_floor —— completed 事件 / tracked 累计成交给出的总量下限
+        self._maker_fills_sum = Decimal("0")
+        self._maker_filled_floor = Decimal("0")
+        self._maker_filled_base = Decimal("0")
+        # 已『提交』的对冲量（下单去重用），区别于『实际成交』的对冲量
+        self._submitted_hedge_base = Decimal("0")
+        self._taker_amounts = {}
+        self._hedging = False
         self.failed_orders = []
         super().__init__(strategy=strategy,
                          connectors=[config.buying_market.connector_name, config.selling_market.connector_name],
@@ -222,16 +240,23 @@ class XEMMExecutor(ExecutorBase):
             amount=self.config.order_amount,
             price=self._maker_target_price)
         self.maker_order = TrackedOrder(order_id=order_id)
+        self._maker_orders_by_id[order_id] = self.maker_order
         self.logger().info(f"Created maker order {order_id} at price {self._maker_target_price}.")
 
     async def control_shutdown_process(self):
-        maker_done = self.maker_order is None or self.maker_order.is_done
-        taker_done = self.taker_order is None or self.taker_order.is_done
-        if maker_done and taker_done:
-            if (self.maker_order and self.maker_order.is_done
-                    and self.taker_order and self.taker_order.is_done):
+        maker_open = bool(self.maker_order and self.maker_order.order and self.maker_order.order.is_open)
+        if not maker_open:
+            # maker 已不在挂单，兜底补齐尚未『提交』的对冲量
+            self._hedge_pending()
+        takers_done = all(
+            (t.is_done or t.order_id in self._failed_taker_ids) for t in self.taker_orders
+        ) if self.taker_orders else True
+        # 用『实际成交』量判断是否真正对冲完成，而非『已提交』量
+        fully_hedged = self._actual_hedged_base() >= self._maker_filled_base
+        if not maker_open and fully_hedged and takers_done:
+            if self._maker_filled_base > Decimal("0") and self.taker_orders:
                 self.close_type = CloseType.COMPLETED
-            self.logger().info("Both orders are done, executor terminated.")
+            self.logger().info("Maker filled amount fully hedged, executor terminated.")
             self.stop()
 
     async def control_update_maker_order(self):
@@ -240,14 +265,52 @@ class XEMMExecutor(ExecutorBase):
         await self.update_current_trade_profitability()
         if self.maker_order is None or self.maker_order.is_done:
             return
-        if self._current_trade_profitability - self._tx_cost_pct < self.config.min_profitability:
-            self.logger().info(f"Order {self.maker_order.order_id} profitability {self._current_trade_profitability - self._tx_cost_pct} is below minimum profitability {self.config.min_profitability}. Cancelling order.")
+        net_profitability = self._current_trade_profitability - self._tx_cost_pct
+        if net_profitability < self.config.min_profitability:
+            self.logger().info(f"Order {self.maker_order.order_id} profitability {net_profitability} is below minimum profitability {self.config.min_profitability}. Cancelling order.")
             self._strategy.cancel(self.maker_connector, self.maker_trading_pair, self.maker_order.order_id)
-            self.maker_order = None
-        elif self._current_trade_profitability - self._tx_cost_pct > self.config.max_profitability:
-            self.logger().info(f"Order {self.maker_order.order_id} profitability {self._current_trade_profitability - self._tx_cost_pct} is above maximum profitability {self.config.max_profitability}. Cancelling order.")
+            self._handle_maker_cancel()
+        elif net_profitability > self.config.max_profitability:
+            self.logger().info(f"Order {self.maker_order.order_id} profitability {net_profitability} is above maximum profitability {self.config.max_profitability}. Cancelling order.")
             self._strategy.cancel(self.maker_connector, self.maker_trading_pair, self.maker_order.order_id)
+            self._handle_maker_cancel()
+
+    def _handle_maker_cancel(self):
+        """撤单后处理：若已有成交（或已进入对冲）则对冲已成交量并收尾，否则清空以便刷新重挂。"""
+        filled = self.maker_order.executed_amount_base if self.maker_order else Decimal("0")
+        if filled > Decimal("0") or self._maker_filled_base > Decimal("0") or self._hedging:
+            # 以 tracked 累计成交作为下限并入 floor（与 fill 事件取 max，不累加）
+            self._maker_filled_floor = max(self._maker_filled_floor, filled)
+            self._recompute_maker_filled()
+            self._enter_hedging()
+            self._hedge_pending()
+        else:
             self.maker_order = None
+
+    def _recompute_maker_filled(self):
+        self._maker_filled_base = max(self._maker_fills_sum, self._maker_filled_floor)
+
+    def _actual_hedged_base(self) -> Decimal:
+        """实际已对冲量 = 所有 taker 单累计成交量（含失败单已成交部分）。单一可信来源。"""
+        return sum((t.executed_amount_base for t in self.taker_orders), Decimal("0"))
+
+    def _enter_hedging(self):
+        """标记进入对冲收尾：停止刷新挂单，取消仍在挂的 maker，转入 SHUTTING_DOWN。"""
+        if self._hedging:
+            return
+        self._hedging = True
+        if self.maker_order and self.maker_order.order and self.maker_order.order.is_open:
+            self.logger().info(f"Cancelling remaining maker order {self.maker_order.order_id} before hedging.")
+            self._strategy.cancel(self.maker_connector, self.maker_trading_pair, self.maker_order.order_id)
+        self._status = RunnableStatus.SHUTTING_DOWN
+
+    def _hedge_pending(self):
+        """对 maker 已成交但尚未『提交』对冲的增量下 taker 单。
+        以 _submitted_hedge_base 去重，避免对同一笔成交重复下单。"""
+        unhedged = self._maker_filled_base - self._submitted_hedge_base
+        if unhedged > Decimal("0"):
+            self.place_taker_order(unhedged)
+            self._submitted_hedge_base += unhedged
 
     async def update_current_trade_profitability(self):
         trade_profitability = Decimal("0")
@@ -274,40 +337,113 @@ class XEMMExecutor(ExecutorBase):
                                     event_tag: int,
                                     market: ConnectorBase,
                                     event: Union[BuyOrderCreatedEvent, SellOrderCreatedEvent]):
-        if self.maker_order and event.order_id == self.maker_order.order_id:
+        if event.order_id in self._maker_orders_by_id:
             self.logger().info(f"Maker order {event.order_id} created.")
-            self.maker_order.order = self.get_in_flight_order(self.maker_connector, event.order_id)
-        elif self.taker_order and event.order_id == self.taker_order.order_id:
-            self.logger().info(f"Taker order {event.order_id} created.")
-            self.taker_order.order = self.get_in_flight_order(self.taker_connector, event.order_id)
+        self._update_tracked_order_with_order_id(event.order_id)
+
+    def _update_tracked_order_with_order_id(self, order_id: str):
+        """用最新的 in-flight order 刷新对应的 TrackedOrder，保证 executed_amount_base
+        等读数实时可靠。在 created/filled/completed 事件中都调用，避免 created 缺失或
+        市价单瞬间成交时 tracked.order 仍为 None，导致 _actual_hedged_base() 误判为 0。
+        通过 _maker_orders_by_id 查找，撤单清空 self.maker_order 后迟到的成交也能刷新。"""
+        maker_tracked = self._maker_orders_by_id.get(order_id)
+        if maker_tracked is not None:
+            maker_tracked.order = self.get_in_flight_order(self.maker_connector, order_id)
+            return
+        for tracked in self.taker_orders:
+            if tracked.order_id == order_id:
+                tracked.order = self.get_in_flight_order(self.taker_connector, order_id)
+                break
 
     def process_order_completed_event(self,
                                       event_tag: int,
                                       market: ConnectorBase,
                                       event: Union[BuyOrderCompletedEvent, SellOrderCompletedEvent]):
-        if self.maker_order and event.order_id == self.maker_order.order_id:
-            self.logger().info(f"Maker order {event.order_id} completed. Executing taker order.")
-            self.place_taker_order()
-            self._status = RunnableStatus.SHUTTING_DOWN
+        self._update_tracked_order_with_order_id(event.order_id)
+        if event.order_id in self._maker_orders_by_id:
+            self.logger().info(f"Maker order {event.order_id} completed. Reconciling filled amount.")
+            # completed 只抬升『下限』，与 fill 事件取 max，绝不累加，避免重复对冲
+            self._maker_filled_floor = max(self._maker_filled_floor, event.base_asset_amount)
+            self._recompute_maker_filled()
+            self._enter_hedging()
+            self._hedge_pending()
 
-    def place_taker_order(self):
+    def process_order_filled_event(self,
+                                   event_tag: int,
+                                   market: ConnectorBase,
+                                   event: OrderFilledEvent):
+        # 按 trade_id 去重，防止同一笔成交被重复计入（包括 completed 之后再到的 fill）。
+        # exchange_trade_id 默认是空字符串 ""（非 None），必须用真值判断，否则所有无
+        # trade_id 的成交会共用同一个 key 而被错误去重。并入 order_id 维度避免跨单碰撞。
+        exchange_trade_id = getattr(event, "exchange_trade_id", None)
+        if exchange_trade_id:
+            dedup_key = f"{event.order_id}:{exchange_trade_id}"
+        else:
+            dedup_key = f"{event.order_id}:{event.timestamp}:{event.price}:{event.amount}"
+        self._update_tracked_order_with_order_id(event.order_id)
+        is_maker = event.order_id in self._maker_orders_by_id
+        # P3 防御：无 exchange_trade_id 时 fallback key 有碰撞概率（同 ts/price/amount 两笔
+        # 相同 fill）。必须在 dedup return 之前用 tracked 累计成交量抬升 floor，否则第二笔 fill
+        # 命中 dedup 后直接 return，floor 永远停在第一笔的值，导致少对冲。
+        if is_maker and not exchange_trade_id:
+            maker_tracked = self._maker_orders_by_id.get(event.order_id)
+            if maker_tracked is not None:
+                self._maker_filled_floor = max(
+                    self._maker_filled_floor, maker_tracked.executed_amount_base
+                )
+                self._recompute_maker_filled()
+        if dedup_key in self._seen_trade_ids:
+            # dedup 命中：fills_sum 不能再 +=，但 floor 已更新，需补充触发对冲
+            if is_maker:
+                self._enter_hedging()
+                self._hedge_pending()
+            return
+        self._seen_trade_ids.add(dedup_key)
+        # 只有 maker 成交需触发对冲；taker 成交计入实际对冲量（由 _actual_hedged_base 派生）。
+        # 用 _maker_orders_by_id 匹配，避免撤单竞态下 maker_order 引用被清空而漏对冲。
+        if is_maker:
+            self._maker_fills_sum += event.amount
+            self._recompute_maker_filled()
+            self._enter_hedging()
+            self._hedge_pending()
+
+    def place_taker_order(self, amount: Decimal):
         taker_order_id = self.place_order(
             connector_name=self.taker_connector,
             trading_pair=self.taker_trading_pair,
             order_type=OrderType.MARKET,
             side=self.taker_order_side,
-            amount=self.config.order_amount)
-        self.taker_order = TrackedOrder(order_id=taker_order_id)
+            amount=amount)
+        tracked = TrackedOrder(order_id=taker_order_id)
+        self.taker_orders.append(tracked)
+        self.taker_order = tracked
+        self._taker_order_ids.add(taker_order_id)
+        self._taker_amounts[taker_order_id] = amount
+        self.logger().info(f"Placed taker hedge order {taker_order_id} for amount {amount}.")
 
     def process_order_failed_event(self, _, market, event: MarketOrderFailureEvent):
         if self.maker_order and self.maker_order.order_id == event.order_id:
             self.failed_orders.append(self.maker_order)
             self.maker_order = None
             self._current_retries += 1
-        elif self.taker_order and self.taker_order.order_id == event.order_id:
-            self.failed_orders.append(self.taker_order)
+        elif event.order_id in self._taker_order_ids:
+            # 幂等保护：同一 failure 事件可能重复到达，已处理过的失败单直接返回，避免重复补单
+            if event.order_id in self._failed_taker_ids:
+                return
+            # 刷新 tracked order，确保读取到真实成交量，避免 created/fill 事件乱序时把已部分
+            # 成交量当成 0，进而按全量重试造成过度对冲。
+            self._update_tracked_order_with_order_id(event.order_id)
+            # taker 对冲失败：只补『未成交』部分，已成交部分仍计入 _actual_hedged_base 与 pnl。
+            # 保留该 tracked 在 taker_orders 中（用于统计已成交部分），并标记为已完结。
+            original = self._taker_amounts.pop(event.order_id, self.config.order_amount)
+            tracked = next((t for t in self.taker_orders if t.order_id == event.order_id), None)
+            filled = tracked.executed_amount_base if tracked is not None else Decimal("0")
+            unfilled = max(original - filled, Decimal("0"))
+            self._failed_taker_ids.add(event.order_id)
+            # 回退未成交部分的『已提交』量，使 _hedge_pending 只补未成交的差额
+            self._submitted_hedge_base -= unfilled
             self._current_retries += 1
-            self.place_taker_order()
+            self._hedge_pending()
 
     def get_custom_info(self) -> Dict:
         # Since we can't make this method async, we'll skip the profitability calculation
@@ -338,18 +474,28 @@ class XEMMExecutor(ExecutorBase):
         self.stop()
 
     def get_cum_fees_quote(self) -> Decimal:
-        if self.is_closed and self.maker_order and self.taker_order:
-            return self.maker_order.cum_fees_quote + self.taker_order.cum_fees_quote
-        else:
+        if not self.is_closed:
             return Decimal("0")
+        # 聚合所有 maker 单（含撤单后迟到成交的、已清空 self.maker_order 引用的）
+        maker_fee = sum((m.cum_fees_quote for m in self._maker_orders_by_id.values()), Decimal("0"))
+        taker_fee = sum((t.cum_fees_quote for t in self.taker_orders), Decimal("0"))
+        return maker_fee + taker_fee
 
     def get_net_pnl_quote(self) -> Decimal:
-        if self.is_closed and self.maker_order and self.taker_order and self.maker_order.is_done and self.taker_order.is_done:
-            maker_pnl = self.maker_order.executed_amount_base * self.maker_order.average_executed_price
-            taker_pnl = self.taker_order.executed_amount_base * self.taker_order.average_executed_price
-            return taker_pnl - maker_pnl - self.get_cum_fees_quote()
-        else:
+        # 只统计真正有成交的 maker 单，避免 refresh 期间未成交即撤的空单干扰
+        filled_makers = [m for m in self._maker_orders_by_id.values() if m.executed_amount_base > Decimal("0")]
+        if not self.is_closed or not filled_makers or not self.taker_orders:
             return Decimal("0")
+        # 与 shutdown 用同一套 done 判定：失败的 taker 也算完结（其已成交部分仍计入 PnL）
+        takers_done = all(
+            (t.is_done or t.order_id in self._failed_taker_ids) for t in self.taker_orders
+        )
+        makers_done = all(m.is_done for m in filled_makers)
+        if not (makers_done and takers_done):
+            return Decimal("0")
+        maker_pnl = sum((m.executed_amount_base * m.average_executed_price for m in filled_makers), Decimal("0"))
+        taker_pnl = sum((t.executed_amount_base * t.average_executed_price for t in self.taker_orders), Decimal("0"))
+        return taker_pnl - maker_pnl - self.get_cum_fees_quote()
 
     def get_net_pnl_pct(self) -> Decimal:
         pnl_quote = self.get_net_pnl_quote()
