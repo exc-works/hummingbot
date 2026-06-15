@@ -20,8 +20,28 @@ from hummingbot.logger import HummingbotLogger
 from hummingbot.strategy.strategy_v2_base import StrategyV2Base
 from hummingbot.strategy_v2.executors.executor_base import ExecutorBase
 from hummingbot.strategy_v2.executors.xemm_executor.data_types import XEMMExecutorConfig
+from hummingbot.strategy_v2.executors.xemm_executor.hedge_exposure import HedgeExposureTracker
 from hummingbot.strategy_v2.models.base import RunnableStatus
 from hummingbot.strategy_v2.models.executors import CloseType, TrackedOrder
+from hummingbot.strategy_v2.executors.xemm_executor.risk import can_hedge
+
+
+class ConnectorMarketDataAdapter:
+    def __init__(self, connectors: Dict[str, ConnectorBase]):
+        self.connectors = connectors
+
+    def get_price_by_type(self, connector_name: str, trading_pair: str, price_type: PriceType):
+        connector = self.connectors[connector_name]
+        if price_type == PriceType.MidPrice and hasattr(connector, "get_mid_price"):
+            return connector.get_mid_price(trading_pair)
+        return None
+
+    def get_available_balance(self, connector_name: str, asset: str):
+        return self.connectors[connector_name].get_available_balance(asset)
+
+    def get_vwap_for_volume(self, connector_name: str, trading_pair: str, volume: float, is_buy: bool):
+        order_book = self.connectors[connector_name].get_order_book(trading_pair)
+        return order_book.get_vwap_for_volume(is_buy, volume)
 
 
 class XEMMExecutor(ExecutorBase):
@@ -106,16 +126,11 @@ class XEMMExecutor(ExecutorBase):
         self._taker_order_ids = set()
         self._failed_taker_ids = set()
         self._seen_trade_ids = set()
-        # maker 成交量取两路来源的 max，避免 completed 与 fill 事件重复累加：
-        #   _maker_fills_sum   —— OrderFilledEvent 按 trade_id 去重后的累计成交
-        #   _maker_filled_floor —— completed 事件 / tracked 累计成交给出的总量下限
-        self._maker_fills_sum = Decimal("0")
-        self._maker_filled_floor = Decimal("0")
-        self._maker_filled_base = Decimal("0")
-        # 已『提交』的对冲量（下单去重用），区别于『实际成交』的对冲量
-        self._submitted_hedge_base = Decimal("0")
+        self._hedge_exposure = HedgeExposureTracker()
         self._taker_amounts = {}
         self._hedging = False
+        self._last_hedge_block_reason = None
+        self._hedge_blocked_since = None
         self.failed_orders = []
         super().__init__(strategy=strategy,
                          connectors=[config.buying_market.connector_name, config.selling_market.connector_name],
@@ -280,7 +295,7 @@ class XEMMExecutor(ExecutorBase):
         filled = self.maker_order.executed_amount_base if self.maker_order else Decimal("0")
         if filled > Decimal("0") or self._maker_filled_base > Decimal("0") or self._hedging:
             # 以 tracked 累计成交作为下限并入 floor（与 fill 事件取 max，不累加）
-            self._maker_filled_floor = max(self._maker_filled_floor, filled)
+            self._hedge_exposure.raise_maker_filled_floor(filled)
             self._recompute_maker_filled()
             self._enter_hedging()
             self._hedge_pending()
@@ -288,11 +303,11 @@ class XEMMExecutor(ExecutorBase):
             self.maker_order = None
 
     def _recompute_maker_filled(self):
-        self._maker_filled_base = max(self._maker_fills_sum, self._maker_filled_floor)
+        return self._maker_filled_base
 
     def _actual_hedged_base(self) -> Decimal:
         """实际已对冲量 = 所有 taker 单累计成交量（含失败单已成交部分）。单一可信来源。"""
-        return sum((t.executed_amount_base for t in self.taker_orders), Decimal("0"))
+        return self._hedge_exposure.actual_hedged_base(self.taker_orders)
 
     def _enter_hedging(self):
         """标记进入对冲收尾：停止刷新挂单，取消仍在挂的 maker，转入 SHUTTING_DOWN。"""
@@ -307,10 +322,68 @@ class XEMMExecutor(ExecutorBase):
     def _hedge_pending(self):
         """对 maker 已成交但尚未『提交』对冲的增量下 taker 单。
         以 _submitted_hedge_base 去重，避免对同一笔成交重复下单。"""
-        unhedged = self._maker_filled_base - self._submitted_hedge_base
+        unhedged = self._hedge_exposure.unsubmitted_hedge_base()
         if unhedged > Decimal("0"):
-            self.place_taker_order(unhedged)
-            self._submitted_hedge_base += unhedged
+            hedge_amount = self._next_hedge_amount(unhedged)
+            if not self._can_place_taker_hedge(hedge_amount):
+                return
+            self.place_taker_order(hedge_amount)
+            self._hedge_exposure.reserve_hedge(hedge_amount)
+
+    def _next_hedge_amount(self, unhedged: Decimal) -> Decimal:
+        max_order_base = self.config.max_hedge_order_base
+        if max_order_base > Decimal("0"):
+            return min(unhedged, max_order_base)
+        return unhedged
+
+    def _hedge_risk_enabled(self) -> bool:
+        return any([
+            self.config.max_hedge_slippage_bps > Decimal("0"),
+            self.config.max_hedge_order_base > Decimal("0"),
+            self.config.min_hedge_notional > Decimal("0"),
+            self.config.min_depth_notional > Decimal("0"),
+            self.config.reserve_taker_base > Decimal("0"),
+            self.config.reserve_taker_quote > Decimal("0"),
+        ])
+
+    def _can_place_taker_hedge(self, amount: Decimal) -> bool:
+        if not self._hedge_risk_enabled():
+            self._last_hedge_block_reason = None
+            self._hedge_blocked_since = None
+            return True
+        capability = can_hedge(
+            market_data_provider=ConnectorMarketDataAdapter(self.connectors),
+            connector_name=self.taker_connector,
+            trading_pair=self.taker_trading_pair,
+            side=self.taker_order_side,
+            amount=amount,
+            max_slippage_bps=self.config.max_hedge_slippage_bps,
+            max_order_base=self.config.max_hedge_order_base,
+            min_notional=self.config.min_hedge_notional,
+            min_depth_notional=self.config.min_depth_notional,
+            reserve_base=self.config.reserve_taker_base,
+            reserve_quote=self.config.reserve_taker_quote,
+        )
+        if capability.allowed:
+            self._last_hedge_block_reason = None
+            self._hedge_blocked_since = None
+            return True
+        self._last_hedge_block_reason = (
+            f"{self.taker_order_side.name} hedge blocked: {capability.reason} "
+            f"(requested={amount}, max_amount={capability.max_amount})"
+        )
+        if self._hedge_blocked_since is None:
+            self._hedge_blocked_since = getattr(self._strategy, "current_timestamp", None)
+        self.logger().warning(self._last_hedge_block_reason)
+        return False
+
+    def _hedge_blocked_seconds(self) -> Decimal:
+        if self._hedge_blocked_since is None:
+            return Decimal("0")
+        current_timestamp = getattr(self._strategy, "current_timestamp", None)
+        if current_timestamp is None:
+            return Decimal("0")
+        return max(Decimal(str(current_timestamp - self._hedge_blocked_since)), Decimal("0"))
 
     async def update_current_trade_profitability(self):
         trade_profitability = Decimal("0")
@@ -363,7 +436,7 @@ class XEMMExecutor(ExecutorBase):
         if event.order_id in self._maker_orders_by_id:
             self.logger().info(f"Maker order {event.order_id} completed. Reconciling filled amount.")
             # completed 只抬升『下限』，与 fill 事件取 max，绝不累加，避免重复对冲
-            self._maker_filled_floor = max(self._maker_filled_floor, event.base_asset_amount)
+            self._hedge_exposure.raise_maker_filled_floor(event.base_asset_amount)
             self._recompute_maker_filled()
             self._enter_hedging()
             self._hedge_pending()
@@ -388,9 +461,7 @@ class XEMMExecutor(ExecutorBase):
         if is_maker and not exchange_trade_id:
             maker_tracked = self._maker_orders_by_id.get(event.order_id)
             if maker_tracked is not None:
-                self._maker_filled_floor = max(
-                    self._maker_filled_floor, maker_tracked.executed_amount_base
-                )
+                self._hedge_exposure.raise_maker_filled_floor(maker_tracked.executed_amount_base)
                 self._recompute_maker_filled()
         if dedup_key in self._seen_trade_ids:
             # dedup 命中：fills_sum 不能再 +=，但 floor 已更新，需补充触发对冲
@@ -402,7 +473,7 @@ class XEMMExecutor(ExecutorBase):
         # 只有 maker 成交需触发对冲；taker 成交计入实际对冲量（由 _actual_hedged_base 派生）。
         # 用 _maker_orders_by_id 匹配，避免撤单竞态下 maker_order 引用被清空而漏对冲。
         if is_maker:
-            self._maker_fills_sum += event.amount
+            self._hedge_exposure.add_maker_fill(event.amount)
             self._recompute_maker_filled()
             self._enter_hedging()
             self._hedge_pending()
@@ -441,7 +512,7 @@ class XEMMExecutor(ExecutorBase):
             unfilled = max(original - filled, Decimal("0"))
             self._failed_taker_ids.add(event.order_id)
             # 回退未成交部分的『已提交』量，使 _hedge_pending 只补未成交的差额
-            self._submitted_hedge_base -= unfilled
+            self._hedge_exposure.release_hedge(unfilled)
             self._current_retries += 1
             self._hedge_pending()
 
@@ -464,7 +535,46 @@ class XEMMExecutor(ExecutorBase):
             "maker_target_price": self._maker_target_price,
             "net_profitability": self._current_trade_profitability - self._tx_cost_pct,
             "order_amount": self.config.order_amount,
+            "maker_filled_base": self._maker_filled_base,
+            "submitted_hedge_base": self._submitted_hedge_base,
+            "actual_hedged_base": self._actual_hedged_base(),
+            "unhedged_base": self._hedge_exposure.unhedged_base(self.taker_orders),
+            "last_hedge_block_reason": self._last_hedge_block_reason,
+            "hedge_blocked_since": self._hedge_blocked_since,
+            "hedge_blocked_seconds": self._hedge_blocked_seconds(),
         }
+
+    @property
+    def _maker_fills_sum(self) -> Decimal:
+        return self._hedge_exposure.maker_fills_sum
+
+    @_maker_fills_sum.setter
+    def _maker_fills_sum(self, value: Decimal):
+        self._hedge_exposure.maker_fills_sum = max(value, Decimal("0"))
+
+    @property
+    def _maker_filled_floor(self) -> Decimal:
+        return self._hedge_exposure.maker_filled_floor
+
+    @_maker_filled_floor.setter
+    def _maker_filled_floor(self, value: Decimal):
+        self._hedge_exposure.maker_filled_floor = max(value, Decimal("0"))
+
+    @property
+    def _maker_filled_base(self) -> Decimal:
+        return self._hedge_exposure.maker_filled_base
+
+    @_maker_filled_base.setter
+    def _maker_filled_base(self, value: Decimal):
+        self._hedge_exposure.raise_maker_filled_floor(value)
+
+    @property
+    def _submitted_hedge_base(self) -> Decimal:
+        return self._hedge_exposure.submitted_hedge_base
+
+    @_submitted_hedge_base.setter
+    def _submitted_hedge_base(self, value: Decimal):
+        self._hedge_exposure.submitted_hedge_base = max(value, Decimal("0"))
 
     def early_stop(self, keep_position: bool = False):
         if self.maker_order and self.maker_order.order and self.maker_order.order.is_open:

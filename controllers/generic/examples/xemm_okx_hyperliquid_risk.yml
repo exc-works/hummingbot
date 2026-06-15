@@ -1,0 +1,27 @@
+# Example XEMM controller config for OKX maker / Hyperliquid taker.
+# Copy into conf/controllers/ and tune all amount/risk values before trading.
+id: xemm_okx_hyperliquid_risk
+controller_type: generic
+controller_name: xemm_multiple_levels
+
+maker_connector: okx
+maker_trading_pair: ETH-USDT
+taker_connector: hyperliquid
+taker_trading_pair: UETH-USDC
+
+total_amount_quote: 100
+buy_levels_targets_amount: 0.003,1-0.006,1-0.009,1
+sell_levels_targets_amount: 0.003,1-0.006,1-0.009,1
+min_profitability: 0.003
+max_profitability: 0.01
+max_executors_imbalance: 1
+
+# Risk controls. 0 disables the specific guard.
+max_unhedged_base: 0.03
+max_hedge_slippage_bps: 25
+max_hedge_order_base: 0.01
+min_hedge_notional: 10
+min_depth_notional: 50
+reserve_taker_base: 0.01
+reserve_taker_quote: 50
+manual_kill_switch: false

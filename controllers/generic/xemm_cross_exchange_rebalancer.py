@@ -17,6 +17,7 @@ from hummingbot.strategy_v2.controllers.controller_base import ControllerBase, C
 from hummingbot.strategy_v2.executors.data_types import ConnectorPair
 from hummingbot.strategy_v2.executors.order_executor.data_types import ExecutionStrategy, OrderExecutorConfig
 from hummingbot.strategy_v2.models.executor_actions import CreateExecutorAction, ExecutorAction
+from hummingbot.strategy_v2.executors.xemm_executor.risk import to_decimal
 
 REBALANCE_LEVEL_ID = "cross_exchange_rebalance"
 
@@ -85,6 +86,22 @@ class XEMMCrossExchangeRebalancerConfig(ControllerConfigBase):
             "prompt_on_new": True,
         },
     )
+    pause_when_xemm_hedging: bool = Field(
+        default=True,
+        json_schema_extra={
+            "prompt": "Pause rebalancing while XEMM has unhedged or pending hedge exposure? (True/False): ",
+            "prompt_on_new": False,
+            "is_updatable": True,
+        },
+    )
+    max_xemm_unhedged_base: Decimal = Field(
+        default=Decimal("0"),
+        json_schema_extra={
+            "prompt": "Max XEMM unhedged base before pausing rebalancer (0 pauses on any unhedged base): ",
+            "prompt_on_new": False,
+            "is_updatable": True,
+        },
+    )
 
     def update_markets(self, markets: Dict[str, Set[str]]) -> Dict[str, Set[str]]:
         for connector, pair in (
@@ -99,6 +116,13 @@ class XEMMCrossExchangeRebalancerConfig(ControllerConfigBase):
     @field_validator("use_oracle_base_conversion", mode="before")
     @classmethod
     def parse_bool(cls, v):
+        if isinstance(v, str):
+            return v.strip().lower() in ("true", "1", "yes", "y")
+        return bool(v)
+
+    @field_validator("pause_when_xemm_hedging", mode="before")
+    @classmethod
+    def parse_pause_bool(cls, v):
         if isinstance(v, str):
             return v.strip().lower() in ("true", "1", "yes", "y")
         return bool(v)
@@ -120,6 +144,21 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
         ]
         self.market_data_provider.initialize_rate_sources(pairs)
 
+    @staticmethod
+    def _safe_connector_value(getter, default: Decimal = Decimal("0")) -> Decimal:
+        try:
+            value = to_decimal(getter())
+            return value if value is not None else default
+        except Exception:
+            return default
+
+    def _safe_mid_price(self, connector_name: str, trading_pair: str) -> Decimal:
+        try:
+            value = self.market_data_provider.get_price_by_type(connector_name, trading_pair, PriceType.MidPrice)
+            return to_decimal(value) or Decimal("0")
+        except Exception:
+            return Decimal("0")
+
     async def update_processed_data(self):
         maker_base, maker_quote = self.config.maker_trading_pair.split("-")
         taker_base, taker_quote = self.config.taker_trading_pair.split("-")
@@ -127,23 +166,19 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
         maker_connector = self.market_data_provider.get_connector(self.config.maker_connector)
         taker_connector = self.market_data_provider.get_connector(self.config.taker_connector)
 
-        maker_base_bal = Decimal(str(maker_connector.get_balance(maker_base)))
-        taker_base_bal = Decimal(str(taker_connector.get_balance(taker_base)))
-        maker_base_avail = Decimal(str(maker_connector.get_available_balance(maker_base)))
-        taker_base_avail = Decimal(str(taker_connector.get_available_balance(taker_base)))
-        maker_quote_avail = Decimal(str(maker_connector.get_available_balance(maker_quote)))
-        maker_quote_total = Decimal(str(maker_connector.get_balance(maker_quote)))
-        taker_quote_avail = Decimal(str(taker_connector.get_available_balance(taker_quote)))
+        maker_base_bal = self._safe_connector_value(lambda: maker_connector.get_balance(maker_base))
+        taker_base_bal = self._safe_connector_value(lambda: taker_connector.get_balance(taker_base))
+        maker_base_avail = self._safe_connector_value(lambda: maker_connector.get_available_balance(maker_base))
+        taker_base_avail = self._safe_connector_value(lambda: taker_connector.get_available_balance(taker_base))
+        maker_quote_avail = self._safe_connector_value(lambda: maker_connector.get_available_balance(maker_quote))
+        maker_quote_total = self._safe_connector_value(lambda: maker_connector.get_balance(maker_quote))
+        taker_quote_avail = self._safe_connector_value(lambda: taker_connector.get_available_balance(taker_quote))
 
         base_rate = self._taker_to_maker_base_rate(maker_base, taker_base)
         taker_base_in_maker_units = taker_base_bal * base_rate
 
-        maker_mid = self.market_data_provider.get_price_by_type(
-            self.config.maker_connector, self.config.maker_trading_pair, PriceType.MidPrice
-        )
-        taker_mid = self.market_data_provider.get_price_by_type(
-            self.config.taker_connector, self.config.taker_trading_pair, PriceType.MidPrice
-        )
+        maker_mid = self._safe_mid_price(self.config.maker_connector, self.config.maker_trading_pair)
+        taker_mid = self._safe_mid_price(self.config.taker_connector, self.config.taker_trading_pair)
 
         maker_quote_for_buy = maker_quote_avail if maker_quote_avail > 0 else maker_quote_total
         maker_quote_in_base = maker_quote_for_buy / maker_mid if maker_mid > 0 else Decimal("0")
@@ -185,6 +220,13 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
         if active:
             return []
 
+        xemm_block_reason = self._xemm_hedge_conflict_reason()
+        if xemm_block_reason is not None:
+            self._last_skip_reason = xemm_block_reason
+            self._next_check_ts = now + self.config.rebalance_interval
+            self.logger().info(f"Cross-exchange rebalance skipped: {self._last_skip_reason}")
+            return []
+
         plan = self._plan_rebalance()
         if plan is None:
             self._next_check_ts = now + self.config.rebalance_interval
@@ -198,6 +240,11 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
             if connector == self.config.maker_connector
             else self.processed_data["taker_mid"]
         )
+        if mid <= Decimal("0"):
+            self._last_skip_reason = f"mid price unavailable for {connector} {trading_pair}"
+            self._next_check_ts = now + self.config.rebalance_interval
+            self.logger().info(f"Cross-exchange rebalance skipped: {self._last_skip_reason}")
+            return []
 
         if connector == self.config.taker_connector:
             base_rate = self.processed_data["base_rate"]
@@ -343,6 +390,48 @@ class XEMMCrossExchangeRebalancer(ControllerBase):
         self._last_skip_reason = (
             f"within drift (maker_diff={maker_diff}, taker_diff={taker_diff}, drift={drift})"
         )
+        return None
+
+    def _is_related_xemm_executor(self, executor) -> bool:
+        config = executor.config
+        if getattr(config, "type", None) != "xemm_executor":
+            return False
+        connector_pairs = {
+            (config.buying_market.connector_name, config.buying_market.trading_pair),
+            (config.selling_market.connector_name, config.selling_market.trading_pair),
+        }
+        rebalancer_pairs = {
+            (self.config.maker_connector, self.config.maker_trading_pair),
+            (self.config.taker_connector, self.config.taker_trading_pair),
+        }
+        return bool(connector_pairs & rebalancer_pairs)
+
+    def _xemm_hedge_conflict_reason(self) -> Optional[str]:
+        if not self.config.pause_when_xemm_hedging:
+            return None
+
+        threshold = self.config.max_xemm_unhedged_base
+        executors = getattr(self, "all_executors_info", None) or self.executors_info
+        for executor in executors:
+            if executor.is_done or not self._is_related_xemm_executor(executor):
+                continue
+            info = executor.custom_info or {}
+            maker_filled = to_decimal(info.get("maker_filled_base")) or Decimal("0")
+            submitted_hedge = to_decimal(info.get("submitted_hedge_base")) or Decimal("0")
+            actual_hedged = to_decimal(info.get("actual_hedged_base")) or Decimal("0")
+            unhedged = to_decimal(info.get("unhedged_base")) or Decimal("0")
+            hedge_block_reason = info.get("last_hedge_block_reason")
+
+            allowed_unhedged = threshold if threshold > Decimal("0") else Decimal("0")
+            if unhedged > allowed_unhedged:
+                return f"related XEMM has unhedged base {unhedged} > {allowed_unhedged}"
+            if submitted_hedge > actual_hedged:
+                return (
+                    f"related XEMM hedge pending "
+                    f"(maker_filled={maker_filled}, submitted={submitted_hedge}, actual={actual_hedged})"
+                )
+            if hedge_block_reason:
+                return f"related XEMM hedge blocked: {hedge_block_reason}"
         return None
 
     def _buy_plan(

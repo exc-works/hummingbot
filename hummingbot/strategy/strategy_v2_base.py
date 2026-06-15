@@ -722,6 +722,7 @@ class StrategyV2Base(StrategyPyBase):
                 if controller_id and controller_id in self.controllers:
                     controller = self.controllers[controller_id]
                     controller.executors_info = self.get_executors_by_controller(controller_id)
+                    controller.all_executors_info = self.get_all_executors()
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -738,9 +739,11 @@ class StrategyV2Base(StrategyPyBase):
             self.controller_reports = self.executor_orchestrator.get_all_reports()
 
             # Update each controller with its specific data
+            all_executors = self.get_all_executors()
             for controller_id, controller in self.controllers.items():
                 controller_report = self.controller_reports.get(controller_id, {})
                 controller.executors_info = controller_report.get("executors", [])
+                controller.all_executors_info = all_executors
                 controller.positions_held = controller_report.get("positions", [])
                 controller.performance_report = controller_report.get("performance", [])
             self._refresh_controller_executor_events()

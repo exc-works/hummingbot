@@ -204,6 +204,7 @@ class ControllerBase(RunnableBase):
         self.processed_data = {}
         self.executors_update_event = asyncio.Event()
         self.executors_info_queue = asyncio.Queue()
+        self.all_executors_info: List[ExecutorInfo] = []
 
     def start(self):
         """

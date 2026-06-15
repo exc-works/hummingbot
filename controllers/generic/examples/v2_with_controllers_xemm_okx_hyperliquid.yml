@@ -1,0 +1,9 @@
+# Copy into conf/scripts/ and use with scripts/v2_with_controllers.py.
+script_file_name: v2_with_controllers.py
+controllers_config:
+  - xemm_okx_hyperliquid_risk.yml
+  - xemm_okx_hyperliquid_rebalancer.yml
+
+# Optional drawdown stops. null disables the guard.
+max_global_drawdown_quote: null
+max_controller_drawdown_quote: null

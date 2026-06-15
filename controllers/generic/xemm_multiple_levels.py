@@ -12,6 +12,7 @@ from hummingbot.strategy_v2.controllers.controller_base import ControllerBase, C
 from hummingbot.strategy_v2.executors.data_types import ConnectorPair
 from hummingbot.strategy_v2.executors.xemm_executor.data_types import XEMMExecutorConfig
 from hummingbot.strategy_v2.models.executor_actions import CreateExecutorAction, ExecutorAction
+from hummingbot.strategy_v2.executors.xemm_executor.risk import HedgeCapability, can_hedge, to_decimal
 
 
 class XEMMMultipleLevelsConfig(ControllerConfigBase):
@@ -39,14 +40,63 @@ class XEMMMultipleLevelsConfig(ControllerConfigBase):
             "prompt": "Enter the sell levels targets with the following structure: (target_profitability1,amount1-target_profitability2,amount2): ",
             "prompt_on_new": True})
     min_profitability: Decimal = Field(
-        default=0.003,
+        default=Decimal("0.003"),
         json_schema_extra={"prompt": "Enter the minimum profitability: ", "prompt_on_new": True})
     max_profitability: Decimal = Field(
-        default=0.01,
+        default=Decimal("0.01"),
         json_schema_extra={"prompt": "Enter the maximum profitability: ", "prompt_on_new": True})
     max_executors_imbalance: int = Field(
         default=1,
         json_schema_extra={"prompt": "Enter the maximum executors imbalance: ", "prompt_on_new": True})
+    max_unhedged_base: Decimal = Field(
+        default=Decimal("0"),
+        json_schema_extra={
+            "prompt": "Enter max active unhedged base exposure (0 to disable): ",
+            "prompt_on_new": False,
+            "is_updatable": True,
+        })
+    max_hedge_slippage_bps: Decimal = Field(
+        default=Decimal("0"),
+        json_schema_extra={
+            "prompt": "Enter max hedge slippage in bps (0 to disable): ",
+            "prompt_on_new": False,
+            "is_updatable": True,
+        })
+    max_hedge_order_base: Decimal = Field(
+        default=Decimal("0"),
+        json_schema_extra={
+            "prompt": "Enter max hedge order size in base (0 to disable): ",
+            "prompt_on_new": False,
+            "is_updatable": True,
+        })
+    min_hedge_notional: Decimal = Field(
+        default=Decimal("0"),
+        json_schema_extra={
+            "prompt": "Enter min hedge notional (0 to disable): ",
+            "prompt_on_new": False,
+            "is_updatable": True,
+        })
+    min_depth_notional: Decimal = Field(
+        default=Decimal("0"),
+        json_schema_extra={
+            "prompt": "Enter min taker depth notional (0 to disable): ",
+            "prompt_on_new": False,
+            "is_updatable": True,
+        })
+    reserve_taker_base: Decimal = Field(
+        default=Decimal("0"),
+        json_schema_extra={
+            "prompt": "Enter taker base balance reserve: ",
+            "prompt_on_new": False,
+            "is_updatable": True,
+        })
+    reserve_taker_quote: Decimal = Field(
+        default=Decimal("0"),
+        json_schema_extra={
+            "prompt": "Enter taker quote balance reserve: ",
+            "prompt_on_new": False,
+            "is_updatable": True,
+        })
 
     @field_validator("buy_levels_targets_amount", "sell_levels_targets_amount", mode="before")
     @classmethod
@@ -73,6 +123,7 @@ class XEMMMultipleLevels(ControllerBase):
         self.sell_levels_targets_amount = config.sell_levels_targets_amount
         super().__init__(config, *args, **kwargs)
         self._gas_token_cache = {}
+        self._last_risk_block_reason = None
         self._initialize_gas_tokens()
         self.initialize_rate_sources()
 
@@ -143,11 +194,94 @@ class XEMMMultipleLevels(ControllerBase):
     async def update_processed_data(self):
         pass
 
+    def _active_maker_exposure_base(self) -> Decimal:
+        exposure = Decimal("0")
+        for executor in self.executors_info:
+            if executor.is_done:
+                continue
+            order_amount = getattr(executor.config, "order_amount", Decimal("0"))
+            unhedged_base = executor.custom_info.get("unhedged_base", Decimal("0"))
+            exposure += max(Decimal(str(order_amount)), Decimal(str(unhedged_base)))
+        return exposure
+
+    def _hedge_side_for_maker_side(self, maker_side: TradeType) -> TradeType:
+        return TradeType.SELL if maker_side == TradeType.BUY else TradeType.BUY
+
+    def _hedge_risk_enabled(self) -> bool:
+        return any([
+            self.config.max_hedge_slippage_bps > Decimal("0"),
+            self.config.max_hedge_order_base > Decimal("0"),
+            self.config.min_hedge_notional > Decimal("0"),
+            self.config.min_depth_notional > Decimal("0"),
+            self.config.reserve_taker_base > Decimal("0"),
+            self.config.reserve_taker_quote > Decimal("0"),
+        ])
+
+    def _check_risk_for_executor(
+        self,
+        maker_side: TradeType,
+        amount: Decimal,
+        pending_exposure_base: Decimal = Decimal("0"),
+        pending_taker_base_reserve: Decimal = Decimal("0"),
+        pending_taker_quote_reserve: Decimal = Decimal("0"),
+    ) -> HedgeCapability:
+        if self.config.max_unhedged_base > Decimal("0"):
+            active_exposure = self._active_maker_exposure_base()
+            projected_exposure = active_exposure + pending_exposure_base + amount
+            if projected_exposure > self.config.max_unhedged_base:
+                return HedgeCapability(
+                    allowed=False,
+                    max_amount=max(
+                        self.config.max_unhedged_base - active_exposure - pending_exposure_base,
+                        Decimal("0"),
+                    ),
+                    reason=(
+                        f"projected maker exposure {projected_exposure} exceeds "
+                        f"max_unhedged_base {self.config.max_unhedged_base}"
+                    ),
+                )
+        if not self._hedge_risk_enabled():
+            return HedgeCapability(allowed=True, max_amount=amount)
+        return can_hedge(
+            market_data_provider=self.market_data_provider,
+            connector_name=self.config.taker_connector,
+            trading_pair=self.config.taker_trading_pair,
+            side=self._hedge_side_for_maker_side(maker_side),
+            amount=amount,
+            max_slippage_bps=self.config.max_hedge_slippage_bps,
+            max_order_base=self.config.max_hedge_order_base,
+            min_notional=self.config.min_hedge_notional,
+            min_depth_notional=self.config.min_depth_notional,
+            reserve_base=self.config.reserve_taker_base + pending_taker_base_reserve,
+            reserve_quote=self.config.reserve_taker_quote + pending_taker_quote_reserve,
+        )
+
+    def _record_risk_block(
+        self,
+        maker_side: TradeType,
+        amount: Decimal,
+        target_profitability: Decimal,
+        capability: HedgeCapability,
+    ):
+        self._last_risk_block_reason = (
+            f"{maker_side.name} target={target_profitability}: {capability.reason} "
+            f"(requested={amount}, max_amount={capability.max_amount})"
+        )
+        self.logger().warning(f"Skipping XEMM executor due to risk check: {self._last_risk_block_reason}")
+
     def determine_executor_actions(self) -> List[ExecutorAction]:
         executor_actions = []
-        mid_price = self.market_data_provider.get_price_by_type(
-            self.config.maker_connector, self.config.maker_trading_pair, PriceType.MidPrice
-        )
+        pending_exposure_base = Decimal("0")
+        pending_taker_base_reserve = Decimal("0")
+        pending_taker_quote_reserve = Decimal("0")
+        self._last_risk_block_reason = None
+        try:
+            mid_price = self.market_data_provider.get_price_by_type(
+                self.config.maker_connector, self.config.maker_trading_pair, PriceType.MidPrice
+            )
+        except Exception:
+            mid_price = None
+        mid_price = to_decimal(mid_price)
         if mid_price is None or mid_price.is_nan() or mid_price <= 0:
             self.logger().warning(
                 f"Mid price unavailable for {self.config.maker_trading_pair} on "
@@ -188,6 +322,17 @@ class XEMMMultipleLevels(ControllerBase):
             if not has_active_buy_at_target and imbalance < self.config.max_executors_imbalance:
                 # Calculate proportional amount: (level_amount / total_side_amount) * (total_quote * 0.5)
                 proportional_amount_quote = (amount / total_buy_amount) * buy_side_quote
+                order_amount = proportional_amount_quote / mid_price
+                capability = self._check_risk_for_executor(
+                    maker_side=TradeType.BUY,
+                    amount=order_amount,
+                    pending_exposure_base=pending_exposure_base,
+                    pending_taker_base_reserve=pending_taker_base_reserve,
+                    pending_taker_quote_reserve=pending_taker_quote_reserve,
+                )
+                if not capability.allowed:
+                    self._record_risk_block(TradeType.BUY, order_amount, target_profitability, capability)
+                    continue
                 min_profitability = target_profitability - self.config.min_profitability
                 max_profitability = target_profitability + self.config.max_profitability
                 config = XEMMExecutorConfig(
@@ -198,12 +343,20 @@ class XEMMMultipleLevels(ControllerBase):
                     selling_market=ConnectorPair(connector_name=self.config.taker_connector,
                                                  trading_pair=self.config.taker_trading_pair),
                     maker_side=TradeType.BUY,
-                    order_amount=proportional_amount_quote / mid_price,
+                    order_amount=order_amount,
                     min_profitability=min_profitability,
                     target_profitability=target_profitability,
-                    max_profitability=max_profitability
+                    max_profitability=max_profitability,
+                    max_hedge_slippage_bps=self.config.max_hedge_slippage_bps,
+                    max_hedge_order_base=self.config.max_hedge_order_base,
+                    min_hedge_notional=self.config.min_hedge_notional,
+                    min_depth_notional=self.config.min_depth_notional,
+                    reserve_taker_base=self.config.reserve_taker_base,
+                    reserve_taker_quote=self.config.reserve_taker_quote,
                 )
                 executor_actions.append(CreateExecutorAction(executor_config=config, controller_id=self.config.id))
+                pending_exposure_base += order_amount
+                pending_taker_base_reserve += order_amount
         for target_profitability, amount in self.sell_levels_targets_amount:
             has_active_sell_at_target = any(
                 e.config.target_profitability == target_profitability for e in active_sell_executors
@@ -211,6 +364,17 @@ class XEMMMultipleLevels(ControllerBase):
             if not has_active_sell_at_target and imbalance > -self.config.max_executors_imbalance:
                 # Calculate proportional amount: (level_amount / total_side_amount) * (total_quote * 0.5)
                 proportional_amount_quote = (amount / total_sell_amount) * sell_side_quote
+                order_amount = proportional_amount_quote / mid_price
+                capability = self._check_risk_for_executor(
+                    maker_side=TradeType.SELL,
+                    amount=order_amount,
+                    pending_exposure_base=pending_exposure_base,
+                    pending_taker_base_reserve=pending_taker_base_reserve,
+                    pending_taker_quote_reserve=pending_taker_quote_reserve,
+                )
+                if not capability.allowed:
+                    self._record_risk_block(TradeType.SELL, order_amount, target_profitability, capability)
+                    continue
                 min_profitability = target_profitability - self.config.min_profitability
                 max_profitability = target_profitability + self.config.max_profitability
                 config = XEMMExecutorConfig(
@@ -221,12 +385,20 @@ class XEMMMultipleLevels(ControllerBase):
                     selling_market=ConnectorPair(connector_name=self.config.maker_connector,
                                                  trading_pair=self.config.maker_trading_pair),
                     maker_side=TradeType.SELL,
-                    order_amount=proportional_amount_quote / mid_price,
+                    order_amount=order_amount,
                     min_profitability=min_profitability,
                     target_profitability=target_profitability,
-                    max_profitability=max_profitability
+                    max_profitability=max_profitability,
+                    max_hedge_slippage_bps=self.config.max_hedge_slippage_bps,
+                    max_hedge_order_base=self.config.max_hedge_order_base,
+                    min_hedge_notional=self.config.min_hedge_notional,
+                    min_depth_notional=self.config.min_depth_notional,
+                    reserve_taker_base=self.config.reserve_taker_base,
+                    reserve_taker_quote=self.config.reserve_taker_quote,
                 )
                 executor_actions.append(CreateExecutorAction(executor_config=config, controller_id=self.config.id))
+                pending_exposure_base += order_amount
+                pending_taker_quote_reserve += order_amount * (capability.estimated_price or mid_price)
         if executor_actions:
             self.logger().info(
                 f"Proposing {len(executor_actions)} XEMM executor(s) for {self.config.maker_trading_pair} "
@@ -236,4 +408,7 @@ class XEMMMultipleLevels(ControllerBase):
 
     def to_format_status(self) -> List[str]:
         all_executors_custom_info = pd.DataFrame(e.custom_info for e in self.executors_info)
-        return [format_df_for_printout(all_executors_custom_info, table_format="psql", )]
+        status = [format_df_for_printout(all_executors_custom_info, table_format="psql", )]
+        if self._last_risk_block_reason:
+            status.append(f"Last risk block: {self._last_risk_block_reason}")
+        return status

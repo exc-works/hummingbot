@@ -137,6 +137,16 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
         self.assertEqual(self.executor.taker_orders[0].order_id, "OID-SELL-1")
         self.assertEqual(self.executor._status, RunnableStatus.SHUTTING_DOWN)
 
+    def test_hedge_pending_respects_max_hedge_order_base(self):
+        self.executor.config.max_hedge_order_base = Decimal("40")
+        self.executor._maker_filled_base = Decimal("100")
+        with patch.object(self.executor, "_can_place_taker_hedge", return_value=True):
+            self.executor._hedge_pending()
+
+        self.assertEqual(self.executor._submitted_hedge_base, Decimal("40"))
+        self.assertEqual(len(self.executor.taker_orders), 1)
+        self.assertEqual(self.executor._taker_amounts.get("OID-SELL-1"), Decimal("40"))
+
     @patch.object(XEMMExecutor, "get_in_flight_order", return_value=None)
     def test_two_partial_fills_without_trade_id_hedge_both(self, _in_flight_mock):
         # 两笔均无 exchange_trade_id（默认 ""）的 partial fill 不应被错误去重，应各自对冲
@@ -628,7 +638,14 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
                                                            'target_profitability_pct': Decimal('0.015'),
                                                            'trade_profitability': Decimal('0'),
                                                            'tx_cost': Decimal('1'),
-                                                           'tx_cost_pct': Decimal('1')})
+                                                           'tx_cost_pct': Decimal('1'),
+                                                           'maker_filled_base': Decimal('0'),
+                                                           'submitted_hedge_base': Decimal('0'),
+                                                           'actual_hedged_base': Decimal('0'),
+                                                           'unhedged_base': Decimal('0'),
+                                                           'last_hedge_block_reason': None,
+                                                           'hedge_blocked_since': None,
+                                                           'hedge_blocked_seconds': Decimal('0')})
 
     def test_to_format_status(self):
         self.assertIn("Maker Side: TradeType.BUY", self.executor.to_format_status())

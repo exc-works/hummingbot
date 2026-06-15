@@ -1,0 +1,22 @@
+# Optional rebalancer to run alongside xemm_okx_hyperliquid_risk.yml.
+# Copy into conf/controllers/. It pauses while related XEMM executors have
+# unhedged or pending hedge exposure.
+id: xemm_okx_hyperliquid_rebalancer
+controller_type: generic
+controller_name: xemm_cross_exchange_rebalancer
+
+maker_connector: okx
+maker_trading_pair: ETH-USDT
+taker_connector: hyperliquid
+taker_trading_pair: UETH-USDC
+
+target_base_per_exchange: 0.05
+drift_threshold_base: 0.005
+min_rebalance_amount_base: 0.001
+rebalance_interval: 60
+base_conversion_rate: 1
+use_oracle_base_conversion: false
+
+pause_when_xemm_hedging: true
+max_xemm_unhedged_base: 0
+manual_kill_switch: false
