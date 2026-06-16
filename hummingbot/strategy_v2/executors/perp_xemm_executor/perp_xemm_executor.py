@@ -356,6 +356,7 @@ class PerpXEMMExecutor(ExecutorBase):
             quote_currency=trading_pair.split("-")[1],
             order_type=order_type,
             order_side=TradeType.BUY if is_buy else TradeType.SELL,
+            position_action=PositionAction.OPEN,
             amount=order_amount,
             price=self._taker_result_price,
             is_maker=order_type.is_limit_type(),
