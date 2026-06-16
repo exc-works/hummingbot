@@ -303,8 +303,8 @@ class PerpXEMMExecutor(ExecutorBase):
             self._maker_target_price = self._taker_result_price / (Decimal("1") + total_deduction)
 
     async def update_tx_costs(self):
-        base, _ = split_hb_trading_pair(self.config.buying_market.trading_pair)
-        base_without_wrapped = base[1:] if base.startswith("W") else base
+        _, taker_quote = split_hb_trading_pair(self.taker_trading_pair)
+        _, maker_quote = split_hb_trading_pair(self.maker_trading_pair)
 
         taker_fee_task = asyncio.create_task(
             self.get_tx_cost_in_asset(
@@ -313,7 +313,7 @@ class PerpXEMMExecutor(ExecutorBase):
                 order_type=OrderType.MARKET,
                 is_buy=self.taker_order_side == TradeType.BUY,
                 order_amount=self.config.order_amount,
-                asset=base_without_wrapped,
+                asset=taker_quote,
             )
         )
         maker_fee_task = asyncio.create_task(
@@ -323,14 +323,29 @@ class PerpXEMMExecutor(ExecutorBase):
                 order_type=OrderType.LIMIT,
                 is_buy=self.maker_order_side == TradeType.BUY,
                 order_amount=self.config.order_amount,
-                asset=base_without_wrapped,
+                asset=maker_quote,
             )
         )
         taker_fee, maker_fee = await asyncio.gather(taker_fee_task, maker_fee_task)
-        self._tx_cost = taker_fee + maker_fee
+
+        total_fee_in_taker_quote = taker_fee
+        if maker_quote != taker_quote:
+            try:
+                conv = self.rate_oracle.get_pair_rate(f"{maker_quote}-{taker_quote}")
+                if conv is not None:
+                    total_fee_in_taker_quote += maker_fee * conv
+                else:
+                    total_fee_in_taker_quote += maker_fee
+            except Exception:
+                total_fee_in_taker_quote += maker_fee
+        else:
+            total_fee_in_taker_quote += maker_fee
+
+        self._tx_cost = total_fee_in_taker_quote
+        notional = self.config.order_amount * self._taker_result_price
         self._tx_cost_pct = (
-            self._tx_cost / self.config.order_amount
-            if self.config.order_amount > Decimal("0")
+            total_fee_in_taker_quote / notional
+            if notional > Decimal("0")
             else Decimal("0")
         )
 
@@ -479,6 +494,20 @@ class PerpXEMMExecutor(ExecutorBase):
     # -----------------------------------------------------------------------
 
     async def create_maker_order(self):
+        maker_mid = self.connectors[self.maker_connector].get_price_by_type(
+            self.maker_trading_pair, PriceType.MidPrice
+        )
+        if maker_mid is not None and maker_mid > Decimal("0"):
+            deviation = abs(self._maker_target_price - maker_mid) / maker_mid
+            if deviation > Decimal("0.05"):
+                self.logger().error(
+                    f"Skip maker order: target {self._maker_target_price} deviates "
+                    f"{deviation * 100:.2f}% from {self.maker_connector} mid {maker_mid}. "
+                    f"Taker ref price={self._taker_result_price}. "
+                    f"Check taker order book / trading pair before placing on Caishen."
+                )
+                return
+
         order_id = self.place_order(
             connector_name=self.maker_connector,
             trading_pair=self.maker_trading_pair,

@@ -3,13 +3,14 @@
 import asyncio
 import decimal
 import base64
+import hashlib
 import json
 import time
 from decimal import Decimal
 from typing import Any, AsyncIterable, Dict, List, Optional, Tuple
 
 from bidict import bidict
-from eth_utils import to_bytes
+from eth_utils import to_bytes, to_hex
 
 from hummingbot.connector.constants import s_decimal_NaN
 from hummingbot.connector.derivative.caishen_perpetual import (
@@ -66,6 +67,11 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         # 存储每个交易对的 base_token 和 quote_token（整数 token ID，用于 API 调用）
         self._base_token_ids: Dict[str, int] = {}
         self._quote_token_ids: Dict[str, int] = {}
+        # mark price ± price_limit_bound 为交易所允许的限价区间
+        self._price_limit_bounds: Dict[str, Decimal] = {}
+        self._mark_prices: Dict[str, Decimal] = {}
+        # 串行化 get_latest + sign + submit，避免并发共用同一 block hash 导致 tx hash 碰撞 (1003)
+        self._tx_submission_lock = asyncio.Lock()
         super().__init__(**kwargs)
     
     @property
@@ -238,6 +244,75 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         
         return quantized_price
 
+    @staticmethod
+    def _hb_order_id_to_caishen_client_order_id(order_id: str) -> str:
+        """
+        Caishen client_order_id 为 1-16 字节；Hummingbot order_id 为 ASCII。
+        用 SHA256 前 16 字节作为唯一 client_order_id（hex 字符串）。
+        """
+        digest = hashlib.sha256(order_id.encode("utf-8")).digest()[:16]
+        return to_hex(digest)
+
+    async def _get_mark_price(self, trading_pair: str) -> Optional[Decimal]:
+        cached = self._mark_prices.get(trading_pair)
+        if cached is not None and cached > Decimal("0"):
+            return cached
+
+        try:
+            exchange_symbol = await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
+            response = await self._api_get(
+                path_url=CONSTANTS.TICKER_PRICE_CHANGE_URL,
+                params={
+                    "symbol": exchange_symbol,
+                    "trading_domain": CONSTANTS.TRADING_DOMAIN_PERP,
+                },
+            )
+            if response.get("code") != 0:
+                return None
+            data = response.get("data", {})
+            mark_raw = data.get("mark_price") or data.get("price")
+            if not mark_raw:
+                return None
+            mark_price = Decimal(str(mark_raw))
+            if mark_price > Decimal("0"):
+                self._mark_prices[trading_pair] = mark_price
+            return mark_price
+        except Exception as exc:
+            self.logger().warning(f"Failed to fetch mark price for {trading_pair}: {exc}")
+            return None
+
+    async def _apply_price_restrictions(
+            self,
+            trading_pair: str,
+            price: Decimal,
+    ) -> Decimal:
+        """
+        将限价 clamp 到 mark_price ± price_limit_bound，避免 1117 PRICE_OUT_OF_RESTRICTED_RANGE。
+        """
+        bound = self._price_limit_bounds.get(trading_pair)
+        if bound is None or bound <= Decimal("0"):
+            return self.quantize_order_price(trading_pair, price)
+
+        mark_price = await self._get_mark_price(trading_pair)
+        if mark_price is None or mark_price <= Decimal("0"):
+            return self.quantize_order_price(trading_pair, price)
+
+        lower = mark_price * (Decimal("1") - bound)
+        upper = mark_price * (Decimal("1") + bound)
+        clamped = price
+        if price < lower:
+            clamped = lower
+        elif price > upper:
+            clamped = upper
+
+        quantized = self.quantize_order_price(trading_pair, clamped)
+        if quantized != self.quantize_order_price(trading_pair, price):
+            self.logger().warning(
+                f"Clamped {trading_pair} limit price from {price} to {quantized} "
+                f"(mark={mark_price}, bound={bound}, allowed=[{lower}, {upper}])."
+            )
+        return quantized
+
     async def _api_request(
             self,
             path_url,
@@ -407,9 +482,12 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             "order_id": order_id_int,  # 使用整数类型的 exchange_order_id
         }
 
-        block_hash_bytes = await self.get_latest()
-        encoded_message = await self.authenticator.make_tx(self.api_key,block_hash_bytes, action_type, form_data)
-        cancel_result = await self.submit_tx(encoded_message)
+        async with self._tx_submission_lock:
+            block_hash_bytes = await self.get_latest()
+            encoded_message = await self.authenticator.make_tx(
+                self.api_key, block_hash_bytes, action_type, form_data
+            )
+            cancel_result = await self.submit_tx(encoded_message)
         
         """
         Cancel result 结构：
@@ -559,12 +637,18 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             "mode": 0,
             "reduce_only": position_action == PositionAction.CLOSE,
         }
+        form_data["client_order_id"] = self._hb_order_id_to_caishen_client_order_id(order_id)
+
         if price is not None and order_type.is_limit_type():
+            price = await self._apply_price_restrictions(trading_pair, price)
             form_data['price'] = str(price)
 
-        block_hash_bytes = await self.get_latest()
-        encoded_message = await self.authenticator.make_tx(self.api_key,block_hash_bytes, action_type, form_data)
-        order_result = await self.submit_tx(encoded_message)
+        async with self._tx_submission_lock:
+            block_hash_bytes = await self.get_latest()
+            encoded_message = await self.authenticator.make_tx(
+                self.api_key, block_hash_bytes, action_type, form_data
+            )
+            order_result = await self.submit_tx(encoded_message)
         
         # 打印 API 返回结果
         self.logger().debug(f"下单 API 响应 - Order ID: {order_id}, Response: {order_result}")
@@ -1371,6 +1455,10 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                 # 不同交易对的结算周期可能不同：ETH-USDC=8小时, BTC-USDC=1小时, SOL-USDC=4小时
                 funding_interval_hours = symbol_info.get("funding_interval_hours", 8)  # 默认8小时
                 self._funding_interval_hours[trading_pair] = funding_interval_hours
+
+                price_limit_bound = symbol_info.get("price_limit_bound")
+                if price_limit_bound is not None:
+                    self._price_limit_bounds[trading_pair] = Decimal(str(price_limit_bound))
                 
                 # 保存 base_token 和 quote_token（整数 token ID），用于后续 API 调用（下单、调整杠杆等）
                 if base_token_id is not None:
