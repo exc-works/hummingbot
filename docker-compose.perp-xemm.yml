@@ -1,0 +1,47 @@
+# Perp XEMM — Caishen 永续（Maker）+ Hyperliquid 永续（Taker）
+#
+# 【模式 A - 交互配置，推荐首次使用】
+#   docker compose -f docker-compose.perp-xemm.yml up -d
+#   docker attach hummingbot_perp_xemm
+#   在界面里: 设密码 → connect caishen_perpetual_testnet → connect hyperliquid_perpetual_testnet → start
+#   退出但保持运行: Ctrl+P 然后 Ctrl+Q（不要用 exit）
+#
+# 【模式 B - Headless 自动启动】配置全部就绪后再启用下方注释的环境变量
+#   需要: conf/.password_verification、conf/connectors/*、conf/scripts/*.yml、conf/controllers/*.yml
+
+services:
+  hummingbot_perp_xemm:
+    container_name: hummingbot_perp_xemm
+    image: hummingbot/hummingbot:dev
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    volumes:
+      - ./conf:/home/hummingbot/conf
+      - ./conf/connectors:/home/hummingbot/conf/connectors
+      - ./conf/strategies:/home/hummingbot/conf/strategies
+      - ./conf/controllers:/home/hummingbot/conf/controllers
+      - ./conf/scripts:/home/hummingbot/conf/scripts
+      - ./logs:/home/hummingbot/logs
+      - ./data:/home/hummingbot/data
+      - ./certs:/home/hummingbot/certs
+      - ./scripts:/home/hummingbot/scripts
+      - ./controllers:/home/hummingbot/controllers
+    # --- 模式 A: 交互配置（默认，不自动跑策略）---
+    # 不设置 HEADLESS_MODE / SCRIPT_CONFIG，容器启动后 attach 进 CLI 手动配置
+    #
+    # --- 模式 B: Headless 自动启动（配置齐全后取消注释）---
+    # environment:
+    #   - CONFIG_PASSWORD=${CONFIG_PASSWORD:-admin}
+    #   - HEADLESS_MODE=true
+    #   - CONFIG_FILE_NAME=v2_with_controllers.py
+    #   - SCRIPT_CONFIG=conf_v2_perp_xemm.yml
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "5"
+    tty: true
+    stdin_open: true
+    network_mode: host
+    restart: unless-stopped
