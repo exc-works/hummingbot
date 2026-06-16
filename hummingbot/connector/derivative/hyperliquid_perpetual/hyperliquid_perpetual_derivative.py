@@ -270,6 +270,8 @@ class HyperliquidPerpetualDerivative(PerpetualDerivativePyBase):
 
     async def _hydrate_dex_markets_asset_ctxs(self, dex_markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         hydrated_markets: List[Dict[str, Any]] = []
+        rate_limited = False
+        skipped_after_rate_limit = 0
 
         for dex_info in dex_markets:
             if not isinstance(dex_info, dict):
@@ -280,6 +282,11 @@ class HyperliquidPerpetualDerivative(PerpetualDerivativePyBase):
 
             dex_name = dex_info.get("name", "")
             if not dex_name:
+                hydrated_markets.append(dex_info)
+                continue
+
+            if rate_limited:
+                skipped_after_rate_limit += 1
                 hydrated_markets.append(dex_info)
                 continue
 
@@ -300,11 +307,19 @@ class HyperliquidPerpetualDerivative(PerpetualDerivativePyBase):
                 if not self._has_complete_asset_ctxs(updated_dex_info):
                     self.logger().warning(f"WARN: perpMeta and assetCtxs length mismatch for dex={dex_name}")
                 hydrated_markets.append(updated_dex_info)
+                await asyncio.sleep(0.1)
             except IOError as e:
-                # 429 rate-limit or other HTTP errors: log concisely without flooding the log with tracebacks
-                self.logger().warning(
-                    f"Error fetching metaAndAssetCtxs for dex={dex_name}; skipping HIP-3 asset contexts. ({e})"
-                )
+                err_text = str(e)
+                if "429" in err_text:
+                    rate_limited = True
+                    self.logger().warning(
+                        f"Rate limited while fetching HIP-3 asset contexts (dex={dex_name}); "
+                        f"skipping remaining per-dex hydration requests."
+                    )
+                else:
+                    self.logger().warning(
+                        f"Error fetching metaAndAssetCtxs for dex={dex_name}; skipping HIP-3 asset contexts. ({e})"
+                    )
                 hydrated_markets.append(dex_info)
             except Exception:
                 self.logger().warning(
@@ -312,6 +327,11 @@ class HyperliquidPerpetualDerivative(PerpetualDerivativePyBase):
                     exc_info=True,
                 )
                 hydrated_markets.append(dex_info)
+
+        if skipped_after_rate_limit > 0:
+            self.logger().warning(
+                f"Skipped HIP-3 asset context hydration for {skipped_after_rate_limit} additional dex entries after rate limit."
+            )
 
         return hydrated_markets
 
@@ -352,7 +372,15 @@ class HyperliquidPerpetualDerivative(PerpetualDerivativePyBase):
         # allPerpMetas may return either meta-only entries or [[meta, assetCtxs], ...] entries.
         if self._is_all_perp_metas_response(exchange_info_dex):
             dex_markets = self._parse_all_perp_metas_response(exchange_info_dex)
-            dex_markets = await self._hydrate_dex_markets_asset_ctxs(dex_markets)
+            # Testnet exposes hundreds of HIP-3 deployers; per-dex hydration triggers 429.
+            # Native perp pairs (e.g. UBTC-USDC) do not need this step.
+            if self.domain != CONSTANTS.TESTNET_DOMAIN:
+                dex_markets = await self._hydrate_dex_markets_asset_ctxs(dex_markets)
+            else:
+                self.logger().info(
+                    "Skipping per-DEX HIP-3 asset context hydration on Hyperliquid testnet "
+                    "(avoids rate limits; standard perp pairs are unaffected)."
+                )
             self._dex_markets = dex_markets
             return dex_markets
         self.logger().warning(
@@ -987,15 +1015,17 @@ class HyperliquidPerpetualDerivative(PerpetualDerivativePyBase):
                     full_symbol = perp_meta.get("name", "")  # e.g., 'xyz:AAPL'
                     if ':' in full_symbol:
                         self._is_hip3_market[full_symbol] = True
-                        deployer, base = full_symbol.split(':', 1)
                         quote = CONSTANTS.CURRENCY
-                        symbol = f'{deployer.upper()}_{base}'
-                        # quote = "USD" if deployer == "xyz" else 'USDH'
-                        trading_pair = combine_to_hb_trading_pair(full_symbol, quote)
+                        trading_pair = combine_to_hb_trading_pair(full_symbol, quote).upper()
                         if trading_pair in mapping.inverse:
-                            self._resolve_trading_pair_symbols_duplicate(mapping, full_symbol, full_symbol.upper(), quote)
-                        else:
-                            mapping[full_symbol] = trading_pair.upper()
+                            existing_symbol = mapping.inverse[trading_pair]
+                            if existing_symbol != full_symbol:
+                                self.logger().debug(
+                                    f"Skipping duplicate HIP-3 trading pair {trading_pair} for "
+                                    f"{full_symbol} (already mapped from {existing_symbol})."
+                                )
+                            continue
+                        mapping[full_symbol] = trading_pair
 
         self._set_trading_pair_symbol_map(mapping)
 
