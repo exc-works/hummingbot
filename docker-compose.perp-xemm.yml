@@ -1,9 +1,13 @@
 # Perp XEMM — Caishen 永续（Maker）+ Hyperliquid 永续（Taker）
 #
-# 【模式 A - 交互配置，推荐首次使用】
+# 本地编译镜像（非官方 pull）：
+#   TAG=:dev make build-dev
 #   docker compose -f docker-compose.perp-xemm.yml up -d
+#
+# 【模式 A - 交互配置，推荐首次使用】
 #   docker attach hummingbot_perp_xemm
-#   在界面里: 设密码 → connect caishen_perpetual_testnet → connect hyperliquid_perpetual_testnet → start
+#   在界面里: connect caishen_perpetual_testnet → connect hyperliquid_perpetual_testnet
+#   start --v2 conf_v2_perp_xemm.yml
 #   退出但保持运行: Ctrl+P 然后 Ctrl+Q（不要用 exit）
 #
 # 【模式 B - Headless 自动启动】配置全部就绪后再启用下方注释的环境变量
