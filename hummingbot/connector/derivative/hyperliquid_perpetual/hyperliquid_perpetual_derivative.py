@@ -300,6 +300,12 @@ class HyperliquidPerpetualDerivative(PerpetualDerivativePyBase):
                 if not self._has_complete_asset_ctxs(updated_dex_info):
                     self.logger().warning(f"WARN: perpMeta and assetCtxs length mismatch for dex={dex_name}")
                 hydrated_markets.append(updated_dex_info)
+            except IOError as e:
+                # 429 rate-limit or other HTTP errors: log concisely without flooding the log with tracebacks
+                self.logger().warning(
+                    f"Error fetching metaAndAssetCtxs for dex={dex_name}; skipping HIP-3 asset contexts. ({e})"
+                )
+                hydrated_markets.append(dex_info)
             except Exception:
                 self.logger().warning(
                     f"Error fetching metaAndAssetCtxs for dex={dex_name}; skipping HIP-3 asset contexts.",
@@ -981,7 +987,7 @@ class HyperliquidPerpetualDerivative(PerpetualDerivativePyBase):
                     full_symbol = perp_meta.get("name", "")  # e.g., 'xyz:AAPL'
                     if ':' in full_symbol:
                         self._is_hip3_market[full_symbol] = True
-                        deployer, base = full_symbol.split(':')
+                        deployer, base = full_symbol.split(':', 1)
                         quote = CONSTANTS.CURRENCY
                         symbol = f'{deployer.upper()}_{base}'
                         # quote = "USD" if deployer == "xyz" else 'USDH'
