@@ -9,8 +9,8 @@ from hummingbot.core.data_type.trade_fee import TradeFeeSchema
 
 # === 手续费配置 ===
 DEFAULT_FEES = TradeFeeSchema(
-    maker_percent_fee_decimal=Decimal("0.0002"),  # 0.02%
-    taker_percent_fee_decimal=Decimal("0.0005"),  # 0.05%
+    maker_percent_fee_decimal=Decimal("0.00015"),  # 0.015%
+    taker_percent_fee_decimal=Decimal("0.00045"),  # 0.045%
     buy_percent_fee_deducted_from_returns=True
 )
 

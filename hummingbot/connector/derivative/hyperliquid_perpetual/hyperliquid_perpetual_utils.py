@@ -6,10 +6,10 @@ from pydantic import ConfigDict, Field, SecretStr, field_validator
 from hummingbot.client.config.config_data_types import BaseConnectorConfigMap
 from hummingbot.core.data_type.trade_fee import TradeFeeSchema
 
-# Maker rebates(-0.02%) are paid out continuously on each trade directly to the trading wallet.(https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees)
+# Fees aligned with Caishen perpetual: maker 0.015%, taker 0.045%
 DEFAULT_FEES = TradeFeeSchema(
-    maker_percent_fee_decimal=Decimal("0"),
-    taker_percent_fee_decimal=Decimal("0.00025"),
+    maker_percent_fee_decimal=Decimal("0.00015"),
+    taker_percent_fee_decimal=Decimal("0.00045"),
     buy_percent_fee_deducted_from_returns=True
 )
 
@@ -130,7 +130,7 @@ KEYS = HyperliquidPerpetualConfigMap.model_construct()
 OTHER_DOMAINS = ["hyperliquid_perpetual_testnet"]
 OTHER_DOMAINS_PARAMETER = {"hyperliquid_perpetual_testnet": "hyperliquid_perpetual_testnet"}
 OTHER_DOMAINS_EXAMPLE_PAIR = {"hyperliquid_perpetual_testnet": "BTC-USD"}
-OTHER_DOMAINS_DEFAULT_FEES = {"hyperliquid_perpetual_testnet": [0, 0.025]}
+OTHER_DOMAINS_DEFAULT_FEES = {"hyperliquid_perpetual_testnet": DEFAULT_FEES}
 
 
 class HyperliquidPerpetualTestnetConfigMap(BaseConnectorConfigMap):
