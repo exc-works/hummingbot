@@ -115,6 +115,13 @@ class PerpetualDerivativePyBase(ExchangePyBase, ABC):
     def set_leverage(self, trading_pair: str, leverage: int = 1):
         safe_ensure_future(self._execute_set_leverage(trading_pair, leverage))
 
+    async def configure_trading_pair_settings(
+        self, trading_pair: str, leverage: int, position_mode: PositionMode
+    ):
+        """Set position mode then leverage sequentially (avoids concurrent tx races)."""
+        await self._execute_set_position_mode(position_mode)
+        await self._execute_set_leverage(trading_pair, leverage)
+
     def get_funding_info(self, trading_pair: str) -> FundingInfo:
         return self._perpetual_trading.get_funding_info(trading_pair)
 

@@ -135,6 +135,7 @@ class CaishenPerpetualAuth(AuthBase):
         msg.base_token = form_data["base_token"]
         msg.quote_token = form_data["quote_token"]
         msg.leverage = form_data["leverage"]
+        msg.mode = form_data.get("mode", 1)
         return msg.SerializeToString()
 
     def prepare_set_position_mode(self, form_data: dict) -> bytes:

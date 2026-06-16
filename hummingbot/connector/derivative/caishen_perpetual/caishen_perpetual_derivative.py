@@ -634,7 +634,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             "type": order_type_int,
             "time_in_force": time_in_force,
             "size": str(amount),
-            "mode": 0,
+            "mode": CONSTANTS.CAISHEN_MARGIN_MODE_ISOLATED,
             "reduce_only": position_action == PositionAction.CLOSE,
         }
         form_data["client_order_id"] = self._hb_order_id_to_caishen_client_order_id(order_id)
@@ -1702,14 +1702,156 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
     async def _get_position_mode(self) -> Optional[PositionMode]:
         return PositionMode.ONEWAY
 
-    async def _trading_pair_position_mode_set(self, mode: PositionMode, trading_pair: str) -> Tuple[bool, str]:
-        msg = ""
+    async def _execute_set_position_mode_for_pairs(
+        self, mode: PositionMode, trading_pairs: List[str]
+    ) -> Tuple[bool, List[str], str]:
+        """
+        Always push margin mode to chain. Base class skips the API call when local
+        position_mode already matches, but Caishen still needs PERP_SET_POSITION_MODE
+        (ISOLATED) even when Hummingbot position mode is already ONEWAY.
+        """
+        successful_pairs = []
         success = True
-        initial_mode = await self._get_position_mode()
-        if initial_mode != mode:
-            msg = "caishen_perpetual only supports the ONEWAY position mode."
-            success = False
-        return success, msg
+        msg = ""
+
+        for trading_pair in trading_pairs:
+            pair_success, msg = await self._trading_pair_position_mode_set(mode, trading_pair)
+            if pair_success:
+                successful_pairs.append(trading_pair)
+            else:
+                success = False
+                self.logger().network(f"Error switching {trading_pair} mode to {mode}: {msg}")
+                break
+
+        return success, successful_pairs, msg
+
+    async def _trading_pair_position_mode_set(self, mode: PositionMode, trading_pair: str) -> Tuple[bool, str]:
+        if mode != PositionMode.ONEWAY:
+            return False, "caishen_perpetual only supports the ONEWAY position mode."
+
+        try:
+            base_token_id = self.get_base_token_id(trading_pair)
+            quote_token_id = self.get_quote_token_id(trading_pair)
+        except KeyError as e:
+            return False, str(e)
+
+        current_margin_mode = await self._fetch_margin_mode(trading_pair)
+        if current_margin_mode == "ISOLATED":
+            self.logger().info(
+                f"{trading_pair} margin mode already ISOLATED on Caishen; skipping on-chain mode tx."
+            )
+            return True, ""
+
+        action_type = "PERP_SET_POSITION_MODE"
+        form_data = {
+            "base_token": base_token_id,
+            "quote_token": quote_token_id,
+            "mode": CONSTANTS.CAISHEN_MARGIN_MODE_ISOLATED,
+        }
+
+        try:
+            async with self._tx_submission_lock:
+                block_hash_bytes = await self.get_latest()
+                encoded_message = await self.authenticator.make_tx(
+                    self.api_key, block_hash_bytes, action_type, form_data
+                )
+                set_result = await self.submit_tx(encoded_message)
+
+            response_code = set_result.get("code", -1)
+            response_msg = set_result.get("msg", "")
+            if response_code != 0:
+                msg = f"设置仓位模式失败: code={response_code}, msg={response_msg}"
+                self.logger().warning(
+                    f"设置逐仓模式失败 - Trading Pair: {trading_pair}, {msg}"
+                )
+                return False, msg
+
+            data = set_result.get("data", {})
+            result = data.get("result", {})
+            error_info = result.get("error")
+            block_result = result.get("block_result")
+
+            if error_info:
+                error_code = error_info.get("code", "")
+                error_message = error_info.get("message", "")
+                msg = f"设置仓位模式失败: {error_code} - {error_message}"
+                self.logger().warning(
+                    f"设置逐仓模式失败 - Trading Pair: {trading_pair}, Error: {msg}"
+                )
+                return False, msg
+
+            if block_result:
+                block_number = block_result.get("number", "0")
+                try:
+                    if int(block_number) > 0:
+                        self.logger().info(
+                            f"Position mode for {trading_pair} set to ISOLATED "
+                            f"(block {block_number})."
+                        )
+                        return True, ""
+                except (ValueError, TypeError):
+                    pass
+
+            msg = f"设置仓位模式结果异常: {result}"
+            self.logger().error(
+                f"设置逐仓模式失败 - Trading Pair: {trading_pair}, {msg}"
+            )
+            return False, msg
+
+        except Exception as exc:
+            msg = f"设置仓位模式异常: {exc}"
+            self.logger().error(
+                f"设置逐仓模式失败 - Trading Pair: {trading_pair}, {msg}"
+            )
+            return False, msg
+
+    async def get_exchange_isolated_leverage(self, trading_pair: str) -> Optional[int]:
+        """Read isolated_leverage for a symbol from Caishen REST (source of truth)."""
+        try:
+            response = await self._api_get(
+                path_url=CONSTANTS.POSITION_MODES_URL,
+                params={"account": self.api_key},
+            )
+            if response.get("code") != 0:
+                return None
+            base_token_id = self.get_base_token_id(trading_pair)
+            quote_token_id = self.get_quote_token_id(trading_pair)
+            for entry in response.get("data", {}).get("modes", []):
+                if (
+                    entry.get("base_token") == base_token_id
+                    and entry.get("quote_token") == quote_token_id
+                ):
+                    if entry.get("mode") == CONSTANTS.CAISHEN_MARGIN_MODE_ISOLATED:
+                        return int(entry.get("isolated_leverage", 0))
+                    return int(entry.get("cross_leverage", 0))
+            return None
+        except Exception as exc:
+            self.logger().debug(f"Could not fetch exchange leverage for {trading_pair}: {exc}")
+            return None
+
+    async def _fetch_margin_mode(self, trading_pair: str) -> Optional[str]:
+        try:
+            response = await self._api_get(
+                path_url=CONSTANTS.POSITION_MODES_URL,
+                params={"account": self.api_key},
+            )
+            if response.get("code") != 0:
+                return None
+            base_token_id = self.get_base_token_id(trading_pair)
+            quote_token_id = self.get_quote_token_id(trading_pair)
+            for entry in response.get("data", {}).get("modes", []):
+                if (
+                    entry.get("base_token") == base_token_id
+                    and entry.get("quote_token") == quote_token_id
+                ):
+                    mode_val = entry.get("mode")
+                    if mode_val == CONSTANTS.CAISHEN_MARGIN_MODE_ISOLATED:
+                        return "ISOLATED"
+                    if mode_val == CONSTANTS.CAISHEN_MARGIN_MODE_CROSS:
+                        return "CROSS"
+            return None
+        except Exception:
+            return None
     
     async def _set_trading_pair_leverage(self, trading_pair: str, leverage: int) -> Tuple[bool, str]:
         """
@@ -1741,12 +1883,16 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             "base_token": base_token_id,
             "quote_token": quote_token_id,
             "leverage": leverage,
+            "mode": CONSTANTS.CAISHEN_MARGIN_MODE_ISOLATED,
         }
         
         try:
-            block_hash_bytes = await self.get_latest()
-            encoded_message = await self.authenticator.make_tx(self.api_key,block_hash_bytes, action_type, form_data)
-            set_result = await self.submit_tx(encoded_message)
+            async with self._tx_submission_lock:
+                block_hash_bytes = await self.get_latest()
+                encoded_message = await self.authenticator.make_tx(
+                    self.api_key, block_hash_bytes, action_type, form_data
+                )
+                set_result = await self.submit_tx(encoded_message)
             self.logger().debug(f"设置杠杆 API 响应: {set_result}")
             
             # 解析 API 响应结构: {'code': 0, 'msg': '', 'data': {'result': {'block_result': {...}}}}

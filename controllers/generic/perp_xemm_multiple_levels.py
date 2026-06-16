@@ -193,20 +193,20 @@ class PerpXEMMMultipleLevels(ControllerBase):
         self._maker_leverage_ready: bool = False
         self._taker_leverage_ready: bool = False
         self._last_leverage_attempt: float = 0.0
+        self._leverage_setup_dispatched_at: Dict[str, float] = {}
+        self._leverage_setup_in_progress: Set[str] = set()
+        self._LEVERAGE_CONFIRM_WAIT_S: float = 3.0
 
         super().__init__(config, *args, **kwargs)
-
-        # Attempt first leverage + position mode setup immediately
-        self._setup_leverage_and_position_mode()
 
     # -----------------------------------------------------------------------
     # Leverage / position-mode setup with retry
     # -----------------------------------------------------------------------
 
-    def _setup_leverage_and_position_mode(self):
+    async def _setup_leverage_and_position_mode(self):
         """
-        Call set_leverage + set_position_mode on both perp connectors.
-        Safe to call multiple times; will skip if already confirmed ready.
+        Apply set_leverage + set_position_mode on both perp connectors.
+        Uses sequential async setup to avoid Caishen on-chain tx races.
         """
         now = time.time()
         if now - self._last_leverage_attempt < self._LEVERAGE_RETRY_INTERVAL_S:
@@ -218,7 +218,7 @@ class PerpXEMMMultipleLevels(ControllerBase):
             (self.config.taker_connector, self.config.taker_trading_pair, self.config.taker_leverage, False),
         ]:
             already_ready = self._maker_leverage_ready if is_maker else self._taker_leverage_ready
-            if already_ready:
+            if already_ready or connector_name in self._leverage_setup_in_progress:
                 continue
             try:
                 connector = self.market_data_provider.get_connector(connector_name)
@@ -228,25 +228,84 @@ class PerpXEMMMultipleLevels(ControllerBase):
                         f"will retry leverage/position-mode setup."
                     )
                     continue
-                connector.set_position_mode(self.config.position_mode)
-                connector.set_leverage(trading_pair, leverage)
+
+                self._leverage_setup_in_progress.add(connector_name)
+                self._leverage_setup_dispatched_at[connector_name] = now
+                self.logger().info(
+                    f"[Perp XEMM] Applying leverage/position-mode for "
+                    f"{connector_name} {trading_pair} "
+                    f"(position_mode={self.config.position_mode.name}, leverage={leverage}x)."
+                )
+
+                if hasattr(connector, "configure_trading_pair_settings"):
+                    await connector.configure_trading_pair_settings(
+                        trading_pair, leverage, self.config.position_mode
+                    )
+                else:
+                    connector.set_position_mode(self.config.position_mode)
+                    connector.set_leverage(trading_pair, leverage)
+
+            except Exception as exc:
+                self.logger().error(
+                    f"[Perp XEMM] Failed to apply leverage/position_mode on {connector_name}: {exc}. "
+                    f"Will retry."
+                )
+                self._leverage_setup_dispatched_at.pop(connector_name, None)
+                self._last_leverage_attempt = 0.0
+            finally:
+                self._leverage_setup_in_progress.discard(connector_name)
+
+    async def _confirm_leverage_setup(self):
+        """Mark a leg ready only after exchange-side settings match the config."""
+        for connector_name, trading_pair, leverage, is_maker in [
+            (self.config.maker_connector, self.config.maker_trading_pair, self.config.maker_leverage, True),
+            (self.config.taker_connector, self.config.taker_trading_pair, self.config.taker_leverage, False),
+        ]:
+            if is_maker and self._maker_leverage_ready:
+                continue
+            if not is_maker and self._taker_leverage_ready:
+                continue
+
+            dispatched_at = self._leverage_setup_dispatched_at.get(connector_name)
+            if dispatched_at is None:
+                continue
+
+            elapsed = time.time() - dispatched_at
+            if elapsed < self._LEVERAGE_CONFIRM_WAIT_S:
+                continue
+
+            try:
+                connector = self.market_data_provider.get_connector(connector_name)
+            except Exception:
+                continue
+
+            if hasattr(connector, "get_exchange_isolated_leverage"):
+                exchange_lev = await connector.get_exchange_isolated_leverage(trading_pair)
+                leverage_ok = exchange_lev == leverage
+            else:
+                exchange_lev = None
+                leverage_ok = connector.get_leverage(trading_pair) == leverage
+
+            mode_ok = connector.position_mode == self.config.position_mode
+
+            if leverage_ok and mode_ok:
                 self.logger().info(
                     f"[Perp XEMM] {connector_name} {trading_pair}: "
-                    f"position_mode={self.config.position_mode.name}, leverage={leverage}x"
+                    f"position_mode={self.config.position_mode.name}, leverage={leverage}x confirmed."
                 )
                 if is_maker:
                     self._maker_leverage_ready = True
                 else:
                     self._taker_leverage_ready = True
-
-                # Optional margin-mode self-check (read-only, warn only)
                 self._warn_if_not_isolated(connector, connector_name, trading_pair)
-
-            except Exception as exc:
-                self.logger().error(
-                    f"[Perp XEMM] Failed to set leverage/position_mode on {connector_name}: {exc}. "
-                    f"Will retry."
+            elif elapsed > 60:
+                self.logger().warning(
+                    f"[Perp XEMM] {connector_name} {trading_pair} setup not confirmed after 60s "
+                    f"(exchange_lev={exchange_lev}, target={leverage}, "
+                    f"local_lev={connector.get_leverage(trading_pair)}, mode_ok={mode_ok}); will retry."
                 )
+                self._leverage_setup_dispatched_at.pop(connector_name, None)
+                self._last_leverage_attempt = 0.0
 
     @staticmethod
     def _warn_if_not_isolated(connector, connector_name: str, trading_pair: str):
@@ -277,7 +336,8 @@ class PerpXEMMMultipleLevels(ControllerBase):
     async def update_processed_data(self):
         """Retry leverage/position-mode setup until both legs confirm ready."""
         if not self._leverage_ready:
-            self._setup_leverage_and_position_mode()
+            await self._setup_leverage_and_position_mode()
+            await self._confirm_leverage_setup()
 
     # -----------------------------------------------------------------------
     # Margin gate helper

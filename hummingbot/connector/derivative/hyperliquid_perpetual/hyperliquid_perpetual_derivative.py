@@ -1246,7 +1246,7 @@ class HyperliquidPerpetualDerivative(PerpetualDerivativePyBase):
         exchange_symbol = await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
         if not self.coin_to_asset:
             await self._update_trading_rules()
-        is_cross = True  # Default to cross margin
+        is_cross = False  # Isolated margin (Perp XEMM / risk control)
 
         # Check if this is a HIP-3 market (doesn't support leverage API)
         if exchange_symbol in self._is_hip3_market and self._is_hip3_market[exchange_symbol]:

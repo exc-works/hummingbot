@@ -38,6 +38,11 @@ SUBMIT_TX_URL = "/v1/tx"
 ACCOUNT_INFO_URL = "/v1/balances/perp"
 ORDER_OPEN_URL = "/v1/orders/open"
 POSITION_INFORMATION_URL = "/v1/positions/open"
+POSITION_MODES_URL = "/v1/positions/modes"
+
+# Caishen on-chain PositionMode (margin mode): CROSS=0, ISOLATED=1
+CAISHEN_MARGIN_MODE_CROSS = 0
+CAISHEN_MARGIN_MODE_ISOLATED = 1
 ACCOUNT_TRADE_LIST_URL = "/v1/trades/by-account"
 ACCOUNT_FUNDING_HISTORY_URL = "/v1/positions/funding/history"
 
