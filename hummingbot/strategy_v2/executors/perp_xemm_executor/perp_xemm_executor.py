@@ -143,6 +143,7 @@ class PerpXEMMExecutor(ExecutorBase):
         self._effective_min_profitability: Decimal = config.min_profitability
         self._effective_max_profitability: Decimal = config.max_profitability
         self._in_pre_funding_window: bool = False
+        self._funding_info_missing_logged: bool = False
 
         # Order tracking
         self.maker_order: Optional[TrackedOrder] = None
@@ -388,6 +389,13 @@ class PerpXEMMExecutor(ExecutorBase):
     # Funding rate logic
     # -----------------------------------------------------------------------
 
+    @staticmethod
+    def _has_funding_info(connector: ConnectorBase, trading_pair: str) -> bool:
+        perpetual_trading = getattr(connector, "_perpetual_trading", None)
+        if perpetual_trading is None:
+            return False
+        return trading_pair in perpetual_trading._funding_info
+
     async def update_funding_buffer(self):
         """
         Compute funding_buffer_pct as a conservative pre-deduction in the maker target price.
@@ -406,6 +414,23 @@ class PerpXEMMExecutor(ExecutorBase):
         try:
             maker_conn = self.connectors[self.maker_connector]
             taker_conn = self.connectors[self.taker_connector]
+
+            if (not self._has_funding_info(maker_conn, self.maker_trading_pair)
+                    or not self._has_funding_info(taker_conn, self.taker_trading_pair)):
+                if not self._funding_info_missing_logged:
+                    self.logger().warning(
+                        f"Funding info not ready for {self.maker_trading_pair}/"
+                        f"{self.taker_trading_pair}; funding_buffer_pct=0 until connectors initialize."
+                    )
+                    self._funding_info_missing_logged = True
+                self._funding_buffer_pct = Decimal("0")
+                return
+
+            if self._funding_info_missing_logged:
+                self.logger().info(
+                    f"Funding info available for {self.maker_trading_pair}/{self.taker_trading_pair}."
+                )
+                self._funding_info_missing_logged = False
 
             maker_info = maker_conn.get_funding_info(self.maker_trading_pair)
             taker_info = taker_conn.get_funding_info(self.taker_trading_pair)
@@ -453,11 +478,12 @@ class PerpXEMMExecutor(ExecutorBase):
                 self._effective_max_profitability = self.config.max_profitability
 
         except Exception as exc:
-            # Funding info may not be available at startup; log and continue with zero buffer
-            self.logger().warning(
-                f"Could not fetch funding info for {self.maker_trading_pair}/{self.taker_trading_pair}: {exc}. "
-                f"funding_buffer_pct set to 0."
-            )
+            if not self._funding_info_missing_logged:
+                self.logger().warning(
+                    f"Could not fetch funding info for {self.maker_trading_pair}/"
+                    f"{self.taker_trading_pair}: {exc}. funding_buffer_pct set to 0."
+                )
+                self._funding_info_missing_logged = True
             self._funding_buffer_pct = Decimal("0")
 
     def _apply_pre_funding_window_logic(self, maker_rate: Decimal, taker_rate: Decimal):
@@ -656,8 +682,20 @@ class PerpXEMMExecutor(ExecutorBase):
         else:
             self.maker_order = None
 
+    def _maker_fill_cap(self) -> Decimal:
+        """Upper bound on maker fill for this executor (sum of placed maker order sizes)."""
+        amounts = [
+            tracked.order.amount
+            for tracked in self._maker_orders_by_id.values()
+            if tracked.order is not None
+        ]
+        if amounts:
+            return sum(amounts, Decimal("0"))
+        return self.config.order_amount
+
     def _recompute_maker_filled(self):
-        self._maker_filled_base = max(self._maker_fills_sum, self._maker_filled_floor)
+        computed = max(self._maker_fills_sum, self._maker_filled_floor)
+        self._maker_filled_base = min(computed, self._maker_fill_cap())
 
     def _actual_hedged_base(self) -> Decimal:
         return sum((t.executed_amount_base for t in self.taker_orders), Decimal("0"))

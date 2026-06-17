@@ -466,7 +466,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             if tracked_order.is_cancelled:
                 self._cancel_requested.discard(order_id)
                 return True
-            if tracked_order.is_pending_cancel or order_id in self._cancel_requested:
+            if tracked_order.is_pending_cancel_confirmation or order_id in self._cancel_requested:
                 self.logger().debug(
                     f"Skip duplicate cancel for {order_id} "
                     f"(state={tracked_order.current_state.name})."
@@ -950,6 +950,19 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                 exc_info=request_error,
             )
 
+    @staticmethod
+    def _normalize_trade_id(trade: Dict[str, Any], exchange_order_id: str) -> str:
+        """Prefer tx_hash so REST polling and WS user stream dedupe the same fill."""
+        tx_hash = trade.get("tx_hash")
+        if tx_hash not in (None, ""):
+            return str(tx_hash)
+        trade_id = trade.get("trade_id")
+        if trade_id not in (None, ""):
+            return str(trade_id)
+        ts_ms = trade.get("timestamp", trade.get("time", 0))
+        size = trade.get("size", "0")
+        return f"{exchange_order_id}-{ts_ms}-{size}"
+
     def _process_trade_rs_event_message(self, order_fill: Dict[str, Any], all_fillable_order):
         """
         处理从 REST API 返回的单条交易记录
@@ -1010,7 +1023,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         
         # 创建交易更新对象
         trade_update = TradeUpdate(
-            trade_id=str(order_fill.get("trade_id", "")),
+            trade_id=self._normalize_trade_id(order_fill, exchange_order_id),
             client_order_id=fillable_order.client_order_id,
             exchange_order_id=exchange_order_id,
             trading_pair=fillable_order.trading_pair,
@@ -1204,7 +1217,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         fill_base_amount = Decimal(str(trade.get("size", "0")))
         fill_price = Decimal(str(trade.get("price", "0")))
         trade_update = TradeUpdate(
-            trade_id=str(trade.get("tx_hash", f"{exchange_order_id}-{ts_ms}")),
+            trade_id=self._normalize_trade_id(trade, exchange_order_id),
             client_order_id=tracked_order.client_order_id,
             exchange_order_id=exchange_order_id,
             trading_pair=tracked_order.trading_pair,
