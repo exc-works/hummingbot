@@ -144,6 +144,7 @@ class PerpXEMMExecutor(ExecutorBase):
         self._effective_max_profitability: Decimal = config.max_profitability
         self._in_pre_funding_window: bool = False
         self._funding_info_missing_logged: bool = False
+        self._last_skip_create_reason: Optional[str] = None
 
         # Order tracking
         self.maker_order: Optional[TrackedOrder] = None
@@ -266,6 +267,8 @@ class PerpXEMMExecutor(ExecutorBase):
             await self.control_shutdown_process()
 
     async def control_maker_order(self):
+        if self.maker_order is not None and self.maker_order.is_done:
+            self.maker_order = None
         if self.maker_order is None:
             await self.create_maker_order()
         else:
@@ -548,6 +551,20 @@ class PerpXEMMExecutor(ExecutorBase):
     # Order creation and management
     # -----------------------------------------------------------------------
 
+    async def _expected_net_profitability_at_target(self) -> Decimal:
+        try:
+            conversion_rate = await self.get_quote_asset_conversion_rate()
+        except Exception:
+            return Decimal("-1")
+        if self._maker_target_price <= Decimal("0"):
+            return Decimal("-1")
+        normalized_taker = self._taker_result_price * conversion_rate
+        if self.maker_order_side == TradeType.BUY:
+            gross = (normalized_taker - self._maker_target_price) / self._maker_target_price
+        else:
+            gross = (self._maker_target_price - normalized_taker) / self._maker_target_price
+        return gross - self._tx_cost_pct
+
     async def create_maker_order(self):
         maker_mid = self.connectors[self.maker_connector].get_price_by_type(
             self.maker_trading_pair, PriceType.MidPrice
@@ -562,6 +579,31 @@ class PerpXEMMExecutor(ExecutorBase):
                     f"Check taker order book / trading pair before placing on Caishen."
                 )
                 return
+
+        expected_net = await self._expected_net_profitability_at_target()
+        if expected_net < self._effective_min_profitability:
+            reason = (
+                f"below_min:{self._effective_min_profitability:.6f}:{expected_net:.6f}"
+            )
+            if self._last_skip_create_reason != reason:
+                self.logger().info(
+                    f"Skip maker {self.maker_order_side.name} order: expected net "
+                    f"{expected_net:.6f} < effective_min {self._effective_min_profitability:.6f}."
+                )
+                self._last_skip_create_reason = reason
+            return
+        if expected_net > self._effective_max_profitability:
+            reason = (
+                f"above_max:{self._effective_max_profitability:.6f}:{expected_net:.6f}"
+            )
+            if self._last_skip_create_reason != reason:
+                self.logger().info(
+                    f"Skip maker {self.maker_order_side.name} order: expected net "
+                    f"{expected_net:.6f} > effective_max {self._effective_max_profitability:.6f}."
+                )
+                self._last_skip_create_reason = reason
+            return
+        self._last_skip_create_reason = None
 
         order_id = self.place_order(
             connector_name=self.maker_connector,

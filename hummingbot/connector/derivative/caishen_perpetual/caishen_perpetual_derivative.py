@@ -963,6 +963,17 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         size = trade.get("size", "0")
         return f"{exchange_order_id}-{ts_ms}-{size}"
 
+    @staticmethod
+    def _is_duplicate_trade_update(order: InFlightOrder, trade: Dict[str, Any], trade_id: str) -> bool:
+        if trade_id in order.order_fills:
+            return True
+        fill_base = Decimal(str(trade.get("size", "0")))
+        fill_price = Decimal(str(trade.get("price", "0")))
+        for existing in order.order_fills.values():
+            if existing.fill_base_amount == fill_base and existing.fill_price == fill_price:
+                return True
+        return False
+
     def _process_trade_rs_event_message(self, order_fill: Dict[str, Any], all_fillable_order):
         """
         处理从 REST API 返回的单条交易记录
@@ -998,7 +1009,13 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                 f"找不到对应的订单，跳过交易记录: {order_fill}"
             )
             return
-        
+
+        trade_id = self._normalize_trade_id(order_fill, exchange_order_id)
+        if self._is_duplicate_trade_update(fillable_order, order_fill, trade_id):
+            return
+        if fillable_order.is_filled:
+            return
+
         # 获取手续费资产（通常是 quote asset）
         fee_asset = fillable_order.quote_asset
         
@@ -1023,7 +1040,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         
         # 创建交易更新对象
         trade_update = TradeUpdate(
-            trade_id=self._normalize_trade_id(order_fill, exchange_order_id),
+            trade_id=trade_id,
             client_order_id=fillable_order.client_order_id,
             exchange_order_id=exchange_order_id,
             trading_pair=fillable_order.trading_pair,
@@ -1216,8 +1233,11 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
 
         fill_base_amount = Decimal(str(trade.get("size", "0")))
         fill_price = Decimal(str(trade.get("price", "0")))
+        trade_id = self._normalize_trade_id(trade, exchange_order_id)
+        if self._is_duplicate_trade_update(tracked_order, trade, trade_id):
+            return
         trade_update = TradeUpdate(
-            trade_id=self._normalize_trade_id(trade, exchange_order_id),
+            trade_id=trade_id,
             client_order_id=tracked_order.client_order_id,
             exchange_order_id=exchange_order_id,
             trading_pair=tracked_order.trading_pair,
