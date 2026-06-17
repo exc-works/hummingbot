@@ -72,6 +72,9 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         self._mark_prices: Dict[str, Decimal] = {}
         # 串行化 get_latest + sign + submit，避免并发共用同一 block hash 导致 tx hash 碰撞 (1003)
         self._tx_submission_lock = asyncio.Lock()
+        # stop 时 early_stop 与 cancel_all 会各撤一次；记录已发起撤单的 client_order_id
+        self._cancel_requested: set = set()
+        self._cancel_dedup_lock = asyncio.Lock()
         super().__init__(**kwargs)
     
     @property
@@ -459,8 +462,26 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
 
 
     async def _place_cancel(self, order_id: str, tracked_order: InFlightOrder):
-        action_type = "PERP_CANCEL_ORDER"
-        self.logger().warning(f"开始撤单 - Order ID: {order_id}, Exchange Order ID: {tracked_order.exchange_order_id}")
+        async with self._cancel_dedup_lock:
+            if tracked_order.is_cancelled:
+                self._cancel_requested.discard(order_id)
+                return True
+            if tracked_order.is_pending_cancel or order_id in self._cancel_requested:
+                self.logger().debug(
+                    f"Skip duplicate cancel for {order_id} "
+                    f"(state={tracked_order.current_state.name})."
+                )
+                return True
+            self._cancel_requested.add(order_id)
+
+        self.logger().warning(
+            f"开始撤单 - Order ID: {order_id}, Exchange Order ID: {tracked_order.exchange_order_id}"
+        )
+        return await self._submit_cancel_tx(order_id, tracked_order, "PERP_CANCEL_ORDER")
+
+    async def _submit_cancel_tx(
+        self, order_id: str, tracked_order: InFlightOrder, action_type: str
+    ) -> bool:
         # 获取 exchange_order_id（整数类型），caishen 撤单 API 需要使用 exchange_order_id 而不是 client_order_id
         exchange_order_id = tracked_order.exchange_order_id
         if not exchange_order_id:
@@ -513,15 +534,11 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             if response_code != 0:
                 msg = f"撤单失败: code={response_code}, msg={response_msg}"
                 self.logger().warning(f"撤单失败 - Order ID: {order_id}, {msg}")
-                
-                # 如果错误码表示订单不存在（如 1139），调用 process_order_not_found
-                # 参考 hyperliquid 的处理方式
+
                 if response_code == 1139 or "not found" in response_msg.lower() or "does not exist" in response_msg.lower():
-                    self.logger().debug(f"订单 {order_id} 不存在（错误码: {response_code}），无需撤单")
                     await self._order_tracker.process_order_not_found(order_id)
-                    # 对于1139错误码，不抛出异常，直接返回True，避免记录error日志
                     return True
-                
+
                 return False
             
             # 情况2: API 返回成功（code == 0），解析 data.result
@@ -536,22 +553,18 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             if error_info and not block_result:
                 error_code = error_info.get("code", "")
                 error_message = error_info.get("message", "")
-                
+
                 self.logger().warning(
                     f"撤单失败 - Order ID: {order_id}, "
                     f"Error Code: {error_code}, Message: {error_message}"
                 )
-                
-                # 如果是订单不存在的错误（错误码 1139 或错误消息包含 not found/does not exist），标记订单为未找到
-                # 参考 hyperliquid 的处理方式
-                if (error_code == 1139 or 
-                    "not found" in str(error_message).lower() or 
+
+                if (error_code == 1139 or
+                    "not found" in str(error_message).lower() or
                     "does not exist" in str(error_message).lower()):
-                    self.logger().debug(f"订单 {order_id} 不存在（错误码: {error_code}），无需撤单")
                     await self._order_tracker.process_order_not_found(order_id)
-                    # 对于1139错误码，不抛出异常，直接返回True，避免记录error日志
                     return True
-                
+
                 raise IOError(f"撤单失败: {error_code} - {error_message}")
             
             # 情况2: 成功（block_result 有值，error 为空）

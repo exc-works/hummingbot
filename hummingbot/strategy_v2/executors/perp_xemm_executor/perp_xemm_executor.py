@@ -142,6 +142,7 @@ class PerpXEMMExecutor(ExecutorBase):
         # Effective min/max profitability (may be widened near funding settlement)
         self._effective_min_profitability: Decimal = config.min_profitability
         self._effective_max_profitability: Decimal = config.max_profitability
+        self._in_pre_funding_window: bool = False
 
         # Order tracking
         self.maker_order: Optional[TrackedOrder] = None
@@ -438,8 +439,16 @@ class PerpXEMMExecutor(ExecutorBase):
 
             if maker_near or taker_near:
                 self._apply_pre_funding_window_logic(maker_rate, taker_rate)
+            elif self._in_pre_funding_window:
+                self._in_pre_funding_window = False
+                self._effective_min_profitability = self.config.min_profitability
+                self._effective_max_profitability = self.config.max_profitability
+                self.logger().info(
+                    f"Pre-funding window ended for {self.maker_trading_pair} "
+                    f"({self.maker_order_side.name}); restored min_profitability to "
+                    f"{self._effective_min_profitability:.6f}."
+                )
             else:
-                # Outside window: restore configured profitability thresholds
                 self._effective_min_profitability = self.config.min_profitability
                 self._effective_max_profitability = self.config.max_profitability
 
@@ -471,22 +480,42 @@ class PerpXEMMExecutor(ExecutorBase):
             net_funding_cost = taker_rate - maker_rate
 
         if net_funding_cost > Decimal("0"):
-            # Net cost: tighten minimum profitability so entry only happens if spread
-            # covers the upcoming funding payment
-            extra = net_funding_cost
-            self._effective_min_profitability = self.config.min_profitability + extra
-            self._effective_max_profitability = self.config.max_profitability + extra
+            new_min = self.config.min_profitability + net_funding_cost
+            new_max = self.config.max_profitability + net_funding_cost
+            if (
+                new_min == self._effective_min_profitability
+                and new_max == self._effective_max_profitability
+                and self._in_pre_funding_window
+            ):
+                return
+            entering = not self._in_pre_funding_window
+            self._in_pre_funding_window = True
+            self._effective_min_profitability = new_min
+            self._effective_max_profitability = new_max
             self.logger().info(
-                f"Pre-funding window: net funding cost {net_funding_cost:.6f}. "
-                f"Tightening min_profitability to {self._effective_min_profitability:.6f}."
+                f"Pre-funding window{' entered' if entering else ' updated'} "
+                f"({self.maker_trading_pair} {self.maker_order_side.name}): "
+                f"net funding cost {net_funding_cost:.6f}, "
+                f"min_profitability -> {new_min:.6f}."
             )
         else:
-            # Net receipt: relax thresholds (allow existing positions to ride through settlement)
-            self._effective_min_profitability = self.config.min_profitability + net_funding_cost
-            self._effective_max_profitability = self.config.max_profitability
+            new_min = self.config.min_profitability + net_funding_cost
+            new_max = self.config.max_profitability
+            if (
+                new_min == self._effective_min_profitability
+                and new_max == self._effective_max_profitability
+                and self._in_pre_funding_window
+            ):
+                return
+            entering = not self._in_pre_funding_window
+            self._in_pre_funding_window = True
+            self._effective_min_profitability = new_min
+            self._effective_max_profitability = new_max
             self.logger().info(
-                f"Pre-funding window: net funding receipt {-net_funding_cost:.6f}. "
-                f"Relaxing min_profitability to {self._effective_min_profitability:.6f}."
+                f"Pre-funding window{' entered' if entering else ' updated'} "
+                f"({self.maker_trading_pair} {self.maker_order_side.name}): "
+                f"net funding receipt {-net_funding_cost:.6f}, "
+                f"min_profitability -> {new_min:.6f}."
             )
 
     # -----------------------------------------------------------------------
