@@ -941,6 +941,29 @@ class PerpXEMMExecutor(ExecutorBase):
     # Info and status
     # -----------------------------------------------------------------------
 
+    @property
+    def filled_amount_quote(self) -> Decimal:
+        """
+        Maker-leg filled notional in quote currency.
+        Required for controller fill-imbalance logic (see perp_xemm_multiple_levels).
+        """
+        total = Decimal("0")
+        for tracked in self._maker_orders_by_id.values():
+            if tracked.executed_amount_base > Decimal("0"):
+                total += tracked.executed_amount_base * tracked.average_executed_price
+        if total > Decimal("0"):
+            return total
+        if self._maker_filled_base > Decimal("0"):
+            ref_price = self._maker_target_price
+            if ref_price <= Decimal("0"):
+                mid = self.connectors[self.maker_connector].get_price_by_type(
+                    self.maker_trading_pair, PriceType.MidPrice
+                )
+                ref_price = mid if mid is not None and mid > Decimal("0") else Decimal("0")
+            if ref_price > Decimal("0"):
+                return self._maker_filled_base * ref_price
+        return Decimal("0")
+
     def get_custom_info(self) -> Dict:
         return {
             "side": self.config.maker_side,

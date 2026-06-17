@@ -343,6 +343,17 @@ class PerpXEMMMultipleLevels(ControllerBase):
     # Margin gate helper
     # -----------------------------------------------------------------------
 
+    def _count_filled_executors(self, maker_side: TradeType) -> int:
+        """
+        Count executors with maker fills on the given side.
+        Includes in-flight hedges (not yet TERMINATED) so imbalance reacts before
+        the executor lifecycle fully completes.
+        """
+        return len([
+            e for e in self.executors_info
+            if e.config.maker_side == maker_side and e.filled_amount_quote > Decimal("0")
+        ])
+
     def _has_sufficient_margin(self, nominal_quote: Decimal) -> bool:
         """
         Controller-level margin gate.
@@ -476,15 +487,16 @@ class PerpXEMMMultipleLevels(ControllerBase):
             executors=self.executors_info,
             filter_func=lambda e: not e.is_done and e.config.maker_side == TradeType.SELL,
         )
-        stopped_buy_executors = self.filter_executors(
-            executors=self.executors_info,
-            filter_func=lambda e: e.is_done and e.config.maker_side == TradeType.BUY and e.filled_amount_quote != 0,
-        )
-        stopped_sell_executors = self.filter_executors(
-            executors=self.executors_info,
-            filter_func=lambda e: e.is_done and e.config.maker_side == TradeType.SELL and e.filled_amount_quote != 0,
-        )
-        imbalance = len(stopped_buy_executors) - len(stopped_sell_executors)
+        filled_buy_count = self._count_filled_executors(TradeType.BUY)
+        filled_sell_count = self._count_filled_executors(TradeType.SELL)
+        imbalance = filled_buy_count - filled_sell_count
+
+        if imbalance != 0:
+            self.logger().info(
+                f"[Perp XEMM] Fill imbalance: buy_fills={filled_buy_count} "
+                f"sell_fills={filled_sell_count} delta={imbalance} "
+                f"(max_executors_imbalance=±{self.config.max_executors_imbalance})."
+            )
 
         total_buy_amount = sum(amt for _, amt in self.buy_levels_targets_amount) or Decimal("1")
         total_sell_amount = sum(amt for _, amt in self.sell_levels_targets_amount) or Decimal("1")
