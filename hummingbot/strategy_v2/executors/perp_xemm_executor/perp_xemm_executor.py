@@ -527,6 +527,10 @@ class PerpXEMMExecutor(ExecutorBase):
     async def control_update_maker_order(self):
         if self.maker_order is None or self.maker_order.is_done:
             return
+        order = self.maker_order.order
+        if order is None or order.exchange_order_id is None:
+            # Caishen confirms orders on-chain; skip profitability checks until ack.
+            return
         await self.update_current_trade_profitability()
         if self.maker_order is None or self.maker_order.is_done:
             return
@@ -701,9 +705,17 @@ class PerpXEMMExecutor(ExecutorBase):
         return await self.connectors[connector].get_quote_price(trading_pair, is_buy, order_amount)
 
     async def get_quote_asset_conversion_rate(self) -> Decimal:
+        _, maker_quote = split_hb_trading_pair(self.maker_trading_pair)
+        _, taker_quote = split_hb_trading_pair(self.taker_trading_pair)
+        if self._are_tokens_interchangeable(taker_quote, maker_quote):
+            return Decimal("1")
         try:
             rate = self.rate_oracle.get_pair_rate(self.quote_conversion_pair)
             if rate is None:
+                inverse_pair = f"{maker_quote}-{taker_quote}"
+                inverse_rate = self.rate_oracle.get_pair_rate(inverse_pair)
+                if inverse_rate is not None and inverse_rate > Decimal("0"):
+                    return Decimal("1") / inverse_rate
                 raise ValueError(f"Could not fetch conversion rate for {self.quote_conversion_pair}")
             return rate
         except Exception as exc:
