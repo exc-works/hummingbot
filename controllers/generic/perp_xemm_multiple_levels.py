@@ -213,6 +213,7 @@ class PerpXEMMMultipleLevels(ControllerBase):
         self._leverage_setup_in_progress: Set[str] = set()
         self._LEVERAGE_CONFIRM_WAIT_S: float = 3.0
         self._startup_positions_logged: bool = False
+        self._last_imbalance_log_key: Optional[tuple] = None
 
         super().__init__(config, *args, **kwargs)
 
@@ -444,6 +445,35 @@ class PerpXEMMMultipleLevels(ControllerBase):
             return -level_units, scale, max(min_scale, Decimal("2") - scale)
         return level_units, max(min_scale, Decimal("2") - scale), scale
 
+    def _log_imbalance_if_changed(
+        self,
+        fill_imbalance: int,
+        inventory_bias: int,
+        effective_imbalance: int,
+        buy_scale: Decimal,
+        sell_scale: Decimal,
+    ):
+        """Log imbalance state only when it changes, not every control tick."""
+        key = (
+            fill_imbalance,
+            inventory_bias,
+            effective_imbalance,
+            buy_scale,
+            sell_scale,
+        )
+        if key == self._last_imbalance_log_key:
+            return
+        self._last_imbalance_log_key = key
+        if fill_imbalance == 0 and inventory_bias == 0:
+            self.logger().info("[Perp XEMM] Imbalance neutral (no fill skew, flat inventory).")
+            return
+        self.logger().info(
+            f"[Perp XEMM] Imbalance: fill_delta={fill_imbalance} "
+            f"inventory_bias={inventory_bias} effective={effective_imbalance} "
+            f"(max=±{self.config.max_executors_imbalance}, "
+            f"buy_scale={buy_scale:.2f}, sell_scale={sell_scale:.2f})."
+        )
+
     # -----------------------------------------------------------------------
     # Margin gate helper
     # -----------------------------------------------------------------------
@@ -609,13 +639,9 @@ class PerpXEMMMultipleLevels(ControllerBase):
         )
         effective_imbalance = fill_imbalance + inventory_bias
 
-        if fill_imbalance != 0 or inventory_bias != 0:
-            self.logger().info(
-                f"[Perp XEMM] Imbalance: fill_delta={fill_imbalance} "
-                f"inventory_bias={inventory_bias} effective={effective_imbalance} "
-                f"(max=±{self.config.max_executors_imbalance}, "
-                f"buy_scale={buy_scale:.2f}, sell_scale={sell_scale:.2f})."
-            )
+        self._log_imbalance_if_changed(
+            fill_imbalance, inventory_bias, effective_imbalance, buy_scale, sell_scale
+        )
 
         # --- Buy levels ---
         for target_profitability, level_amount in self.buy_levels_targets_amount:
