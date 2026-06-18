@@ -16,7 +16,7 @@ import pandas as pd
 from pydantic import Field, field_validator
 
 from hummingbot.client.ui.interface_utils import format_df_for_printout
-from hummingbot.core.data_type.common import PositionMode, PriceType, TradeType
+from hummingbot.core.data_type.common import PositionMode, PositionSide, PriceType, TradeType
 from hummingbot.strategy_v2.controllers.controller_base import ControllerBase, ControllerConfigBase
 from hummingbot.strategy_v2.executors.data_types import ConnectorPair
 from hummingbot.strategy_v2.executors.perp_xemm_executor.data_types import (
@@ -144,6 +144,22 @@ class PerpXEMMMultipleLevelsConfig(ControllerConfigBase):
         },
     )
 
+    # Inventory skew: read exchange positions and bias quoting toward flattening maker leg
+    inventory_skew_enabled: bool = Field(
+        default=True,
+        json_schema_extra={
+            "prompt": "Enable inventory skew from exchange positions (true/false): ",
+            "prompt_on_new": True,
+        },
+    )
+    inventory_skew_band_quote: Decimal = Field(
+        default=Decimal("50"),
+        json_schema_extra={
+            "prompt": "Dead band in quote before inventory skew applies (e.g. 50 USDC): ",
+            "prompt_on_new": True,
+        },
+    )
+
     @field_validator("buy_levels_targets_amount", "sell_levels_targets_amount", mode="before")
     @classmethod
     def validate_levels_targets_amount(cls, v):
@@ -196,6 +212,7 @@ class PerpXEMMMultipleLevels(ControllerBase):
         self._leverage_setup_dispatched_at: Dict[str, float] = {}
         self._leverage_setup_in_progress: Set[str] = set()
         self._LEVERAGE_CONFIRM_WAIT_S: float = 3.0
+        self._startup_positions_logged: bool = False
 
         super().__init__(config, *args, **kwargs)
 
@@ -338,6 +355,94 @@ class PerpXEMMMultipleLevels(ControllerBase):
         if not self._leverage_ready:
             await self._setup_leverage_and_position_mode()
             await self._confirm_leverage_setup()
+        elif not self._startup_positions_logged:
+            self._log_startup_positions()
+
+    # -----------------------------------------------------------------------
+    # Exchange position / inventory skew
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _signed_position_base(connector, trading_pair: str) -> Decimal:
+        """Signed base position: long > 0, short < 0, flat = 0."""
+        perpetual_trading = getattr(connector, "_perpetual_trading", None)
+        if perpetual_trading is None:
+            return Decimal("0")
+        position = perpetual_trading.get_position(trading_pair)
+        if position is None or position.amount == 0:
+            return Decimal("0")
+        if position.position_side == PositionSide.SHORT:
+            return -position.amount
+        return position.amount
+
+    def _read_leg_positions(self) -> tuple[Decimal, Decimal]:
+        maker_conn = self.market_data_provider.get_connector(self.config.maker_connector)
+        taker_conn = self.market_data_provider.get_connector(self.config.taker_connector)
+        maker_base = self._signed_position_base(maker_conn, self.config.maker_trading_pair)
+        taker_base = self._signed_position_base(taker_conn, self.config.taker_trading_pair)
+        return maker_base, taker_base
+
+    def _log_startup_positions(self):
+        """One-time snapshot after connectors are ready."""
+        try:
+            maker_base, taker_base = self._read_leg_positions()
+            mid = self.market_data_provider.get_price_by_type(
+                self.config.maker_connector,
+                self.config.maker_trading_pair,
+                PriceType.MidPrice,
+            )
+            mid = mid if mid is not None and mid > 0 else Decimal("0")
+            drift_base = maker_base + taker_base
+            self.logger().info(
+                f"[Perp XEMM] Startup positions — "
+                f"maker {self.config.maker_connector} {self.config.maker_trading_pair}: "
+                f"{maker_base} base"
+                f"{f' (~{maker_base * mid:.2f} quote)' if mid > 0 else ''}; "
+                f"taker {self.config.taker_connector} {self.config.taker_trading_pair}: "
+                f"{taker_base} base"
+                f"{f' (~{taker_base * mid:.2f} quote)' if mid > 0 else ''}; "
+                f"cross-leg drift (maker+taker): {drift_base} base."
+            )
+            if mid > 0 and abs(drift_base * mid) > self.config.inventory_skew_band_quote:
+                self.logger().warning(
+                    f"[Perp XEMM] Cross-leg drift {drift_base} base "
+                    f"(~{drift_base * mid:.2f} quote) exceeds band "
+                    f"{self.config.inventory_skew_band_quote}; check hedge alignment."
+                )
+        except Exception as exc:
+            self.logger().warning(f"[Perp XEMM] Could not read startup positions: {exc}.")
+        finally:
+            self._startup_positions_logged = True
+
+    def _inventory_skew_adjustment(
+        self,
+        mid_price: Decimal,
+        per_level_quote: Decimal,
+    ) -> tuple[int, Decimal, Decimal]:
+        """
+        Derive inventory bias (in executor-count units) and buy/sell size scales
+        from maker-leg net position. Short maker → favor BUY / shrink SELL.
+        """
+        if not self.config.inventory_skew_enabled or per_level_quote <= 0:
+            return 0, Decimal("1"), Decimal("1")
+
+        maker_base, _ = self._read_leg_positions()
+        maker_quote = maker_base * mid_price
+        band = self.config.inventory_skew_band_quote
+        if abs(maker_quote) <= band:
+            return 0, Decimal("1"), Decimal("1")
+
+        level_units = min(
+            int(abs(maker_quote) / per_level_quote),
+            self.config.max_executors_imbalance,
+        )
+        level_units = max(level_units, 1)
+        scale = min(Decimal("2"), Decimal("1") + abs(maker_quote) / band)
+        min_scale = Decimal("0.25")
+
+        if maker_quote < 0:
+            return -level_units, scale, max(min_scale, Decimal("2") - scale)
+        return level_units, max(min_scale, Decimal("2") - scale), scale
 
     # -----------------------------------------------------------------------
     # Margin gate helper
@@ -489,20 +594,28 @@ class PerpXEMMMultipleLevels(ControllerBase):
         )
         filled_buy_count = self._count_filled_executors(TradeType.BUY)
         filled_sell_count = self._count_filled_executors(TradeType.SELL)
-        imbalance = filled_buy_count - filled_sell_count
-
-        if imbalance != 0:
-            self.logger().info(
-                f"[Perp XEMM] Fill imbalance: buy_fills={filled_buy_count} "
-                f"sell_fills={filled_sell_count} delta={imbalance} "
-                f"(max_executors_imbalance=±{self.config.max_executors_imbalance})."
-            )
+        fill_imbalance = filled_buy_count - filled_sell_count
 
         total_buy_amount = sum(amt for _, amt in self.buy_levels_targets_amount) or Decimal("1")
         total_sell_amount = sum(amt for _, amt in self.sell_levels_targets_amount) or Decimal("1")
 
         buy_side_quote = self.config.total_amount_quote * Decimal("0.5")
         sell_side_quote = self.config.total_amount_quote * Decimal("0.5")
+        avg_level_quote = buy_side_quote / total_buy_amount
+
+        inventory_bias, buy_scale, sell_scale = self._inventory_skew_adjustment(
+            mid_price=mid_price,
+            per_level_quote=avg_level_quote,
+        )
+        effective_imbalance = fill_imbalance + inventory_bias
+
+        if fill_imbalance != 0 or inventory_bias != 0:
+            self.logger().info(
+                f"[Perp XEMM] Imbalance: fill_delta={fill_imbalance} "
+                f"inventory_bias={inventory_bias} effective={effective_imbalance} "
+                f"(max=±{self.config.max_executors_imbalance}, "
+                f"buy_scale={buy_scale:.2f}, sell_scale={sell_scale:.2f})."
+            )
 
         # --- Buy levels ---
         for target_profitability, level_amount in self.buy_levels_targets_amount:
@@ -510,10 +623,10 @@ class PerpXEMMMultipleLevels(ControllerBase):
                 e.config.target_profitability == target_profitability
                 for e in active_buy_executors
             )
-            if has_active or imbalance >= self.config.max_executors_imbalance:
+            if has_active or effective_imbalance >= self.config.max_executors_imbalance:
                 continue
 
-            proportional_quote = (level_amount / total_buy_amount) * buy_side_quote
+            proportional_quote = (level_amount / total_buy_amount) * buy_side_quote * buy_scale
             order_amount_base = proportional_quote / mid_price
 
             # Controller-level margin gate
@@ -535,10 +648,10 @@ class PerpXEMMMultipleLevels(ControllerBase):
                 e.config.target_profitability == target_profitability
                 for e in active_sell_executors
             )
-            if has_active or imbalance <= -self.config.max_executors_imbalance:
+            if has_active or effective_imbalance <= -self.config.max_executors_imbalance:
                 continue
 
-            proportional_quote = (level_amount / total_sell_amount) * sell_side_quote
+            proportional_quote = (level_amount / total_sell_amount) * sell_side_quote * sell_scale
             order_amount_base = proportional_quote / mid_price
 
             # Controller-level margin gate
@@ -570,6 +683,15 @@ class PerpXEMMMultipleLevels(ControllerBase):
             f"position_mode={self.config.position_mode.name}"
         )
         rows = [lev_status]
+        if self._leverage_ready:
+            try:
+                maker_base, taker_base = self._read_leg_positions()
+                rows.append(
+                    f"Positions: maker={maker_base} base | taker={taker_base} base | "
+                    f"drift={maker_base + taker_base} base"
+                )
+            except Exception:
+                pass
         if self.executors_info:
             all_executors_df = pd.DataFrame(e.custom_info for e in self.executors_info)
             rows.append(format_df_for_printout(all_executors_df, table_format="psql"))
