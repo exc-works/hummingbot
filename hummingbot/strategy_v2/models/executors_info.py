@@ -57,11 +57,25 @@ class ExecutorInfo(BaseModel):
 
     @property
     def trading_pair(self) -> Optional[str]:
-        return self.config.trading_pair
+        if hasattr(self.config, "trading_pair"):
+            return self.config.trading_pair
+        maker_market = self._maker_market_pair()
+        return maker_market.trading_pair if maker_market is not None else None
 
     @property
     def connector_name(self) -> Optional[str]:
-        return self.config.connector_name
+        if hasattr(self.config, "connector_name"):
+            return self.config.connector_name
+        maker_market = self._maker_market_pair()
+        return maker_market.connector_name if maker_market is not None else None
+
+    def _maker_market_pair(self):
+        """Resolve maker leg for multi-market executor configs (XEMM, perp XEMM, etc.)."""
+        if not hasattr(self.config, "buying_market") or not hasattr(self.config, "maker_side"):
+            return None
+        if self.config.maker_side == TradeType.BUY:
+            return self.config.buying_market
+        return self.config.selling_market
 
     def to_dict(self):
         base_dict = self.model_dump()

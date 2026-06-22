@@ -712,9 +712,24 @@ class PerpXEMMMultipleLevels(ControllerBase):
         min_notional = self.config.position_stale_min_notional_quote
         if min_notional <= 0:
             return maker_base != 0 or taker_base != 0
-        maker_notional = abs(maker_base * mid_price)
-        taker_notional = abs(taker_base * mid_price)
+        if mid_price.is_nan() or mid_price <= 0:
+            return maker_base != 0 or taker_base != 0
+        try:
+            maker_notional = abs(maker_base * mid_price)
+            taker_notional = abs(taker_base * mid_price)
+        except Exception:
+            return maker_base != 0 or taker_base != 0
         return maker_notional >= min_notional or taker_notional >= min_notional
+
+    def _safe_mid_price(self) -> Optional[Decimal]:
+        mid = self.market_data_provider.get_price_by_type(
+            self.config.maker_connector,
+            self.config.maker_trading_pair,
+            PriceType.MidPrice,
+        )
+        if mid is None or mid.is_nan() or mid <= 0:
+            return None
+        return mid
 
     def _position_stale_control_actions(self) -> List[ExecutorAction]:
         if not self.config.position_stale_control_enabled:
@@ -722,36 +737,31 @@ class PerpXEMMMultipleLevels(ControllerBase):
 
         try:
             maker_base, taker_base = self._track_position_changes()
+            mid_price = self._safe_mid_price()
+            if mid_price is None:
+                return []
+
+            if not self._position_has_stale_exposure(maker_base, taker_base, mid_price):
+                return []
+
+            if self._position_stale_flatten_dispatched:
+                return []
+
+            if self._last_position_change_ts is None:
+                return []
+
+            idle_s = self.market_data_provider.time() - self._last_position_change_ts
+            if idle_s < self.config.max_position_idle_s:
+                return []
+
+            self._position_stale_flatten_dispatched = True
+            self.logger().info(
+                f"[Perp XEMM] Stale position flatten after {idle_s / 3600:.1f}h unchanged "
+                f"(maker={maker_base}, taker={taker_base})."
+            )
+            return self._build_flatten_both_legs_actions(maker_base, taker_base)
         except Exception:
             return []
-
-        if not self._position_has_stale_exposure(
-            maker_base,
-            taker_base,
-            mid_price=self.market_data_provider.get_price_by_type(
-                self.config.maker_connector,
-                self.config.maker_trading_pair,
-                PriceType.MidPrice,
-            ) or Decimal("0"),
-        ):
-            return []
-
-        if self._position_stale_flatten_dispatched:
-            return []
-
-        if self._last_position_change_ts is None:
-            return []
-
-        idle_s = self.market_data_provider.time() - self._last_position_change_ts
-        if idle_s < self.config.max_position_idle_s:
-            return []
-
-        self._position_stale_flatten_dispatched = True
-        self.logger().info(
-            f"[Perp XEMM] Stale position flatten after {idle_s / 3600:.1f}h unchanged "
-            f"(maker={maker_base}, taker={taker_base})."
-        )
-        return self._build_flatten_both_legs_actions(maker_base, taker_base)
 
     # -----------------------------------------------------------------------
     # Margin gate helper
