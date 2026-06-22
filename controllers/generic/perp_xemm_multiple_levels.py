@@ -16,15 +16,16 @@ import pandas as pd
 from pydantic import Field, field_validator
 
 from hummingbot.client.ui.interface_utils import format_df_for_printout
-from hummingbot.core.data_type.common import PositionMode, PositionSide, PriceType, TradeType
+from hummingbot.core.data_type.common import PositionAction, PositionMode, PositionSide, PriceType, TradeType
 from hummingbot.strategy_v2.controllers.controller_base import ControllerBase, ControllerConfigBase
 from hummingbot.strategy_v2.executors.data_types import ConnectorPair
+from hummingbot.strategy_v2.executors.order_executor.data_types import ExecutionStrategy, OrderExecutorConfig
 from hummingbot.strategy_v2.executors.perp_xemm_executor.data_types import (
     DEFAULT_FUNDING_PAYMENT_INTERVAL_S,
     DEFAULT_PRE_FUNDING_WINDOW_S,
     PerpXEMMExecutorConfig,
 )
-from hummingbot.strategy_v2.models.executor_actions import CreateExecutorAction, ExecutorAction
+from hummingbot.strategy_v2.models.executor_actions import CreateExecutorAction, ExecutorAction, StopExecutorAction
 
 
 class PerpXEMMMultipleLevelsConfig(ControllerConfigBase):
@@ -144,18 +145,55 @@ class PerpXEMMMultipleLevelsConfig(ControllerConfigBase):
         },
     )
 
-    # Inventory skew: read exchange positions and bias quoting toward flattening maker leg
-    inventory_skew_enabled: bool = Field(
+    # Funding settlement control: compare combined net funding (bps) vs round-trip fee bps
+    funding_settlement_control_enabled: bool = Field(
         default=True,
         json_schema_extra={
-            "prompt": "Enable inventory skew from exchange positions (true/false): ",
+            "prompt": "Enable funding settlement eval/flatten (true/false): ",
             "prompt_on_new": True,
         },
     )
-    inventory_skew_band_quote: Decimal = Field(
+    funding_settlement_eval_window_s: int = Field(
+        default=300,
+        json_schema_extra={
+            "prompt": "Seconds before funding settlement to evaluate (e.g. 300=5min): ",
+            "prompt_on_new": True,
+        },
+    )
+    funding_flatten_cost_bps: Decimal = Field(
+        default=Decimal("12"),
+        json_schema_extra={
+            "prompt": "Round-trip close+reopen cost in bps (default 12): ",
+            "prompt_on_new": True,
+        },
+    )
+    funding_post_settlement_resume_s: int = Field(
+        default=30,
+        json_schema_extra={
+            "prompt": "Seconds after settlement before resuming new quotes: ",
+            "prompt_on_new": True,
+        },
+    )
+
+    # Flatten when exchange positions are unchanged for too long (resume quoting immediately)
+    position_stale_control_enabled: bool = Field(
+        default=True,
+        json_schema_extra={
+            "prompt": "Enable stale-position flatten (true/false): ",
+            "prompt_on_new": True,
+        },
+    )
+    max_position_idle_s: int = Field(
+        default=4 * 60 * 60,
+        json_schema_extra={
+            "prompt": "Seconds with unchanged positions before flatten (14400=4h): ",
+            "prompt_on_new": True,
+        },
+    )
+    position_stale_min_notional_quote: Decimal = Field(
         default=Decimal("50"),
         json_schema_extra={
-            "prompt": "Dead band in quote before inventory skew applies (e.g. 50 USDC): ",
+            "prompt": "Min |leg| notional to apply stale flatten (0=any non-flat): ",
             "prompt_on_new": True,
         },
     )
@@ -213,7 +251,13 @@ class PerpXEMMMultipleLevels(ControllerBase):
         self._leverage_setup_in_progress: Set[str] = set()
         self._LEVERAGE_CONFIRM_WAIT_S: float = 3.0
         self._startup_positions_logged: bool = False
-        self._last_imbalance_log_key: Optional[tuple] = None
+        self._last_imbalance_log_key: Optional[int] = None
+        self._funding_pause_until: float = 0.0
+        self._funding_evaluated_settlement_ts: Optional[float] = None
+        self._last_funding_control_log_key: Optional[tuple] = None
+        self._last_position_snapshot: Optional[tuple[Decimal, Decimal]] = None
+        self._last_position_change_ts: Optional[float] = None
+        self._position_stale_flatten_dispatched: bool = False
 
         super().__init__(config, *args, **kwargs)
 
@@ -360,7 +404,7 @@ class PerpXEMMMultipleLevels(ControllerBase):
             self._log_startup_positions()
 
     # -----------------------------------------------------------------------
-    # Exchange position / inventory skew
+    # Exchange position
     # -----------------------------------------------------------------------
 
     @staticmethod
@@ -372,9 +416,14 @@ class PerpXEMMMultipleLevels(ControllerBase):
         position = perpetual_trading.get_position(trading_pair)
         if position is None or position.amount == 0:
             return Decimal("0")
+        amount = position.amount
+        # Caishen / Hyperliquid store signed amount (short < 0). Other connectors may
+        # store unsigned amount with position_side — avoid double-negating the former.
+        if amount < 0:
+            return amount
         if position.position_side == PositionSide.SHORT:
-            return -position.amount
-        return position.amount
+            return -abs(amount)
+        return abs(amount)
 
     def _read_leg_positions(self) -> tuple[Decimal, Decimal]:
         maker_conn = self.market_data_provider.get_connector(self.config.maker_connector)
@@ -394,85 +443,315 @@ class PerpXEMMMultipleLevels(ControllerBase):
             )
             mid = mid if mid is not None and mid > 0 else Decimal("0")
             drift_base = maker_base + taker_base
+            maker_side = "flat"
+            if maker_base > 0:
+                maker_side = "long"
+            elif maker_base < 0:
+                maker_side = "short"
             self.logger().info(
                 f"[Perp XEMM] Startup positions — "
                 f"maker {self.config.maker_connector} {self.config.maker_trading_pair}: "
-                f"{maker_base} base"
+                f"{maker_base} base ({maker_side})"
                 f"{f' (~{maker_base * mid:.2f} quote)' if mid > 0 else ''}; "
                 f"taker {self.config.taker_connector} {self.config.taker_trading_pair}: "
                 f"{taker_base} base"
                 f"{f' (~{taker_base * mid:.2f} quote)' if mid > 0 else ''}; "
                 f"cross-leg drift (maker+taker): {drift_base} base."
             )
-            if mid > 0 and abs(drift_base * mid) > self.config.inventory_skew_band_quote:
-                self.logger().warning(
-                    f"[Perp XEMM] Cross-leg drift {drift_base} base "
-                    f"(~{drift_base * mid:.2f} quote) exceeds band "
-                    f"{self.config.inventory_skew_band_quote}; check hedge alignment."
-                )
         except Exception as exc:
             self.logger().warning(f"[Perp XEMM] Could not read startup positions: {exc}.")
         finally:
             self._startup_positions_logged = True
 
-    def _inventory_skew_adjustment(
-        self,
-        mid_price: Decimal,
-        per_level_quote: Decimal,
-    ) -> tuple[int, Decimal, Decimal]:
-        """
-        Derive inventory bias (in executor-count units) and buy/sell size scales
-        from maker-leg net position. Short maker → favor BUY / shrink SELL.
-        """
-        if not self.config.inventory_skew_enabled or per_level_quote <= 0:
-            return 0, Decimal("1"), Decimal("1")
-
-        maker_base, _ = self._read_leg_positions()
-        maker_quote = maker_base * mid_price
-        band = self.config.inventory_skew_band_quote
-        if abs(maker_quote) <= band:
-            return 0, Decimal("1"), Decimal("1")
-
-        level_units = min(
-            int(abs(maker_quote) / per_level_quote),
-            self.config.max_executors_imbalance,
-        )
-        level_units = max(level_units, 1)
-        scale = min(Decimal("2"), Decimal("1") + abs(maker_quote) / band)
-        min_scale = Decimal("0.25")
-
-        if maker_quote < 0:
-            return -level_units, scale, max(min_scale, Decimal("2") - scale)
-        return level_units, max(min_scale, Decimal("2") - scale), scale
-
-    def _log_imbalance_if_changed(
-        self,
-        fill_imbalance: int,
-        inventory_bias: int,
-        effective_imbalance: int,
-        buy_scale: Decimal,
-        sell_scale: Decimal,
-    ):
-        """Log imbalance state only when it changes, not every control tick."""
-        key = (
-            fill_imbalance,
-            inventory_bias,
-            effective_imbalance,
-            buy_scale,
-            sell_scale,
-        )
-        if key == self._last_imbalance_log_key:
+    def _log_imbalance_if_changed(self, fill_imbalance: int):
+        """Log fill imbalance only when it changes, not every control tick."""
+        if fill_imbalance == self._last_imbalance_log_key:
             return
-        self._last_imbalance_log_key = key
-        if fill_imbalance == 0 and inventory_bias == 0:
-            self.logger().info("[Perp XEMM] Imbalance neutral (no fill skew, flat inventory).")
+        self._last_imbalance_log_key = fill_imbalance
+        if fill_imbalance == 0:
+            self.logger().info("[Perp XEMM] Imbalance neutral (fill_delta=0).")
             return
         self.logger().info(
             f"[Perp XEMM] Imbalance: fill_delta={fill_imbalance} "
-            f"inventory_bias={inventory_bias} effective={effective_imbalance} "
-            f"(max=±{self.config.max_executors_imbalance}, "
-            f"buy_scale={buy_scale:.2f}, sell_scale={sell_scale:.2f})."
+            f"(max=±{self.config.max_executors_imbalance})."
         )
+
+    # -----------------------------------------------------------------------
+    # Funding settlement control (bps compare vs round-trip cost)
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _has_funding_info(connector, trading_pair: str) -> bool:
+        perpetual_trading = getattr(connector, "_perpetual_trading", None)
+        if perpetual_trading is None:
+            return False
+        return trading_pair in perpetual_trading._funding_info
+
+    @staticmethod
+    def _leg_funding_rate_contribution(position_base: Decimal, funding_rate: Decimal) -> Decimal:
+        """
+        Signed funding rate contribution for one leg (rate is per that leg's funding period).
+        Positive rate: longs pay, shorts receive.
+        """
+        if position_base == 0 or funding_rate == 0:
+            return Decimal("0")
+        if position_base > 0:
+            return funding_rate
+        return -funding_rate
+
+    def _combined_net_funding_bps(
+        self,
+        maker_base: Decimal,
+        taker_base: Decimal,
+        maker_rate: Decimal,
+        taker_rate: Decimal,
+    ) -> Decimal:
+        """Combined net funding cost across both legs, in bps (>0 = net pay)."""
+        net_rate = (
+            self._leg_funding_rate_contribution(maker_base, maker_rate)
+            + self._leg_funding_rate_contribution(taker_base, taker_rate)
+        )
+        return net_rate * Decimal("10000")
+
+    def _nearest_funding_settlement(self) -> Optional[float]:
+        try:
+            maker_conn = self.market_data_provider.get_connector(self.config.maker_connector)
+            taker_conn = self.market_data_provider.get_connector(self.config.taker_connector)
+            if (not self._has_funding_info(maker_conn, self.config.maker_trading_pair)
+                    or not self._has_funding_info(taker_conn, self.config.taker_trading_pair)):
+                return None
+            maker_next = maker_conn.get_funding_info(
+                self.config.maker_trading_pair
+            ).next_funding_utc_timestamp
+            taker_next = taker_conn.get_funding_info(
+                self.config.taker_trading_pair
+            ).next_funding_utc_timestamp
+            return min(maker_next, taker_next)
+        except Exception:
+            return None
+
+    def _is_funding_quoting_paused(self) -> bool:
+        return self.market_data_provider.time() < self._funding_pause_until
+
+    def _stop_active_xemm_executors(self) -> List[StopExecutorAction]:
+        return [
+            StopExecutorAction(
+                controller_id=self.config.id,
+                executor_id=executor.id,
+                keep_position=True,
+            )
+            for executor in self.executors_info
+            if not executor.is_done and executor.config.type == "perp_xemm_executor"
+        ]
+
+    def _build_leg_close_action(
+        self,
+        connector_name: str,
+        trading_pair: str,
+        position_base: Decimal,
+        leverage: int,
+    ) -> Optional[CreateExecutorAction]:
+        if position_base == 0:
+            return None
+        connector = self.market_data_provider.get_connector(connector_name)
+        close_side = TradeType.SELL if position_base > 0 else TradeType.BUY
+        amount = connector.quantize_order_amount(trading_pair, abs(position_base))
+        if amount <= 0:
+            return None
+        config = OrderExecutorConfig(
+            timestamp=self.market_data_provider.time(),
+            connector_name=connector_name,
+            trading_pair=trading_pair,
+            side=close_side,
+            amount=amount,
+            position_action=PositionAction.CLOSE,
+            execution_strategy=ExecutionStrategy.MARKET,
+            leverage=leverage,
+        )
+        return CreateExecutorAction(controller_id=self.config.id, executor_config=config)
+
+    def _build_flatten_both_legs_actions(
+        self,
+        maker_base: Decimal,
+        taker_base: Decimal,
+    ) -> List[ExecutorAction]:
+        actions: List[ExecutorAction] = []
+        actions.extend(self._stop_active_xemm_executors())
+        maker_close = self._build_leg_close_action(
+            self.config.maker_connector,
+            self.config.maker_trading_pair,
+            maker_base,
+            self.config.maker_leverage,
+        )
+        taker_close = self._build_leg_close_action(
+            self.config.taker_connector,
+            self.config.taker_trading_pair,
+            taker_base,
+            self.config.taker_leverage,
+        )
+        if maker_close:
+            actions.append(maker_close)
+        if taker_close:
+            actions.append(taker_close)
+        return actions
+
+    def _log_funding_control_once(self, log_key: tuple, message: str):
+        if log_key == self._last_funding_control_log_key:
+            return
+        self._last_funding_control_log_key = log_key
+        self.logger().info(message)
+
+    def _funding_settlement_control_actions(self) -> List[ExecutorAction]:
+        """
+        Within eval window before settlement:
+          net <= 0 bps          -> no action
+          0 < net <= cost bps   -> pause new quotes until settlement (no flatten)
+          net > cost bps        -> flatten both legs + pause until settlement
+        """
+        if not self.config.funding_settlement_control_enabled:
+            return []
+
+        now = self.market_data_provider.time()
+        next_settlement = self._nearest_funding_settlement()
+        if next_settlement is None:
+            return []
+
+        secs_to_settle = next_settlement - now
+        eval_window = self.config.funding_settlement_eval_window_s
+
+        if secs_to_settle <= 0:
+            if self._funding_evaluated_settlement_ts == next_settlement:
+                self._funding_evaluated_settlement_ts = None
+            return []
+
+        if secs_to_settle > eval_window:
+            return []
+
+        if self._funding_evaluated_settlement_ts == next_settlement:
+            return []
+
+        try:
+            maker_conn = self.market_data_provider.get_connector(self.config.maker_connector)
+            taker_conn = self.market_data_provider.get_connector(self.config.taker_connector)
+            maker_info = maker_conn.get_funding_info(self.config.maker_trading_pair)
+            taker_info = taker_conn.get_funding_info(self.config.taker_trading_pair)
+            maker_base, taker_base = self._read_leg_positions()
+            net_bps = self._combined_net_funding_bps(
+                maker_base=maker_base,
+                taker_base=taker_base,
+                maker_rate=maker_info.rate,
+                taker_rate=taker_info.rate,
+            )
+        except Exception as exc:
+            self.logger().warning(f"[Perp XEMM] Funding settlement eval failed: {exc}")
+            return []
+
+        self._funding_evaluated_settlement_ts = next_settlement
+        self._funding_pause_until = (
+            next_settlement + self.config.funding_post_settlement_resume_s
+        )
+        cost_bps = self.config.funding_flatten_cost_bps
+
+        if net_bps <= 0:
+            self._funding_pause_until = 0.0
+            self._log_funding_control_once(
+                (next_settlement, "favorable", float(net_bps)),
+                f"[Perp XEMM] Funding eval: net {net_bps:.2f} bps (favorable), "
+                f"settlement in {secs_to_settle:.0f}s — no action.",
+            )
+            return []
+
+        actions: List[ExecutorAction] = []
+
+        if net_bps > cost_bps:
+            actions.extend(self._build_flatten_both_legs_actions(maker_base, taker_base))
+            self._log_funding_control_once(
+                (next_settlement, "flatten", float(net_bps)),
+                f"[Perp XEMM] Funding eval: net {net_bps:.2f} bps > cost {cost_bps} bps, "
+                f"settlement in {secs_to_settle:.0f}s — flatten both legs, pause quotes until "
+                f"{self._funding_pause_until:.0f}.",
+            )
+        else:
+            actions.extend(self._stop_active_xemm_executors())
+            self._log_funding_control_once(
+                (next_settlement, "pause", float(net_bps)),
+                f"[Perp XEMM] Funding eval: 0 < net {net_bps:.2f} bps <= cost {cost_bps} bps, "
+                f"settlement in {secs_to_settle:.0f}s — pause new quotes (no flatten).",
+            )
+
+        return actions
+
+    # -----------------------------------------------------------------------
+    # Stale position control (unchanged positions → flatten, resume immediately)
+    # -----------------------------------------------------------------------
+
+    def _track_position_changes(self) -> tuple[Decimal, Decimal]:
+        maker_base, taker_base = self._read_leg_positions()
+        snapshot = (maker_base, taker_base)
+        now = self.market_data_provider.time()
+
+        if self._last_position_snapshot is None:
+            self._last_position_snapshot = snapshot
+            self._last_position_change_ts = now
+        elif snapshot != self._last_position_snapshot:
+            self._last_position_snapshot = snapshot
+            self._last_position_change_ts = now
+            self._position_stale_flatten_dispatched = False
+
+        if maker_base == 0 and taker_base == 0:
+            self._position_stale_flatten_dispatched = False
+
+        return maker_base, taker_base
+
+    def _position_has_stale_exposure(
+        self,
+        maker_base: Decimal,
+        taker_base: Decimal,
+        mid_price: Decimal,
+    ) -> bool:
+        min_notional = self.config.position_stale_min_notional_quote
+        if min_notional <= 0:
+            return maker_base != 0 or taker_base != 0
+        maker_notional = abs(maker_base * mid_price)
+        taker_notional = abs(taker_base * mid_price)
+        return maker_notional >= min_notional or taker_notional >= min_notional
+
+    def _position_stale_control_actions(self) -> List[ExecutorAction]:
+        if not self.config.position_stale_control_enabled:
+            return []
+
+        try:
+            maker_base, taker_base = self._track_position_changes()
+        except Exception:
+            return []
+
+        if not self._position_has_stale_exposure(
+            maker_base,
+            taker_base,
+            mid_price=self.market_data_provider.get_price_by_type(
+                self.config.maker_connector,
+                self.config.maker_trading_pair,
+                PriceType.MidPrice,
+            ) or Decimal("0"),
+        ):
+            return []
+
+        if self._position_stale_flatten_dispatched:
+            return []
+
+        if self._last_position_change_ts is None:
+            return []
+
+        idle_s = self.market_data_provider.time() - self._last_position_change_ts
+        if idle_s < self.config.max_position_idle_s:
+            return []
+
+        self._position_stale_flatten_dispatched = True
+        self.logger().info(
+            f"[Perp XEMM] Stale position flatten after {idle_s / 3600:.1f}h unchanged "
+            f"(maker={maker_base}, taker={taker_base})."
+        )
+        return self._build_flatten_both_legs_actions(maker_base, taker_base)
 
     # -----------------------------------------------------------------------
     # Margin gate helper
@@ -602,6 +881,17 @@ class PerpXEMMMultipleLevels(ControllerBase):
             )
             return executor_actions
 
+        funding_actions = self._funding_settlement_control_actions()
+        if funding_actions:
+            return funding_actions
+
+        if self._is_funding_quoting_paused():
+            return executor_actions
+
+        stale_actions = self._position_stale_control_actions()
+        if stale_actions:
+            return stale_actions
+
         mid_price: Optional[Decimal] = self.market_data_provider.get_price_by_type(
             self.config.maker_connector,
             self.config.maker_trading_pair,
@@ -631,17 +921,8 @@ class PerpXEMMMultipleLevels(ControllerBase):
 
         buy_side_quote = self.config.total_amount_quote * Decimal("0.5")
         sell_side_quote = self.config.total_amount_quote * Decimal("0.5")
-        avg_level_quote = buy_side_quote / total_buy_amount
 
-        inventory_bias, buy_scale, sell_scale = self._inventory_skew_adjustment(
-            mid_price=mid_price,
-            per_level_quote=avg_level_quote,
-        )
-        effective_imbalance = fill_imbalance + inventory_bias
-
-        self._log_imbalance_if_changed(
-            fill_imbalance, inventory_bias, effective_imbalance, buy_scale, sell_scale
-        )
+        self._log_imbalance_if_changed(fill_imbalance)
 
         # --- Buy levels ---
         for target_profitability, level_amount in self.buy_levels_targets_amount:
@@ -649,10 +930,10 @@ class PerpXEMMMultipleLevels(ControllerBase):
                 e.config.target_profitability == target_profitability
                 for e in active_buy_executors
             )
-            if has_active or effective_imbalance >= self.config.max_executors_imbalance:
+            if has_active or fill_imbalance >= self.config.max_executors_imbalance:
                 continue
 
-            proportional_quote = (level_amount / total_buy_amount) * buy_side_quote * buy_scale
+            proportional_quote = (level_amount / total_buy_amount) * buy_side_quote
             order_amount_base = proportional_quote / mid_price
 
             # Controller-level margin gate
@@ -674,10 +955,10 @@ class PerpXEMMMultipleLevels(ControllerBase):
                 e.config.target_profitability == target_profitability
                 for e in active_sell_executors
             )
-            if has_active or effective_imbalance <= -self.config.max_executors_imbalance:
+            if has_active or fill_imbalance <= -self.config.max_executors_imbalance:
                 continue
 
-            proportional_quote = (level_amount / total_sell_amount) * sell_side_quote * sell_scale
+            proportional_quote = (level_amount / total_sell_amount) * sell_side_quote
             order_amount_base = proportional_quote / mid_price
 
             # Controller-level margin gate
@@ -709,6 +990,11 @@ class PerpXEMMMultipleLevels(ControllerBase):
             f"position_mode={self.config.position_mode.name}"
         )
         rows = [lev_status]
+        if self._is_funding_quoting_paused():
+            rows.append(
+                f"Funding pause: quoting suspended until "
+                f"{self._funding_pause_until:.0f} (now={self.market_data_provider.time():.0f})"
+            )
         if self._leverage_ready:
             try:
                 maker_base, taker_base = self._read_leg_positions()
