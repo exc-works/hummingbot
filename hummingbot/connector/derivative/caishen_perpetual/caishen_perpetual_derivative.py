@@ -12,7 +12,7 @@ from typing import Any, AsyncIterable, Dict, List, Optional, Tuple
 from bidict import bidict
 from eth_utils import to_bytes, to_hex
 
-from hummingbot.connector.constants import s_decimal_NaN
+from hummingbot.connector.constants import s_decimal_NaN, s_decimal_0
 from hummingbot.connector.derivative.caishen_perpetual import (
     caishen_perpetual_constants as CONSTANTS,
     caishen_perpetual_web_utils as web_utils,
@@ -30,7 +30,7 @@ from hummingbot.connector.perpetual_derivative_py_base import PerpetualDerivativ
 from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.core.api_throttler.data_types import RateLimit
 from hummingbot.core.data_type.common import OrderType, PositionAction, PositionMode, PositionSide, TradeType
-from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate, TradeUpdate
+from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderState, OrderUpdate, TradeUpdate
 from hummingbot.core.data_type.trade_fee import TokenAmount, TradeFeeBase
 from hummingbot.core.utils.estimate_fee import build_trade_fee
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
@@ -75,6 +75,8 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         # stop 时 early_stop 与 cancel_all 会各撤一次；记录已发起撤单的 client_order_id
         self._cancel_requested: set = set()
         self._cancel_dedup_lock = asyncio.Lock()
+        self._balance_refresh_task: Optional[asyncio.Task] = None
+        self._balance_refresh_lock = asyncio.Lock()
         super().__init__(**kwargs)
     
     @property
@@ -130,6 +132,105 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
     @property
     def funding_fee_poll_interval(self) -> int:
         return 120
+
+    async def start_network(self):
+        await super().start_network()
+        if self.is_trading_required:
+            try:
+                await self._update_balances()
+            except Exception:
+                self.logger().warning(
+                    "Failed to refresh Caishen balances on network start; will retry on poll.",
+                    exc_info=True,
+                )
+
+    def _estimated_position_margin(self) -> Decimal:
+        total = s_decimal_0
+        for position in self.account_positions.values():
+            if position.amount.is_nan() or position.entry_price.is_nan():
+                continue
+            leverage = position.leverage if position.leverage and position.leverage > 0 else Decimal("1")
+            total += abs(position.amount * position.entry_price) / leverage
+        return total
+
+    def _estimated_open_order_margin(self) -> Decimal:
+        total = s_decimal_0
+        for order in self.in_flight_orders.values():
+            if order.amount.is_nan() or order.amount <= 0:
+                continue
+            price = order.price
+            if price is None or price.is_nan() or price <= 0:
+                try:
+                    price = self.get_price(order.trading_pair, False)
+                except Exception:
+                    continue
+            if price is None or price.is_nan() or price <= 0:
+                continue
+            leverage = order.leverage if order.leverage and order.leverage > 0 else Decimal("1")
+            total += abs(order.amount * price) / leverage
+        return total
+
+    def get_available_balance(self, currency: str) -> Decimal:
+        """
+        Return free margin for new orders.
+
+        After network glitches the cached ``isolated_order_frozen`` from WS/REST can stay
+        high even when the exchange UI already shows full available margin. Reconcile
+        using local open-order + position margin when stale order freeze is likely.
+        """
+        wallet = self.get_balance(currency)
+        cached = self._account_available_balances.get(currency, s_decimal_0)
+        if wallet <= 0:
+            return cached
+
+        position_margin = self._estimated_position_margin()
+        open_order_margin = self._estimated_open_order_margin()
+        implied_order_frozen = wallet - cached - position_margin
+
+        if implied_order_frozen > open_order_margin + Decimal("50"):
+            reconciled = wallet - position_margin - open_order_margin
+            if reconciled > cached:
+                self._schedule_balance_refresh("stale_order_frozen")
+                return reconciled if reconciled > 0 else s_decimal_0
+        return cached
+
+    def _schedule_balance_refresh(self, reason: str = "") -> None:
+        async def _refresh():
+            async with self._balance_refresh_lock:
+                try:
+                    await self._update_balances()
+                except Exception:
+                    self.logger().warning(
+                        f"Caishen balance refresh failed ({reason}).",
+                        exc_info=True,
+                    )
+
+        if self._balance_refresh_task is None or self._balance_refresh_task.done():
+            self._balance_refresh_task = safe_ensure_future(_refresh())
+
+    def _apply_perp_balance_snapshot(self, balance_info: Dict[str, Any]) -> None:
+        quote = balance_info.get("symbol", CONSTANTS.CURRENCY)
+
+        def _to_decimal(field_name: str) -> Decimal:
+            try:
+                value = Decimal(str(balance_info.get(field_name, "0") or "0"))
+                if value.is_nan() or value.is_infinite():
+                    return s_decimal_0
+                return value
+            except (ValueError, TypeError, decimal.InvalidOperation):
+                return s_decimal_0
+
+        wallet = _to_decimal("wallet")
+        isolated_position_frozen = _to_decimal("isolated_position_frozen")
+        isolated_order_frozen = _to_decimal("isolated_order_frozen")
+        cross_order_frozen = _to_decimal("cross_order_frozen")
+
+        available = wallet - isolated_position_frozen - isolated_order_frozen - cross_order_frozen
+        if available < s_decimal_0:
+            available = s_decimal_0
+
+        self._account_balances[quote] = wallet
+        self._account_available_balances[quote] = available
 
     async def _make_network_check_request(self):
         await self._api_get(path_url=self.check_network_request_path)
@@ -537,6 +638,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
 
                 if response_code == 1139 or "not found" in response_msg.lower() or "does not exist" in response_msg.lower():
                     await self._order_tracker.process_order_not_found(order_id)
+                    self._schedule_balance_refresh("cancel_not_found")
                     return True
 
                 return False
@@ -563,6 +665,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                     "not found" in str(error_message).lower() or
                     "does not exist" in str(error_message).lower()):
                     await self._order_tracker.process_order_not_found(order_id)
+                    self._schedule_balance_refresh("cancel_not_found")
                     return True
 
                 raise IOError(f"撤单失败: {error_code} - {error_message}")
@@ -576,6 +679,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
                         self.logger().debug(
                             f"撤单成功 - Order ID: {order_id}, Block Number: {block_number}"
                         )
+                        self._schedule_balance_refresh("cancel_success")
                         return True
                     else:
                         self.logger().warning(
@@ -1249,6 +1353,7 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             is_taker=not trade.get("is_maker", False),
         )
         self._order_tracker.process_trade_update(trade_update)
+        self._schedule_balance_refresh("trade_fill")
 
     async def _process_order_message(self, order_msg: Dict[str, Any]):
         exchange_order_id = str(order_msg.get("order_id", ""))
@@ -1277,20 +1382,18 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
             exchange_order_id=exchange_order_id,
         )
         self._order_tracker.process_order_update(order_update)
+        if order_update.new_state in (
+            OrderState.FILLED,
+            OrderState.CANCELED,
+            OrderState.FAILED,
+            OrderState.COMPLETED,
+        ):
+            self._schedule_balance_refresh(f"order_{order_update.new_state.name.lower()}")
 
     async def _process_balance_message(self, balance_msg: Dict[str, Any]):
-        asset = balance_msg.get("symbol", CONSTANTS.CURRENCY)
         try:
-            wallet = Decimal(str(balance_msg.get("wallet", "0") or "0"))
-            isolated_position_frozen = Decimal(str(balance_msg.get("isolated_position_frozen", "0") or "0"))
-            isolated_order_frozen = Decimal(str(balance_msg.get("isolated_order_frozen", "0") or "0"))
-            cross_order_frozen = Decimal(str(balance_msg.get("cross_order_frozen", "0") or "0"))
-            available = wallet - isolated_position_frozen - isolated_order_frozen - cross_order_frozen
-            if available < Decimal("0"):
-                available = Decimal("0")
-            self._account_balances[asset] = wallet
-            self._account_available_balances[asset] = available
-        except (ValueError, TypeError, decimal.InvalidOperation):
+            self._apply_perp_balance_snapshot(balance_msg)
+        except Exception:
             self.logger().warning(f"Unable to parse balance websocket message: {balance_msg}")
 
     async def _process_position_message(self, position_msg: Dict[str, Any]):
@@ -1631,51 +1734,10 @@ class CaishenPerpetualDerivative(PerpetualDerivativePyBase):
         
         data = account_info.get("data", {})
         balance_info = data.get("balance", {})
-        
-        quote = CONSTANTS.CURRENCY
-        
-        # 总余额 = 钱包余额
-        try:
-            wallet_str = str(balance_info.get("wallet", "0") or "0")
-            total_balance = Decimal(wallet_str)
-            if total_balance.is_nan() or total_balance.is_infinite():
-                total_balance = Decimal("0")
-        except (ValueError, TypeError, decimal.InvalidOperation):
-            self.logger().warning(f"无法解析钱包余额: {balance_info.get('wallet')}, 使用 0")
-            total_balance = Decimal("0")
-        
-        # 可用余额 = 钱包余额 - 所有冻结资金
-        try:
-            isolated_position_frozen = Decimal(str(balance_info.get("isolated_position_frozen", "0") or "0"))
-            if isolated_position_frozen.is_nan() or isolated_position_frozen.is_infinite():
-                isolated_position_frozen = Decimal("0")
-        except (ValueError, TypeError, decimal.InvalidOperation):
-            isolated_position_frozen = Decimal("0")
-        
-        try:
-            isolated_order_frozen = Decimal(str(balance_info.get("isolated_order_frozen", "0") or "0"))
-            if isolated_order_frozen.is_nan() or isolated_order_frozen.is_infinite():
-                isolated_order_frozen = Decimal("0")
-        except (ValueError, TypeError, decimal.InvalidOperation):
-            isolated_order_frozen = Decimal("0")
-        
-        try:
-            cross_order_frozen = Decimal(str(balance_info.get("cross_order_frozen", "0") or "0"))
-            if cross_order_frozen.is_nan() or cross_order_frozen.is_infinite():
-                cross_order_frozen = Decimal("0")
-        except (ValueError, TypeError, decimal.InvalidOperation):
-            cross_order_frozen = Decimal("0")
-        
-        # 计算可用余额，确保不会是负数或 NaN
-        available_balance = total_balance - isolated_position_frozen - isolated_order_frozen - cross_order_frozen
-        if available_balance < Decimal("0"):
-            available_balance = Decimal("0")
-        if available_balance.is_nan() or available_balance.is_infinite():
-            available_balance = Decimal("0")
-        
-        # 更新账户余额
-        self._account_balances[quote] = total_balance
-        self._account_available_balances[quote] = available_balance
+        if not balance_info:
+            self.logger().warning("获取余额信息失败: empty balance payload")
+            return
+        self._apply_perp_balance_snapshot(balance_info)
     
     async def _update_positions(self):
         """更新持仓"""

@@ -16,7 +16,8 @@ import pandas as pd
 from pydantic import Field, field_validator
 
 from hummingbot.client.ui.interface_utils import format_df_for_printout
-from hummingbot.core.data_type.common import PositionAction, PositionMode, PositionSide, PriceType, TradeType
+from hummingbot.core.data_type.common import OrderType, PositionAction, PositionMode, PositionSide, PriceType, TradeType
+from hummingbot.core.data_type.order_candidate import PerpetualOrderCandidate
 from hummingbot.strategy_v2.controllers.controller_base import ControllerBase, ControllerConfigBase
 from hummingbot.strategy_v2.executors.data_types import ConnectorPair
 from hummingbot.strategy_v2.executors.order_executor.data_types import ExecutionStrategy, OrderExecutorConfig
@@ -121,8 +122,8 @@ class PerpXEMMMultipleLevelsConfig(ControllerConfigBase):
         json_schema_extra={"prompt": "Enter the maximum executors imbalance: ", "prompt_on_new": True},
     )
 
-    # Margin buffer: required free margin = nominal/leverage * (1 + margin_buffer_pct)
-    # For isolated margin, recommend >= 1.0 (2x the minimum)
+    # Margin buffer: caps total side exposure at total_amount_quote/2 * (1 + margin_buffer_pct)
+    # in margin terms; per-order checks use incremental nominal/leverage vs available.
     margin_buffer_pct: Decimal = Field(
         default=Decimal("1.0"),
         json_schema_extra={"prompt": "Enter the margin buffer pct (>=1.0 for isolated): ", "prompt_on_new": True},
@@ -258,6 +259,8 @@ class PerpXEMMMultipleLevels(ControllerBase):
         self._last_position_snapshot: Optional[tuple[Decimal, Decimal]] = None
         self._last_position_change_ts: Optional[float] = None
         self._position_stale_flatten_dispatched: bool = False
+        self._margin_gate_last_warn_key: Optional[tuple] = None
+        self._margin_gate_last_warn_ts: float = 0.0
 
         super().__init__(config, *args, **kwargs)
 
@@ -785,53 +788,98 @@ class PerpXEMMMultipleLevels(ControllerBase):
             and e.filled_amount_quote > Decimal("0")
         ])
 
-    def _has_sufficient_margin(self, nominal_quote: Decimal) -> bool:
-        """
-        Controller-level margin gate.
-        Check that both legs have enough free margin for a new executor of size nominal_quote.
+    def _log_margin_gate_skip(
+        self,
+        leg: str,
+        quote: str,
+        required: Decimal,
+        available: Decimal,
+        wallet: Decimal,
+        nominal_quote: Decimal,
+    ) -> None:
+        """Rate-limited margin gate warning with wallet vs available breakdown."""
+        warn_key = (leg, f"{required:.2f}", f"{available:.2f}", f"{wallet:.2f}")
+        now = self.market_data_provider.time()
+        if (
+            warn_key == self._margin_gate_last_warn_key
+            and now - self._margin_gate_last_warn_ts < 30
+        ):
+            return
+        self._margin_gate_last_warn_key = warn_key
+        self._margin_gate_last_warn_ts = now
+        frozen = max(wallet - available, Decimal("0"))
+        self.logger().warning(
+            f"[Margin Gate] {leg} margin insufficient for ~{nominal_quote:.0f} {quote} nominal: "
+            f"need {required:.2f}, available {available:.2f} "
+            f"(wallet {wallet:.2f}, frozen ~{frozen:.2f}). Skipping new executor."
+        )
 
-        Required margin per leg = nominal_quote / leverage * (1 + margin_buffer_pct)
-        This prevents N simultaneous executors from cumulatively exhausting isolated margin.
+    def _has_sufficient_margin(
+        self,
+        nominal_quote: Decimal,
+        maker_side: TradeType,
+        order_amount_base: Decimal,
+        mid_price: Decimal,
+    ) -> bool:
         """
-        buffer = self.config.margin_buffer_pct
+        Controller-level margin gate using the exchange budget checker only.
 
+        Relies on connector ``get_available_balance`` (Caishen reconciles stale order
+        freeze after network/cancel glitches).
+        """
         try:
             maker_conn = self.market_data_provider.get_connector(self.config.maker_connector)
             taker_conn = self.market_data_provider.get_connector(self.config.taker_connector)
             _, maker_quote = self.config.maker_trading_pair.split("-")
             _, taker_quote = self.config.taker_trading_pair.split("-")
 
+            maker_wallet = maker_conn.get_balance(maker_quote)
             maker_available = maker_conn.get_available_balance(maker_quote)
+            taker_wallet = taker_conn.get_balance(taker_quote)
             taker_available = taker_conn.get_available_balance(taker_quote)
 
-            maker_required = (
-                nominal_quote / Decimal(str(self.config.maker_leverage)) * (Decimal("1") + buffer)
+            taker_order_side = (
+                TradeType.SELL if maker_side == TradeType.BUY else TradeType.BUY
             )
-            taker_required = (
-                nominal_quote / Decimal(str(self.config.taker_leverage)) * (Decimal("1") + buffer)
+            maker_candidate = PerpetualOrderCandidate(
+                trading_pair=self.config.maker_trading_pair,
+                is_maker=True,
+                order_type=OrderType.LIMIT,
+                order_side=maker_side,
+                amount=order_amount_base,
+                price=mid_price,
+                leverage=Decimal(str(self.config.maker_leverage)),
+                position_close=False,
             )
+            taker_candidate = PerpetualOrderCandidate(
+                trading_pair=self.config.taker_trading_pair,
+                is_maker=False,
+                order_type=OrderType.MARKET,
+                order_side=taker_order_side,
+                amount=order_amount_base,
+                price=mid_price,
+                leverage=Decimal(str(self.config.taker_leverage)),
+                position_close=False,
+            )
+            maker_adj = maker_conn.budget_checker.adjust_candidates([maker_candidate])[0]
+            taker_adj = taker_conn.budget_checker.adjust_candidates([taker_candidate])[0]
 
-            if maker_available < maker_required:
-                self.logger().warning(
-                    f"[Margin Gate] Maker margin insufficient: "
-                    f"need {maker_required:.2f} {maker_quote}, "
-                    f"have {maker_available:.2f}. "
-                    f"Skipping new executor."
+            if maker_adj.amount <= Decimal("0"):
+                required = nominal_quote / Decimal(str(self.config.maker_leverage))
+                self._log_margin_gate_skip(
+                    "Maker", maker_quote, required, maker_available, maker_wallet, nominal_quote,
                 )
                 return False
-            if taker_available < taker_required:
-                self.logger().warning(
-                    f"[Margin Gate] Taker margin insufficient: "
-                    f"need {taker_required:.2f} {taker_quote}, "
-                    f"have {taker_available:.2f}. "
-                    f"Skipping new executor."
+            if taker_adj.amount <= Decimal("0"):
+                required = nominal_quote / Decimal(str(self.config.taker_leverage))
+                self._log_margin_gate_skip(
+                    "Taker", taker_quote, required, taker_available, taker_wallet, nominal_quote,
                 )
                 return False
             return True
 
         except Exception as exc:
             self.logger().error(f"[Margin Gate] Error checking margin: {exc}. Allowing executor creation.")
-            # Fail-open to avoid blocking legitimate trading; executor's own balance check will catch it
             return True
 
     # -----------------------------------------------------------------------
@@ -962,7 +1010,9 @@ class PerpXEMMMultipleLevels(ControllerBase):
             order_amount_base = proportional_quote / mid_price
 
             # Controller-level margin gate
-            if not self._has_sufficient_margin(proportional_quote):
+            if not self._has_sufficient_margin(
+                proportional_quote, TradeType.BUY, order_amount_base, mid_price
+            ):
                 continue
 
             config = self._build_executor_config(
@@ -987,7 +1037,9 @@ class PerpXEMMMultipleLevels(ControllerBase):
             order_amount_base = proportional_quote / mid_price
 
             # Controller-level margin gate
-            if not self._has_sufficient_margin(proportional_quote):
+            if not self._has_sufficient_margin(
+                proportional_quote, TradeType.SELL, order_amount_base, mid_price
+            ):
                 continue
 
             config = self._build_executor_config(

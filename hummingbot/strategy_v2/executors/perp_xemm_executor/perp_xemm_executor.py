@@ -221,30 +221,29 @@ class PerpXEMMExecutor(ExecutorBase):
         maker_adj = self.adjust_order_candidates(self.maker_connector, [maker_candidate])[0]
         taker_adj = self.adjust_order_candidates(self.taker_connector, [taker_candidate])[0]
 
-        # Additional buffer check: available free margin must be >= nominal/leverage * (1 + buffer)
-        buffer = self.config.margin_buffer_pct
         nominal = mid_price * self.config.order_amount
-        maker_required = nominal / Decimal(str(self._maker_leverage)) * (Decimal("1") + buffer)
-        taker_required = nominal / Decimal(str(self._taker_leverage)) * (Decimal("1") + buffer)
-
         maker_conn = self.connectors[self.maker_connector]
         taker_conn = self.connectors[self.taker_connector]
         _, maker_quote = split_hb_trading_pair(self.maker_trading_pair)
         _, taker_quote = split_hb_trading_pair(self.taker_trading_pair)
         maker_available = maker_conn.get_available_balance(maker_quote)
         taker_available = taker_conn.get_available_balance(taker_quote)
+        maker_wallet = maker_conn.get_balance(maker_quote)
+        taker_wallet = taker_conn.get_balance(taker_quote)
 
         insufficient = False
-        if maker_adj.amount == Decimal("0") or maker_available < maker_required:
+        if maker_adj.amount == Decimal("0"):
             self.logger().error(
-                f"Insufficient maker margin: need {maker_required:.4f} {maker_quote} "
-                f"(incl. {buffer*100:.0f}% buffer), have {maker_available:.4f}."
+                f"Insufficient maker margin for ~{nominal:.2f} {maker_quote} nominal: "
+                f"available {maker_available:.4f} "
+                f"(wallet {maker_wallet:.4f}, frozen ~{max(maker_wallet - maker_available, Decimal('0')):.4f})."
             )
             insufficient = True
-        if taker_adj.amount == Decimal("0") or taker_available < taker_required:
+        if taker_adj.amount == Decimal("0"):
             self.logger().error(
-                f"Insufficient taker margin: need {taker_required:.4f} {taker_quote} "
-                f"(incl. {buffer*100:.0f}% buffer), have {taker_available:.4f}."
+                f"Insufficient taker margin for ~{nominal:.2f} {taker_quote} nominal: "
+                f"available {taker_available:.4f} "
+                f"(wallet {taker_wallet:.4f}, frozen ~{max(taker_wallet - taker_available, Decimal('0')):.4f})."
             )
             insufficient = True
 
