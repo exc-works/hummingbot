@@ -40,6 +40,8 @@ class PerpXEMMExecutor(ExecutorBase):
     """
 
     _logger: Optional[HummingbotLogger] = None
+    # Caishen (and similar) may emit OrderCompleted before fill WS; wait before giving up.
+    _MAKER_LATE_FILL_GRACE_S: float = 60.0
 
     @classmethod
     def logger(cls) -> HummingbotLogger:
@@ -165,6 +167,7 @@ class PerpXEMMExecutor(ExecutorBase):
         # State flags
         self._hedging = False
         self._emergency_close_triggered = False
+        self._maker_fill_reconcile_deadline: Optional[float] = None
         self.failed_orders = []
 
         # Taker market order support check
@@ -651,13 +654,30 @@ class PerpXEMMExecutor(ExecutorBase):
         """Monitor taker hedge completion; stop when done or trigger emergency close."""
         # If maker is still open (shouldn't be in SHUTTING_DOWN, but be safe), cancel it
         maker_open = bool(self.maker_order and self.maker_order.order and self.maker_order.order.is_open)
+        self._sync_maker_filled_from_tracked_orders()
         if not maker_open:
             self._hedge_pending()
+
+        if self._awaiting_late_maker_fills():
+            return
 
         takers_done = all(
             (t.is_done or t.order_id in self._failed_taker_ids) for t in self.taker_orders
         ) if self.taker_orders else True
-        fully_hedged = self._actual_hedged_base() >= self._maker_filled_base
+
+        if (
+            not maker_open
+            and takers_done
+            and self._hedging
+            and self._maker_filled_base <= Decimal("0")
+        ):
+            self.logger().warning(
+                "Maker order completed with no confirmed fill after reconcile; executor terminated."
+            )
+            self.stop()
+            return
+
+        fully_hedged = self._is_fully_hedged()
 
         if not maker_open and fully_hedged and takers_done:
             if self._maker_filled_base > Decimal("0") and self.taker_orders:
@@ -737,6 +757,36 @@ class PerpXEMMExecutor(ExecutorBase):
     def _recompute_maker_filled(self):
         computed = max(self._maker_fills_sum, self._maker_filled_floor)
         self._maker_filled_base = min(computed, self._maker_fill_cap())
+
+    def _sync_maker_filled_from_tracked_orders(self):
+        """Refresh fill floor from in-flight order state (handles late WS fills)."""
+        for tracked in self._maker_orders_by_id.values():
+            if tracked.order is not None:
+                self._maker_filled_floor = max(
+                    self._maker_filled_floor, tracked.executed_amount_base
+                )
+        self._recompute_maker_filled()
+
+    def _awaiting_late_maker_fills(self) -> bool:
+        if self._maker_fill_reconcile_deadline is None:
+            return False
+        if self._maker_filled_base > Decimal("0"):
+            self._maker_fill_reconcile_deadline = None
+            return False
+        if time.time() < self._maker_fill_reconcile_deadline:
+            return True
+        self.logger().error(
+            f"Late maker fill grace ({self._MAKER_LATE_FILL_GRACE_S:.0f}s) expired for "
+            f"executor {self.config.id}; no fill confirmed on {self.maker_connector}. "
+            f"Check for naked maker exposure."
+        )
+        self._maker_fill_reconcile_deadline = None
+        return False
+
+    def _is_fully_hedged(self) -> bool:
+        if self._maker_filled_base <= Decimal("0"):
+            return False
+        return self._actual_hedged_base() >= self._maker_filled_base
 
     def _actual_hedged_base(self) -> Decimal:
         return sum((t.executed_amount_base for t in self.taker_orders), Decimal("0"))
@@ -862,11 +912,27 @@ class PerpXEMMExecutor(ExecutorBase):
     ):
         self._update_tracked_order_with_order_id(event.order_id)
         if event.order_id in self._maker_orders_by_id:
+            maker_tracked = self._maker_orders_by_id[event.order_id]
+            tracked_executed = (
+                maker_tracked.executed_amount_base if maker_tracked is not None else Decimal("0")
+            )
             self.logger().info(f"Maker order {event.order_id} completed. Reconciling filled amount.")
-            self._maker_filled_floor = max(self._maker_filled_floor, event.base_asset_amount)
+            self._maker_filled_floor = max(
+                self._maker_filled_floor, event.base_asset_amount, tracked_executed
+            )
             self._recompute_maker_filled()
             self._enter_hedging()
-            self._hedge_pending()
+            if self._maker_filled_base > Decimal("0"):
+                self._maker_fill_reconcile_deadline = None
+                self._hedge_pending()
+            else:
+                self._maker_fill_reconcile_deadline = time.time() + self._MAKER_LATE_FILL_GRACE_S
+                self.logger().warning(
+                    f"Maker order {event.order_id} completed with zero fill amount "
+                    f"(completed={event.base_asset_amount}, tracked={tracked_executed}). "
+                    f"Waiting up to {self._MAKER_LATE_FILL_GRACE_S:.0f}s for fill events "
+                    f"before shutdown; taker hedge deferred."
+                )
 
     def process_order_filled_event(
         self,
@@ -883,8 +949,7 @@ class PerpXEMMExecutor(ExecutorBase):
         self._update_tracked_order_with_order_id(event.order_id)
         is_maker = event.order_id in self._maker_orders_by_id
 
-        # Floor update before potential dedup return (prevents under-hedging on fallback keys)
-        if is_maker and not exchange_trade_id:
+        if is_maker:
             maker_tracked = self._maker_orders_by_id.get(event.order_id)
             if maker_tracked is not None:
                 self._maker_filled_floor = max(
@@ -894,6 +959,7 @@ class PerpXEMMExecutor(ExecutorBase):
 
         if dedup_key in self._seen_trade_ids:
             if is_maker:
+                self._maker_fill_reconcile_deadline = None
                 self._enter_hedging()
                 self._hedge_pending()
             return
@@ -902,6 +968,7 @@ class PerpXEMMExecutor(ExecutorBase):
         if is_maker:
             self._maker_fills_sum += event.amount
             self._recompute_maker_filled()
+            self._maker_fill_reconcile_deadline = None
             self._enter_hedging()
             self._hedge_pending()
 
