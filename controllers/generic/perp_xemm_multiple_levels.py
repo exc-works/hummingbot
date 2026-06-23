@@ -533,6 +533,11 @@ class PerpXEMMMultipleLevels(ControllerBase):
     def _is_funding_quoting_paused(self) -> bool:
         return self.market_data_provider.time() < self._funding_pause_until
 
+    @staticmethod
+    def _is_perp_xemm_executor(executor_info) -> bool:
+        """True only for XEMM quote executors; leg-close uses OrderExecutorConfig."""
+        return getattr(executor_info.config, "type", None) == "perp_xemm_executor"
+
     def _stop_active_xemm_executors(self) -> List[StopExecutorAction]:
         return [
             StopExecutorAction(
@@ -541,7 +546,7 @@ class PerpXEMMMultipleLevels(ControllerBase):
                 keep_position=True,
             )
             for executor in self.executors_info
-            if not executor.is_done and executor.config.type == "perp_xemm_executor"
+            if not executor.is_done and self._is_perp_xemm_executor(executor)
         ]
 
     def _build_leg_close_action(
@@ -775,7 +780,9 @@ class PerpXEMMMultipleLevels(ControllerBase):
         """
         return len([
             e for e in self.executors_info
-            if e.config.maker_side == maker_side and e.filled_amount_quote > Decimal("0")
+            if self._is_perp_xemm_executor(e)
+            and e.config.maker_side == maker_side
+            and e.filled_amount_quote > Decimal("0")
         ])
 
     def _has_sufficient_margin(self, nominal_quote: Decimal) -> bool:
@@ -916,11 +923,19 @@ class PerpXEMMMultipleLevels(ControllerBase):
 
         active_buy_executors = self.filter_executors(
             executors=self.executors_info,
-            filter_func=lambda e: not e.is_done and e.config.maker_side == TradeType.BUY,
+            filter_func=lambda e: (
+                self._is_perp_xemm_executor(e)
+                and not e.is_done
+                and e.config.maker_side == TradeType.BUY
+            ),
         )
         active_sell_executors = self.filter_executors(
             executors=self.executors_info,
-            filter_func=lambda e: not e.is_done and e.config.maker_side == TradeType.SELL,
+            filter_func=lambda e: (
+                self._is_perp_xemm_executor(e)
+                and not e.is_done
+                and e.config.maker_side == TradeType.SELL
+            ),
         )
         filled_buy_count = self._count_filled_executors(TradeType.BUY)
         filled_sell_count = self._count_filled_executors(TradeType.SELL)
