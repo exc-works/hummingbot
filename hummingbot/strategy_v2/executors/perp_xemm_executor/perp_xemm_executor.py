@@ -12,6 +12,7 @@ from hummingbot.core.event.events import (
     BuyOrderCompletedEvent,
     BuyOrderCreatedEvent,
     MarketOrderFailureEvent,
+    OrderCancelledEvent,
     OrderFilledEvent,
     SellOrderCompletedEvent,
     SellOrderCreatedEvent,
@@ -167,7 +168,9 @@ class PerpXEMMExecutor(ExecutorBase):
         # State flags
         self._hedging = False
         self._emergency_close_triggered = False
-        self._maker_fill_reconcile_deadline: Optional[float] = None
+        # Grace window after zero-fill completed or post-cancel (Caishen 1139 late fills).
+        self._maker_reconcile_deadline: Optional[float] = None
+        self._maker_reconcile_zero_fill: bool = False
         self.failed_orders = []
 
         # Taker market order support check
@@ -658,7 +661,7 @@ class PerpXEMMExecutor(ExecutorBase):
         if not maker_open:
             self._hedge_pending()
 
-        if self._awaiting_late_maker_fills():
+        if self._awaiting_maker_reconcile():
             return
 
         takers_done = all(
@@ -740,6 +743,8 @@ class PerpXEMMExecutor(ExecutorBase):
             self._recompute_maker_filled()
             self._enter_hedging()
             self._hedge_pending()
+            if filled > Decimal("0") or self._maker_filled_base > Decimal("0"):
+                self._start_post_cancel_reconcile()
         else:
             self.maker_order = None
 
@@ -767,20 +772,54 @@ class PerpXEMMExecutor(ExecutorBase):
                 )
         self._recompute_maker_filled()
 
-    def _awaiting_late_maker_fills(self) -> bool:
-        if self._maker_fill_reconcile_deadline is None:
-            return False
-        if self._maker_filled_base > Decimal("0"):
-            self._maker_fill_reconcile_deadline = None
-            return False
-        if time.time() < self._maker_fill_reconcile_deadline:
-            return True
-        self.logger().error(
-            f"Late maker fill grace ({self._MAKER_LATE_FILL_GRACE_S:.0f}s) expired for "
-            f"executor {self.config.id}; no fill confirmed on {self.maker_connector}. "
-            f"Check for naked maker exposure."
+    def _start_zero_fill_reconcile(self):
+        self._maker_reconcile_deadline = time.time() + self._MAKER_LATE_FILL_GRACE_S
+        self._maker_reconcile_zero_fill = True
+
+    def _start_post_cancel_reconcile(self):
+        deadline = time.time() + self._MAKER_LATE_FILL_GRACE_S
+        if self._maker_reconcile_deadline is None or deadline > self._maker_reconcile_deadline:
+            self._maker_reconcile_deadline = deadline
+        self._maker_reconcile_zero_fill = False
+        self.logger().warning(
+            f"Post-cancel maker fill grace started ({self._MAKER_LATE_FILL_GRACE_S:.0f}s) for "
+            f"executor {self.config.id}; deferring shutdown until late fills reconcile."
         )
-        self._maker_fill_reconcile_deadline = None
+
+    def _clear_maker_reconcile(self):
+        self._maker_reconcile_deadline = None
+        self._maker_reconcile_zero_fill = False
+
+    def _awaiting_maker_reconcile(self) -> bool:
+        if self._maker_reconcile_deadline is None:
+            return False
+
+        if self._maker_reconcile_zero_fill:
+            if self._maker_filled_base > Decimal("0"):
+                self._clear_maker_reconcile()
+                return False
+        else:
+            self._sync_maker_filled_from_tracked_orders()
+            if self._unhedged_base() > Decimal("0"):
+                self._hedge_pending()
+
+        if time.time() < self._maker_reconcile_deadline:
+            return True
+
+        if self._maker_reconcile_zero_fill:
+            self.logger().error(
+                f"Late maker fill grace ({self._MAKER_LATE_FILL_GRACE_S:.0f}s) expired for "
+                f"executor {self.config.id}; no fill confirmed on {self.maker_connector}. "
+                f"Check for naked maker exposure."
+            )
+        else:
+            unhedged = self._unhedged_base()
+            if unhedged > Decimal("0"):
+                self.logger().error(
+                    f"Post-cancel maker fill grace ({self._MAKER_LATE_FILL_GRACE_S:.0f}s) expired "
+                    f"for executor {self.config.id} with {unhedged} unhedged on {self.maker_connector}."
+                )
+        self._clear_maker_reconcile()
         return False
 
     def _is_fully_hedged(self) -> bool:
@@ -923,16 +962,31 @@ class PerpXEMMExecutor(ExecutorBase):
             self._recompute_maker_filled()
             self._enter_hedging()
             if self._maker_filled_base > Decimal("0"):
-                self._maker_fill_reconcile_deadline = None
+                self._clear_maker_reconcile()
                 self._hedge_pending()
             else:
-                self._maker_fill_reconcile_deadline = time.time() + self._MAKER_LATE_FILL_GRACE_S
+                self._start_zero_fill_reconcile()
                 self.logger().warning(
                     f"Maker order {event.order_id} completed with zero fill amount "
                     f"(completed={event.base_asset_amount}, tracked={tracked_executed}). "
                     f"Waiting up to {self._MAKER_LATE_FILL_GRACE_S:.0f}s for fill events "
                     f"before shutdown; taker hedge deferred."
                 )
+
+    def process_order_canceled_event(
+        self,
+        event_tag: int,
+        market: ConnectorBase,
+        event: OrderCancelledEvent,
+    ):
+        self._update_tracked_order_with_order_id(event.order_id)
+        if event.order_id not in self._maker_orders_by_id:
+            return
+        self._sync_maker_filled_from_tracked_orders()
+        if self._maker_filled_base > Decimal("0") or self._hedging:
+            self._enter_hedging()
+            self._hedge_pending()
+            self._start_post_cancel_reconcile()
 
     def process_order_filled_event(
         self,
@@ -959,7 +1013,8 @@ class PerpXEMMExecutor(ExecutorBase):
 
         if dedup_key in self._seen_trade_ids:
             if is_maker:
-                self._maker_fill_reconcile_deadline = None
+                if self._maker_reconcile_zero_fill:
+                    self._clear_maker_reconcile()
                 self._enter_hedging()
                 self._hedge_pending()
             return
@@ -968,7 +1023,8 @@ class PerpXEMMExecutor(ExecutorBase):
         if is_maker:
             self._maker_fills_sum += event.amount
             self._recompute_maker_filled()
-            self._maker_fill_reconcile_deadline = None
+            if self._maker_reconcile_zero_fill:
+                self._clear_maker_reconcile()
             self._enter_hedging()
             self._hedge_pending()
 

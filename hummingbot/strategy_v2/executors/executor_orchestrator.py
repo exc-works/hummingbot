@@ -470,13 +470,22 @@ class ExecutorOrchestrator:
                     existing_position.add_orders_from_executor(executor_info)
                 else:
                     # Create new position (handles both spot/perp and LP)
+                    config_side = self._config_trade_side(executor_info.config)
                     position = PositionHold(
                         executor_info.connector_name,
                         executor_info.trading_pair,
-                        position_side if position_side else executor_info.config.side
+                        position_side if position_side else config_side
                     )
                     position.add_orders_from_executor(executor_info)
                     positions.append(position)
+
+    @staticmethod
+    def _config_trade_side(config) -> Optional[TradeType]:
+        if hasattr(config, "maker_side"):
+            return config.maker_side
+        if hasattr(config, "side"):
+            return config.side
+        return None
 
     def _determine_position_side(self, executor_info: ExecutorInfo) -> Optional[TradeType]:
         """
@@ -490,12 +499,16 @@ class ExecutorOrchestrator:
         if not market or not hasattr(market, 'position_mode'):
             return None
 
+        config_side = self._config_trade_side(executor_info.config)
+        if config_side is None:
+            return executor_info.side
+
         position_mode = market.position_mode
         if hasattr(executor_info.config, "position_action") and position_mode == PositionMode.HEDGE:
-            opposite_side = TradeType.BUY if executor_info.config.side == TradeType.SELL else TradeType.SELL
-            return opposite_side if executor_info.config.position_action == PositionAction.CLOSE else executor_info.config.side
+            opposite_side = TradeType.BUY if config_side == TradeType.SELL else TradeType.SELL
+            return opposite_side if executor_info.config.position_action == PositionAction.CLOSE else config_side
 
-        return executor_info.config.side
+        return config_side
 
     def _find_existing_position(self, positions: List[PositionHold],
                                 executor_info: ExecutorInfo,
