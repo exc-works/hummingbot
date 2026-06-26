@@ -34,15 +34,18 @@ class OkxExchange(ExchangePyBase):
                  rate_limits_share_pct: Decimal = Decimal("100"),
                  trading_pairs: Optional[List[str]] = None,
                  trading_required: bool = True,
-                 okx_registration_sub_domain: str = "www"):
+                 okx_registration_sub_domain: str = "www",
+                 domain: str = "okx"):
         """
         :param okx_registration_sub_domain: The subdomain to use - options are "www" (default), "app" (US users), or "my" (EEA users)
                               See: https://github.com/ccxt/ccxt/issues/24601
+        :param domain: Connector variant - "okx" for live trading, "okx_demo" for simulated (demo) trading
         """
         self.okx_api_key = okx_api_key
         self.okx_secret_key = okx_secret_key
         self.okx_passphrase = okx_passphrase
         self.okx_registration_sub_domain = okx_registration_sub_domain or "www"
+        self._connector_domain = domain
         self._trading_required = trading_required
         self._trading_pairs = trading_pairs
         super().__init__(balance_asset_limit, rate_limits_share_pct)
@@ -53,11 +56,16 @@ class OkxExchange(ExchangePyBase):
             api_key=self.okx_api_key,
             secret_key=self.okx_secret_key,
             passphrase=self.okx_passphrase,
-            time_provider=self._time_synchronizer)
+            time_provider=self._time_synchronizer,
+            simulated_trading=self.is_simulated_trading)
+
+    @property
+    def is_simulated_trading(self) -> bool:
+        return self._connector_domain == CONSTANTS.DEMO_DOMAIN
 
     @property
     def name(self) -> str:
-        return "okx"
+        return self._connector_domain
 
     @property
     def rate_limits_rules(self):

@@ -33,12 +33,20 @@ def get_ws_url(sub_domain: str) -> str:
 
 DEFAULT_DOMAIN = get_okx_base_url("www")
 
+DEMO_DOMAIN = "okx_demo"
+DEMO_WS_PUBLIC = "wss://wspap.okx.com:8443/ws/v5/public"
+DEMO_WS_PRIVATE = "wss://wspap.okx.com:8443/ws/v5/private"
 
-def get_okx_ws_uri_public(sub_domain):
+
+def get_okx_ws_uri_public(sub_domain: str, simulated_trading: bool = False) -> str:
+    if simulated_trading:
+        return DEMO_WS_PUBLIC
     return f"{get_ws_url(sub_domain)}/ws/v5/public"
 
 
-def get_okx_ws_uri_private(sub_domain):
+def get_okx_ws_uri_private(sub_domain: str, simulated_trading: bool = False) -> str:
+    if simulated_trading:
+        return DEMO_WS_PRIVATE
     return f"{get_ws_url(sub_domain)}/ws/v5/private"
 
 

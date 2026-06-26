@@ -13,11 +13,18 @@ from hummingbot.core.web_assistant.connections.data_types import RESTRequest, WS
 
 class OkxAuth(AuthBase):
 
-    def __init__(self, api_key: str, secret_key: str, passphrase: str, time_provider: TimeSynchronizer):
+    def __init__(
+            self,
+            api_key: str,
+            secret_key: str,
+            passphrase: str,
+            time_provider: TimeSynchronizer,
+            simulated_trading: bool = False):
         self.api_key: str = api_key
         self.secret_key: str = secret_key
         self.passphrase: str = passphrase
         self.time_provider: TimeSynchronizer = time_provider
+        self._simulated_trading: bool = simulated_trading
 
     async def rest_authenticate(self, request: RESTRequest) -> RESTRequest:
         """
@@ -76,6 +83,8 @@ class OkxAuth(AuthBase):
             "OK-ACCESS-TIMESTAMP": timestamp,
             "OK-ACCESS-PASSPHRASE": self.passphrase,
         }
+        if self._simulated_trading:
+            header["x-simulated-trading"] = "1"
 
         return header
 

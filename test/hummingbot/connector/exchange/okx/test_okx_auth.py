@@ -64,6 +64,26 @@ class OkxAuthTests(TestCase):
         self.assertEqual(expected_signature, request.headers["OK-ACCESS-SIGN"])
         expected_passphrase = self.passphrase
         self.assertEqual(expected_passphrase, request.headers["OK-ACCESS-PASSPHRASE"])
+        self.assertNotIn("x-simulated-trading", request.headers)
+
+    def test_add_simulated_trading_header_for_demo(self):
+        demo_auth = OkxAuth(
+            api_key=self.api_key,
+            secret_key=self.secret_key,
+            passphrase=self.passphrase,
+            time_provider=self.mock_time_provider,
+            simulated_trading=True,
+        )
+        request = RESTRequest(
+            method=RESTMethod.GET,
+            url="https://test.url/api/endpoint",
+            is_auth_required=True,
+            throttler_limit_id="/api/endpoint"
+        )
+
+        self.async_run_with_timeout(demo_auth.rest_authenticate(request))
+
+        self.assertEqual("1", request.headers["x-simulated-trading"])
 
     def test_add_auth_headers_to_get_request_with_params(self):
         request = RESTRequest(

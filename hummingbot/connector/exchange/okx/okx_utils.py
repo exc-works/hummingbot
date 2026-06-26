@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Any, Dict, Literal
 
-from pydantic import Field, SecretStr
+from pydantic import ConfigDict, Field, SecretStr
 
 from hummingbot.client.config.config_data_types import BaseConnectorConfigMap
 from hummingbot.core.data_type.trade_fee import TradeFeeSchema
@@ -56,6 +56,54 @@ class OKXConfigMap(BaseConnectorConfigMap):
 
 
 KEYS = OKXConfigMap.model_construct()
+
+OTHER_DOMAINS = ["okx_demo"]
+OTHER_DOMAINS_PARAMETER = {"okx_demo": "okx_demo"}
+OTHER_DOMAINS_EXAMPLE_PAIR = {"okx_demo": EXAMPLE_PAIR}
+OTHER_DOMAINS_DEFAULT_FEES = {"okx_demo": DEFAULT_FEES}
+
+
+class OKXDemoConfigMap(BaseConnectorConfigMap):
+    connector: str = "okx_demo"
+    okx_demo_api_key: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your OKX Demo Trading API key (create under Trade > Demo Trading > Personal Center > Demo Trading API)",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        }
+    )
+    okx_demo_secret_key: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your OKX Demo Trading secret key",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        }
+    )
+    okx_demo_passphrase: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your OKX Demo Trading passphrase",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        }
+    )
+    okx_demo_registration_sub_domain: Literal["www", "app", "my"] = Field(
+        default="www",
+        json_schema_extra={
+            "prompt": "Which OKX subdomain did you register the demo key at? (www/app/my)",
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        }
+    )
+    model_config = ConfigDict(title="okx")
+
+
+OTHER_DOMAINS_KEYS = {"okx_demo": OKXDemoConfigMap.model_construct()}
 
 
 def is_exchange_information_valid(exchange_info: Dict[str, Any]) -> bool:
