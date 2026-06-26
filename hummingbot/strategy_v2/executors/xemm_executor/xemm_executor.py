@@ -144,7 +144,7 @@ class XEMMExecutor(ExecutorBase):
             self.stop()
             return
         if not self.config.require_maker_order_book:
-            self.logger().info(
+            self.logger().debug(
                 f"require_maker_order_book=false; using {sizing_source} ({sizing_price}) "
                 f"for balance check on {self.maker_trading_pair}."
             )

@@ -84,6 +84,7 @@ class XEMMMultipleLevels(ControllerBase):
         self.sell_levels_targets_amount = config.sell_levels_targets_amount
         super().__init__(config, *args, **kwargs)
         self._gas_token_cache = {}
+        self._last_taker_sizing_log_key = None
         self._initialize_gas_tokens()
         self.initialize_rate_sources()
 
@@ -179,10 +180,14 @@ class XEMMMultipleLevels(ControllerBase):
                 )
             return executor_actions
         if not self.config.require_maker_order_book:
-            self.logger().info(
-                f"require_maker_order_book=false; using {sizing_source} "
-                f"({sizing_price}) for {self.config.maker_trading_pair} sizing."
-            )
+            # INFO only when taker reference price moves (0.01 quote) or source changes
+            log_key = (sizing_source, sizing_price.quantize(Decimal("0.01")))
+            if log_key != self._last_taker_sizing_log_key:
+                self._last_taker_sizing_log_key = log_key
+                self.logger().info(
+                    f"require_maker_order_book=false; using {sizing_source} "
+                    f"({sizing_price}) for {self.config.maker_trading_pair} sizing."
+                )
         active_buy_executors = self.filter_executors(
             executors=self.executors_info,
             filter_func=lambda e: not e.is_done and e.config.maker_side == TradeType.BUY
