@@ -180,11 +180,10 @@ class XEMMMultipleLevels(ControllerBase):
                 )
             return executor_actions
         if not self.config.require_maker_order_book:
-            # INFO only when taker reference price moves (0.01 quote) or source changes
             log_key = (sizing_source, sizing_price.quantize(Decimal("0.01")))
             if log_key != self._last_taker_sizing_log_key:
                 self._last_taker_sizing_log_key = log_key
-                self.logger().info(
+                self.logger().debug(
                     f"require_maker_order_book=false; using {sizing_source} "
                     f"({sizing_price}) for {self.config.maker_trading_pair} sizing."
                 )

@@ -126,7 +126,7 @@ class XEMMExecutor(ExecutorBase):
         return self.connectors[connector_name].get_price_by_type(trading_pair, price_type)
 
     async def validate_sufficient_balance(self):
-        sizing_price, sizing_source = resolve_xemm_sizing_price(
+        sizing_price, _ = resolve_xemm_sizing_price(
             get_price_by_type=self._connector_get_price_by_type,
             maker_connector=self.maker_connector,
             maker_trading_pair=self.maker_trading_pair,
@@ -143,11 +143,6 @@ class XEMMExecutor(ExecutorBase):
             self.close_type = CloseType.FAILED
             self.stop()
             return
-        if not self.config.require_maker_order_book:
-            self.logger().debug(
-                f"require_maker_order_book=false; using {sizing_source} ({sizing_price}) "
-                f"for balance check on {self.maker_trading_pair}."
-            )
         maker_order_candidate = OrderCandidate(
             trading_pair=self.maker_trading_pair,
             is_maker=True,
