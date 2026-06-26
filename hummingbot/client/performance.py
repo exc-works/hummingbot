@@ -102,13 +102,10 @@ class PerformanceMetrics:
 
         aggregated_orders = []
         for group in grouped_orders.values():
-            aggregated_prices = 0
-            aggregated_amounts = 0
-            for order in group:
-                aggregated_prices += order.price
-                aggregated_amounts += order.amount
+            aggregated_amounts = sum((order.amount for order in group), Decimal("0"))
+            aggregated_quote = sum((order.amount * order.price for order in group), Decimal("0"))
             aggregated = group[0]
-            aggregated.price = aggregated_prices / len(group)
+            aggregated.price = aggregated_quote / aggregated_amounts if aggregated_amounts > 0 else aggregated.price
             aggregated.amount = aggregated_amounts
             aggregated_orders.append(aggregated)
 
@@ -142,6 +139,20 @@ class PerformanceMetrics:
         for st in short:
             pnls.append((st[0].price - st[1].price) * st[1].amount)
         return pnls
+
+    @staticmethod
+    def oneway_derivative_pnl(buy_volume_base: Decimal,
+                              sell_volume_base: Decimal,
+                              avg_buy_price: Decimal,
+                              avg_sell_price: Decimal) -> Decimal:
+        """
+        Position-level realized PnL for one-way (net) perpetuals, aligned with exchange
+        position history: matched volume at volume-weighted average buy/sell prices.
+        """
+        matched_base = min(buy_volume_base, abs(sell_volume_base))
+        if matched_base <= s_decimal_0:
+            return s_decimal_0
+        return (avg_sell_price - avg_buy_price) * matched_base
 
     @staticmethod
     def smart_round(value: Decimal, precision: Optional[int] = None) -> Decimal:
@@ -282,7 +293,26 @@ class PerformanceMetrics:
                 if lng is None and sht is None:
                     break
 
-            self.trade_pnl = Decimal(str(sum(self.derivative_pnl(long, short))))
+            fifo_pnl = Decimal(str(sum(self.derivative_pnl(long, short))))
+            oneway_pnl = self.oneway_derivative_pnl(
+                buy_volume_base=self.b_vol_base,
+                sell_volume_base=self.s_vol_base,
+                avg_buy_price=self.avg_b_price,
+                avg_sell_price=self.avg_s_price,
+            )
+            # Prefer exchange-style VWAP matching for fully closed one-way positions
+            # (aligned with OKX position history; OKX ONEWAY fills use posSide="net").
+            buy_base = self.b_vol_base
+            sell_base = abs(self.s_vol_base)
+            max_side = max(buy_base, sell_base)
+            volumes_balanced = (
+                max_side > s_decimal_0
+                and abs(buy_base - sell_base) / max_side <= Decimal("0.01")
+            )
+            if volumes_balanced and oneway_pnl != s_decimal_0:
+                self.trade_pnl = oneway_pnl
+            else:
+                self.trade_pnl = fifo_pnl if fifo_pnl != s_decimal_0 else oneway_pnl
 
     async def _initialize_metrics(self,
                                   trading_pair: str,

@@ -199,6 +199,18 @@ class PerpXEMMMultipleLevelsConfig(ControllerConfigBase):
         },
     )
 
+    # After an executor at a level finishes (fill+hedge, cancel, or stop), wait before
+    # spawning a replacement at the same side+target_profitability. Reduces churn and
+    # Caishen 1139 cancel noise when orders fill instantly after manual flatten/restart.
+    level_requote_cooldown_s: float = Field(
+        default=10.0,
+        ge=0,
+        json_schema_extra={
+            "prompt": "Seconds to wait before re-quoting a level after its executor ends (0=off): ",
+            "prompt_on_new": True,
+        },
+    )
+
     @field_validator("buy_levels_targets_amount", "sell_levels_targets_amount", mode="before")
     @classmethod
     def validate_levels_targets_amount(cls, v):
@@ -261,6 +273,7 @@ class PerpXEMMMultipleLevels(ControllerBase):
         self._position_stale_flatten_dispatched: bool = False
         self._margin_gate_last_warn_key: Optional[tuple] = None
         self._margin_gate_last_warn_ts: float = 0.0
+        self._level_cooldown_last_log_key: Optional[tuple] = None
 
         super().__init__(config, *args, **kwargs)
 
@@ -886,6 +899,42 @@ class PerpXEMMMultipleLevels(ControllerBase):
     # Executor creation
     # -----------------------------------------------------------------------
 
+    def _level_in_requote_cooldown(
+        self,
+        maker_side: TradeType,
+        target_profitability: Decimal,
+    ) -> bool:
+        cooldown = self.config.level_requote_cooldown_s
+        if cooldown <= 0:
+            return False
+        now = self.market_data_provider.time()
+        for executor in self.executors_info:
+            if not self._is_perp_xemm_executor(executor):
+                continue
+            if executor.config.maker_side != maker_side:
+                continue
+            if executor.config.target_profitability != target_profitability:
+                continue
+            if not executor.is_done or executor.close_timestamp is None:
+                continue
+            if now - executor.close_timestamp < cooldown:
+                return True
+        return False
+
+    def _log_level_cooldown_skip(
+        self,
+        maker_side: TradeType,
+        target_profitability: Decimal,
+    ):
+        log_key = (maker_side, target_profitability)
+        if self._level_cooldown_last_log_key == log_key:
+            return
+        self._level_cooldown_last_log_key = log_key
+        self.logger().info(
+            f"[Perp XEMM] Level cooldown ({self.config.level_requote_cooldown_s:.0f}s): "
+            f"skip {maker_side.name} target={target_profitability} re-quote."
+        )
+
     def _build_executor_config(
         self,
         maker_side: TradeType,
@@ -1005,6 +1054,9 @@ class PerpXEMMMultipleLevels(ControllerBase):
             )
             if has_active or fill_imbalance >= self.config.max_executors_imbalance:
                 continue
+            if self._level_in_requote_cooldown(TradeType.BUY, target_profitability):
+                self._log_level_cooldown_skip(TradeType.BUY, target_profitability)
+                continue
 
             proportional_quote = (level_amount / total_buy_amount) * buy_side_quote
             order_amount_base = proportional_quote / mid_price
@@ -1031,6 +1083,9 @@ class PerpXEMMMultipleLevels(ControllerBase):
                 for e in active_sell_executors
             )
             if has_active or fill_imbalance <= -self.config.max_executors_imbalance:
+                continue
+            if self._level_in_requote_cooldown(TradeType.SELL, target_profitability):
+                self._log_level_cooldown_skip(TradeType.SELL, target_profitability)
                 continue
 
             proportional_quote = (level_amount / total_sell_amount) * sell_side_quote

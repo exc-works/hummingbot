@@ -6,8 +6,8 @@ from hummingbot.client.config.config_data_types import BaseConnectorConfigMap
 from hummingbot.core.data_type.trade_fee import TradeFeeSchema
 
 DEFAULT_FEES = TradeFeeSchema(
-    maker_percent_fee_decimal=Decimal("0.0002"),
-    taker_percent_fee_decimal=Decimal("0.0005"),
+    maker_percent_fee_decimal=Decimal("0.0004"),
+    taker_percent_fee_decimal=Decimal("0.0007"),
     buy_percent_fee_deducted_from_returns=True,
 )
 

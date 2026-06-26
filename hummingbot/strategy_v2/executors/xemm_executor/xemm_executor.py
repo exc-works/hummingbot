@@ -22,6 +22,7 @@ from hummingbot.strategy_v2.executors.executor_base import ExecutorBase
 from hummingbot.strategy_v2.executors.xemm_executor.data_types import XEMMExecutorConfig
 from hummingbot.strategy_v2.models.base import RunnableStatus
 from hummingbot.strategy_v2.models.executors import CloseType, TrackedOrder
+from hummingbot.strategy_v2.utils.xemm_sizing_price import resolve_xemm_sizing_price
 
 
 class XEMMExecutor(ExecutorBase):
@@ -121,23 +122,46 @@ class XEMMExecutor(ExecutorBase):
                          connectors=[config.buying_market.connector_name, config.selling_market.connector_name],
                          config=config, update_interval=update_interval, max_retries=max_retries)
 
+    def _connector_get_price_by_type(self, connector_name: str, trading_pair: str, price_type: PriceType):
+        return self.connectors[connector_name].get_price_by_type(trading_pair, price_type)
+
     async def validate_sufficient_balance(self):
-        mid_price = self.get_price(self.maker_connector, self.maker_trading_pair,
-                                   price_type=PriceType.MidPrice)
+        sizing_price, sizing_source = resolve_xemm_sizing_price(
+            get_price_by_type=self._connector_get_price_by_type,
+            maker_connector=self.maker_connector,
+            maker_trading_pair=self.maker_trading_pair,
+            taker_connector=self.taker_connector,
+            taker_trading_pair=self.taker_trading_pair,
+            require_maker_order_book=self.config.require_maker_order_book,
+        )
+        if sizing_price is None:
+            mode = "maker order book" if self.config.require_maker_order_book else "taker reference price"
+            self.logger().error(
+                f"No {mode} for balance check on {self.maker_trading_pair} / "
+                f"{self.taker_trading_pair}; stopping executor."
+            )
+            self.close_type = CloseType.FAILED
+            self.stop()
+            return
+        if not self.config.require_maker_order_book:
+            self.logger().info(
+                f"require_maker_order_book=false; using {sizing_source} ({sizing_price}) "
+                f"for balance check on {self.maker_trading_pair}."
+            )
         maker_order_candidate = OrderCandidate(
             trading_pair=self.maker_trading_pair,
             is_maker=True,
             order_type=OrderType.LIMIT,
             order_side=self.maker_order_side,
             amount=self.config.order_amount,
-            price=mid_price,)
+            price=sizing_price,)
         taker_order_candidate = OrderCandidate(
             trading_pair=self.taker_trading_pair,
             is_maker=False,
             order_type=OrderType.MARKET,
             order_side=self.taker_order_side,
             amount=self.config.order_amount,
-            price=mid_price,)
+            price=sizing_price,)
         maker_adjusted_candidate = self.adjust_order_candidates(self.maker_connector, [maker_order_candidate])[0]
         taker_adjusted_candidate = self.adjust_order_candidates(self.taker_connector, [taker_order_candidate])[0]
         if maker_adjusted_candidate.amount == Decimal("0") or taker_adjusted_candidate.amount == Decimal("0"):

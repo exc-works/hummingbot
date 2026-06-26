@@ -633,6 +633,8 @@ class PerpXEMMExecutor(ExecutorBase):
         if order is None or order.exchange_order_id is None:
             # Caishen confirms orders on-chain; skip profitability checks until ack.
             return
+        if order.executed_amount_base >= order.amount:
+            return
         await self.update_current_trade_profitability()
         if self.maker_order is None or self.maker_order.is_done:
             return
@@ -834,11 +836,21 @@ class PerpXEMMExecutor(ExecutorBase):
         """Amount of maker fill that is not yet covered by any taker fill."""
         return max(self._maker_filled_base - self._actual_hedged_base(), Decimal("0"))
 
+    def _maker_order_has_open_remainder(self) -> bool:
+        if self.maker_order is None or self.maker_order.order is None:
+            return False
+        order = self.maker_order.order
+        if not order.is_open:
+            return False
+        if order.executed_amount_base >= order.amount:
+            return False
+        return True
+
     def _enter_hedging(self):
         if self._hedging:
             return
         self._hedging = True
-        if self.maker_order and self.maker_order.order and self.maker_order.order.is_open:
+        if self._maker_order_has_open_remainder():
             self.logger().info(
                 f"Cancelling remaining maker order {self.maker_order.order_id} before hedging."
             )

@@ -122,6 +122,23 @@ class OkxPerpetualDerivative(PerpetualDerivativePyBase):
     def _format_size_to_amount(self, trading_pair, size: Decimal) -> Decimal:
         return size * self._contract_sizes[trading_pair]
 
+    def _resolve_position_action(self, tracked_order: InFlightOrder, pos_side: str) -> PositionAction:
+        """
+        In ONEWAY (net) mode OKX always reports posSide='net', so OPEN/CLOSE cannot be inferred
+        from posSide alone. Prefer the action recorded on the tracked order at submission time.
+        """
+        if tracked_order.position != PositionAction.NIL:
+            return tracked_order.position
+        trade_type = tracked_order.trade_type
+        if pos_side == "net":
+            return PositionAction.NIL
+        position_side = PositionSide.LONG if pos_side == "long" else PositionSide.SHORT
+        if (trade_type is TradeType.BUY and position_side is PositionSide.LONG) or (
+            trade_type is TradeType.SELL and position_side is PositionSide.SHORT
+        ):
+            return PositionAction.OPEN
+        return PositionAction.CLOSE
+
     def supported_order_types(self) -> List[OrderType]:
         """
         :return a list of OrderType supported by this connector
@@ -464,11 +481,7 @@ class OkxPerpetualDerivative(PerpetualDerivativePyBase):
 
     def _parse_trade_update(self, trade_msg: Dict, tracked_order: InFlightOrder) -> TradeUpdate:
         trade_id: str = str(trade_msg["tradeId"])
-        position_side = trade_msg["posSide"]
-        position_action = (PositionAction.OPEN
-                           if (tracked_order.trade_type is TradeType.BUY and position_side == "long"
-                               or tracked_order.trade_type is TradeType.SELL and position_side == "short")
-                           else PositionAction.CLOSE)
+        position_action = self._resolve_position_action(tracked_order, trade_msg.get("posSide", ""))
         fill_base_amount = abs(self._format_size_to_amount(tracked_order.trading_pair, (Decimal(str(trade_msg["fillSz"])))))
 
         fee = TradeFeeBase.new_perpetual_fee(
@@ -637,7 +650,7 @@ class OkxPerpetualDerivative(PerpetualDerivativePyBase):
             position_side = self.get_position_side(data)
             unrealized_pnl = Decimal(data["upl"]) if bool(data["upl"]) else Decimal(str(0.0))
             entry_price = Decimal(data["avgPx"]) if bool(data["avgPx"]) else Decimal(str(0.0))
-            amount = self.get_position_amount(data)
+            amount = self.get_position_amount(data, hb_trading_pair)
             leverage = Decimal(data["lever"]) if bool(data["lever"]) else Decimal(str(0.0))
             pos_key = self._perpetual_trading.position_key(hb_trading_pair, position_side)
             if amount != s_decimal_0:
@@ -661,15 +674,18 @@ class OkxPerpetualDerivative(PerpetualDerivativePyBase):
             position_side = PositionSide.LONG if position_msg.get("posSide") == "long" else PositionSide.SHORT
         return position_side
 
-    @staticmethod
-    def get_position_amount(position_msg: Dict[str, Any]) -> Decimal:
-        if bool(position_msg["notionalUsd"]):
+    def get_position_amount(self, position_msg: Dict[str, Any], trading_pair: str) -> Decimal:
+        pos = position_msg.get("pos")
+        if pos is not None and str(pos) not in ("", "0"):
+            contract_size = self._contract_sizes.get(trading_pair)
+            if contract_size is not None:
+                return abs(Decimal(str(pos))) * contract_size
+        if bool(position_msg.get("notionalUsd")) and bool(position_msg.get("avgPx")):
             notional_usd = Decimal(position_msg["notionalUsd"])
             avg_px = Decimal(position_msg["avgPx"])
-            amount = abs(notional_usd / avg_px) if notional_usd != s_decimal_0 else s_decimal_0
-            return max(amount, round(amount))
-        else:
-            return Decimal("0.0")
+            if notional_usd != s_decimal_0 and avg_px != s_decimal_0:
+                return abs(notional_usd / avg_px)
+        return Decimal("0")
 
     async def _process_account_position_event(self, position_msg: Dict[str, Any]):
         """
@@ -681,7 +697,7 @@ class OkxPerpetualDerivative(PerpetualDerivativePyBase):
             trading_pair = await self.trading_pair_associated_to_exchange_symbol(symbol=ex_trading_pair)
             position_side = self.get_position_side(position_msg)
             entry_price = Decimal(position_msg["avgPx"]) if bool(position_msg["avgPx"]) else Decimal("0")
-            amount = self.get_position_amount(position_msg)
+            amount = self.get_position_amount(position_msg, trading_pair)
             leverage = Decimal(position_msg["lever"]) if bool(position_msg["lever"]) else Decimal("0")
             unrealized_pnl = Decimal(position_msg["upl"]) if bool(position_msg["upl"]) else Decimal("0")
             pos_key = self._perpetual_trading.position_key(trading_pair, position_side)
@@ -720,12 +736,6 @@ class OkxPerpetualDerivative(PerpetualDerivativePyBase):
         """
         client_order_id = order_msg["clOrdId"]
         order_status = CONSTANTS.ORDER_STATE[order_msg["state"]]
-        trade_type = TradeType.BUY if order_msg["side"] == "buy" else TradeType.SELL
-        position_side = PositionSide.LONG if order_msg["posSide"] == "long" else PositionSide.SHORT
-        position_action = (PositionAction.OPEN
-                           if (trade_type == TradeType.BUY and position_side == PositionSide.LONG) or
-                              (trade_type == TradeType.SELL and position_side == PositionSide.SHORT)
-                           else PositionAction.CLOSE)
         fill_fee_currency = order_msg.get("fillFeeCcy")
         fill_fee = -Decimal(order_msg.get("fillFee", "0"))
 
@@ -742,6 +752,7 @@ class OkxPerpetualDerivative(PerpetualDerivativePyBase):
 
         fillable_order = self._order_tracker.all_fillable_orders.get(client_order_id)
         if fillable_order is not None and order_status in [OrderState.PARTIALLY_FILLED, OrderState.FILLED]:
+            position_action = self._resolve_position_action(fillable_order, order_msg.get("posSide", ""))
             fill_base_amount = abs(self._format_size_to_amount(fillable_order.trading_pair, (Decimal(str(order_msg["fillSz"])))))
             fee = TradeFeeBase.new_perpetual_fee(
                 fee_schema=self.trade_fee_schema(),

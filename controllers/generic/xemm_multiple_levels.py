@@ -6,12 +6,13 @@ import pandas as pd
 from pydantic import Field, field_validator
 
 from hummingbot.client.ui.interface_utils import format_df_for_printout
-from hummingbot.core.data_type.common import PriceType, TradeType
+from hummingbot.core.data_type.common import TradeType
 from hummingbot.core.gateway.gateway_http_client import GatewayHttpClient
 from hummingbot.strategy_v2.controllers.controller_base import ControllerBase, ControllerConfigBase
 from hummingbot.strategy_v2.executors.data_types import ConnectorPair
 from hummingbot.strategy_v2.executors.xemm_executor.data_types import XEMMExecutorConfig
 from hummingbot.strategy_v2.models.executor_actions import CreateExecutorAction, ExecutorAction
+from hummingbot.strategy_v2.utils.xemm_sizing_price import resolve_xemm_sizing_price
 
 
 class XEMMMultipleLevelsConfig(ControllerConfigBase):
@@ -47,6 +48,16 @@ class XEMMMultipleLevelsConfig(ControllerConfigBase):
     max_executors_imbalance: int = Field(
         default=1,
         json_schema_extra={"prompt": "Enter the maximum executors imbalance: ", "prompt_on_new": True})
+    require_maker_order_book: bool = Field(
+        default=True,
+        json_schema_extra={
+            "prompt": (
+                "Require maker order book for sizing? (True=maker MidPrice required, "
+                "False=size and validate using taker price only): "
+            ),
+            "prompt_on_new": True,
+        },
+    )
 
     @field_validator("buy_levels_targets_amount", "sell_levels_targets_amount", mode="before")
     @classmethod
@@ -145,15 +156,33 @@ class XEMMMultipleLevels(ControllerBase):
 
     def determine_executor_actions(self) -> List[ExecutorAction]:
         executor_actions = []
-        mid_price = self.market_data_provider.get_price_by_type(
-            self.config.maker_connector, self.config.maker_trading_pair, PriceType.MidPrice
+        sizing_price, sizing_source = resolve_xemm_sizing_price(
+            get_price_by_type=self.market_data_provider.get_price_by_type,
+            maker_connector=self.config.maker_connector,
+            maker_trading_pair=self.config.maker_trading_pair,
+            taker_connector=self.config.taker_connector,
+            taker_trading_pair=self.config.taker_trading_pair,
+            require_maker_order_book=self.config.require_maker_order_book,
         )
-        if mid_price is None or mid_price.is_nan() or mid_price <= 0:
-            self.logger().warning(
-                f"Mid price unavailable for {self.config.maker_trading_pair} on "
-                f"{self.config.maker_connector}; skipping XEMM executor creation."
-            )
+        if sizing_price is None:
+            if self.config.require_maker_order_book:
+                self.logger().warning(
+                    f"Maker MidPrice unavailable for {self.config.maker_trading_pair} on "
+                    f"{self.config.maker_connector} (require_maker_order_book=true); "
+                    f"skipping XEMM executor creation."
+                )
+            else:
+                self.logger().warning(
+                    f"No taker reference price for {self.config.taker_trading_pair} on "
+                    f"{self.config.taker_connector} (require_maker_order_book=false); "
+                    f"skipping XEMM executor creation."
+                )
             return executor_actions
+        if not self.config.require_maker_order_book:
+            self.logger().info(
+                f"require_maker_order_book=false; using {sizing_source} "
+                f"({sizing_price}) for {self.config.maker_trading_pair} sizing."
+            )
         active_buy_executors = self.filter_executors(
             executors=self.executors_info,
             filter_func=lambda e: not e.is_done and e.config.maker_side == TradeType.BUY
@@ -198,10 +227,11 @@ class XEMMMultipleLevels(ControllerBase):
                     selling_market=ConnectorPair(connector_name=self.config.taker_connector,
                                                  trading_pair=self.config.taker_trading_pair),
                     maker_side=TradeType.BUY,
-                    order_amount=proportional_amount_quote / mid_price,
+                    order_amount=proportional_amount_quote / sizing_price,
                     min_profitability=min_profitability,
                     target_profitability=target_profitability,
-                    max_profitability=max_profitability
+                    max_profitability=max_profitability,
+                    require_maker_order_book=self.config.require_maker_order_book,
                 )
                 executor_actions.append(CreateExecutorAction(executor_config=config, controller_id=self.config.id))
         for target_profitability, amount in self.sell_levels_targets_amount:
@@ -221,16 +251,17 @@ class XEMMMultipleLevels(ControllerBase):
                     selling_market=ConnectorPair(connector_name=self.config.maker_connector,
                                                  trading_pair=self.config.maker_trading_pair),
                     maker_side=TradeType.SELL,
-                    order_amount=proportional_amount_quote / mid_price,
+                    order_amount=proportional_amount_quote / sizing_price,
                     min_profitability=min_profitability,
                     target_profitability=target_profitability,
-                    max_profitability=max_profitability
+                    max_profitability=max_profitability,
+                    require_maker_order_book=self.config.require_maker_order_book,
                 )
                 executor_actions.append(CreateExecutorAction(executor_config=config, controller_id=self.config.id))
         if executor_actions:
             self.logger().info(
                 f"Proposing {len(executor_actions)} XEMM executor(s) for {self.config.maker_trading_pair} "
-                f"(mid={mid_price})."
+                f"(sizing_price={sizing_price}, source={sizing_source})."
             )
         return executor_actions
 

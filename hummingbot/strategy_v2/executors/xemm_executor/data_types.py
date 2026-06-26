@@ -14,3 +14,4 @@ class XEMMExecutorConfig(ExecutorConfigBase):
     min_profitability: Decimal
     target_profitability: Decimal
     max_profitability: Decimal
+    require_maker_order_book: bool = True
