@@ -341,6 +341,7 @@ class CaishenSpotExchange(ExchangePyBase):
             "type": order_type_int,
             "time_in_force": time_in_force,
             "size": str(amount),
+            "stp_mode": CONSTANTS.DEFAULT_STP_MODE,
         }
         if order_type.is_limit_type() and price is not None and not price.is_nan():
             form_data["price"] = str(price)

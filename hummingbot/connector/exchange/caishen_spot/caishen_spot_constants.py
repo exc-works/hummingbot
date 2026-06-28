@@ -43,6 +43,16 @@ ORDER_TYPE = {
     "MARKET": 1,
 }
 
+# SelfTradePreventionMode — share.schema.SelfTradePreventionMode
+# EXPIRE_TAKER(2): 保留挂单 maker，撤销吃单 taker，防止同账户自成交
+SELF_TRADE_PREVENTION_MODE = {
+    "NOT_SET": 0,
+    "EXPIRE_MAKER": 1,
+    "EXPIRE_TAKER": 2,
+    "EXPIRE_BOTH": 3,
+}
+DEFAULT_STP_MODE = SELF_TRADE_PREVENTION_MODE["EXPIRE_TAKER"]
+
 HBOT_ORDER_ID_PREFIX = ""
 MAX_ORDER_ID_LEN = 16
 CURRENCY = "USDC"
