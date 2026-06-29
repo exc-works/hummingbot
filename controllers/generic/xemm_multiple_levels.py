@@ -158,16 +158,23 @@ class XEMMMultipleLevels(ControllerBase):
     async def update_processed_data(self):
         pass
 
+    def _counts_toward_fill_imbalance(self, executor: ExecutorInfo) -> bool:
+        """
+        True for executors with maker fills that still have in-flight hedge exposure.
+        TERMINATED executors are excluded so fill_delta reflects open imbalance only,
+        not session-lifetime fill history.
+        """
+        return (
+            executor.config.type == "xemm_executor"
+            and not executor.is_done
+            and executor.filled_amount_quote > Decimal("0")
+        )
+
     def _count_filled_executors(self, maker_side: TradeType) -> int:
-        """
-        Count executors with maker fills on the given side.
-        Includes in-flight hedges (not yet TERMINATED) so imbalance reacts promptly.
-        """
         return len([
             e for e in self.executors_info
-            if e.config.type == "xemm_executor"
+            if self._counts_toward_fill_imbalance(e)
             and e.config.maker_side == maker_side
-            and e.filled_amount_quote > Decimal("0")
         ])
 
     def _occupies_level(self, executor: ExecutorInfo) -> bool:
