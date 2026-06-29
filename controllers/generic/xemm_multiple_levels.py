@@ -11,7 +11,9 @@ from hummingbot.core.gateway.gateway_http_client import GatewayHttpClient
 from hummingbot.strategy_v2.controllers.controller_base import ControllerBase, ControllerConfigBase
 from hummingbot.strategy_v2.executors.data_types import ConnectorPair
 from hummingbot.strategy_v2.executors.xemm_executor.data_types import XEMMExecutorConfig
+from hummingbot.strategy_v2.models.base import RunnableStatus
 from hummingbot.strategy_v2.models.executor_actions import CreateExecutorAction, ExecutorAction
+from hummingbot.strategy_v2.models.executors_info import ExecutorInfo
 from hummingbot.strategy_v2.utils.xemm_sizing_price import resolve_xemm_sizing_price
 
 
@@ -168,6 +170,16 @@ class XEMMMultipleLevels(ControllerBase):
             and e.filled_amount_quote > Decimal("0")
         ])
 
+    def _occupies_level(self, executor: ExecutorInfo) -> bool:
+        """
+        True while an executor is actively quoting on a level.
+        SHUTTING_DOWN executors hedge on taker and no longer maintain maker orders;
+        their slot must be free so a replacement executor can be created.
+        """
+        if executor.config.type != "xemm_executor":
+            return False
+        return executor.status in (RunnableStatus.NOT_STARTED, RunnableStatus.RUNNING)
+
     def _log_imbalance_if_changed(self, fill_imbalance: int):
         if fill_imbalance == self._last_imbalance_log_key:
             return
@@ -214,11 +226,11 @@ class XEMMMultipleLevels(ControllerBase):
                 )
         active_buy_executors = self.filter_executors(
             executors=self.executors_info,
-            filter_func=lambda e: not e.is_done and e.config.maker_side == TradeType.BUY
+            filter_func=lambda e: self._occupies_level(e) and e.config.maker_side == TradeType.BUY
         )
         active_sell_executors = self.filter_executors(
             executors=self.executors_info,
-            filter_func=lambda e: not e.is_done and e.config.maker_side == TradeType.SELL
+            filter_func=lambda e: self._occupies_level(e) and e.config.maker_side == TradeType.SELL
         )
         filled_buy_count = self._count_filled_executors(TradeType.BUY)
         filled_sell_count = self._count_filled_executors(TradeType.SELL)

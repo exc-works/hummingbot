@@ -26,6 +26,7 @@ from hummingbot.strategy_v2.executors.perp_xemm_executor.data_types import (
     DEFAULT_PRE_FUNDING_WINDOW_S,
     PerpXEMMExecutorConfig,
 )
+from hummingbot.strategy_v2.models.base import RunnableStatus
 from hummingbot.strategy_v2.models.executor_actions import CreateExecutorAction, ExecutorAction, StopExecutorAction
 
 
@@ -554,6 +555,15 @@ class PerpXEMMMultipleLevels(ControllerBase):
         """True only for XEMM quote executors; leg-close uses OrderExecutorConfig."""
         return getattr(executor_info.config, "type", None) == "perp_xemm_executor"
 
+    def _occupies_level(self, executor) -> bool:
+        """
+        True while a perp XEMM executor is actively quoting on a level.
+        SHUTTING_DOWN executors no longer maintain maker orders; release the slot.
+        """
+        if not self._is_perp_xemm_executor(executor):
+            return False
+        return executor.status in (RunnableStatus.NOT_STARTED, RunnableStatus.RUNNING)
+
     def _stop_active_xemm_executors(self) -> List[StopExecutorAction]:
         return [
             StopExecutorAction(
@@ -1021,17 +1031,13 @@ class PerpXEMMMultipleLevels(ControllerBase):
         active_buy_executors = self.filter_executors(
             executors=self.executors_info,
             filter_func=lambda e: (
-                self._is_perp_xemm_executor(e)
-                and not e.is_done
-                and e.config.maker_side == TradeType.BUY
+                self._occupies_level(e) and e.config.maker_side == TradeType.BUY
             ),
         )
         active_sell_executors = self.filter_executors(
             executors=self.executors_info,
             filter_func=lambda e: (
-                self._is_perp_xemm_executor(e)
-                and not e.is_done
-                and e.config.maker_side == TradeType.SELL
+                self._occupies_level(e) and e.config.maker_side == TradeType.SELL
             ),
         )
         filled_buy_count = self._count_filled_executors(TradeType.BUY)
