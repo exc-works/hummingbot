@@ -798,22 +798,18 @@ class PerpXEMMMultipleLevels(ControllerBase):
     # Margin gate helper
     # -----------------------------------------------------------------------
 
-    def _counts_toward_fill_imbalance(self, executor) -> bool:
-        """
-        True for executors with maker fills that still have in-flight hedge exposure.
-        TERMINATED executors are excluded so fill_delta reflects open imbalance only.
-        """
-        return (
-            self._is_perp_xemm_executor(executor)
-            and not executor.is_done
-            and executor.filled_amount_quote > Decimal("0")
-        )
-
     def _count_filled_executors(self, maker_side: TradeType) -> int:
+        """
+        Count TERMINATED executors with maker fills on the given side.
+        Uses only completed (TERMINATED) executors — net historical fill
+        accumulation guard (same semantics as the official implementation).
+        """
         return len([
             e for e in self.executors_info
-            if self._counts_toward_fill_imbalance(e)
+            if self._is_perp_xemm_executor(e)
             and e.config.maker_side == maker_side
+            and e.is_done
+            and e.filled_amount_quote > Decimal("0")
         ])
 
     def _log_margin_gate_skip(
