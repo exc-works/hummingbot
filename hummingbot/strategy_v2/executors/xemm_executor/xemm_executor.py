@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from decimal import Decimal
-from typing import Dict
+from typing import Dict, Set
 
 from hummingbot.connector.connector_base import ConnectorBase, Union
 from hummingbot.connector.utils import split_hb_trading_pair
@@ -11,6 +11,7 @@ from hummingbot.core.event.events import (
     BuyOrderCompletedEvent,
     BuyOrderCreatedEvent,
     MarketOrderFailureEvent,
+    OrderCancelledEvent,
     OrderFilledEvent,
     SellOrderCompletedEvent,
     SellOrderCreatedEvent,
@@ -104,6 +105,8 @@ class XEMMExecutor(ExecutorBase):
         # 保留所有曾创建的 maker TrackedOrder（按 order_id），即使撤单清空了 self.maker_order
         # 引用，迟到的成交仍能刷新 tracked 并正确计入 PnL/fee。
         self._maker_orders_by_id = {}
+        # 因 profitability 刷新而发起撤单、尚未收到撤单确认的 order_id
+        self._pending_maker_refresh_ids: Set[str] = set()
         self._taker_order_ids = set()
         self._failed_taker_ids = set()
         self._seen_trade_ids = set()
@@ -174,6 +177,17 @@ class XEMMExecutor(ExecutorBase):
             await self.control_shutdown_process()
 
     async def control_maker_order(self):
+        if self._hedging:
+            return
+        if self._pending_maker_refresh_ids:
+            return
+        if self.maker_order is not None and self.maker_order.is_done:
+            self.maker_order = None
+        if self._any_open_maker_order():
+            if self.maker_order is None:
+                self.maker_order = self._primary_open_maker_order()
+            await self.control_update_maker_order()
+            return
         if self.maker_order is None:
             await self.create_maker_order()
         else:
@@ -251,6 +265,8 @@ class XEMMExecutor(ExecutorBase):
         return await self.connectors[connector].get_quote_price(trading_pair, is_buy, order_amount)
 
     async def create_maker_order(self):
+        if self._pending_maker_refresh_ids or self._any_open_maker_order():
+            return
         order_id = self.place_order(
             connector_name=self.maker_connector,
             trading_pair=self.maker_trading_pair,
@@ -287,15 +303,44 @@ class XEMMExecutor(ExecutorBase):
         net_profitability = self._current_trade_profitability - self._tx_cost_pct
         if net_profitability < self.config.min_profitability:
             self.logger().info(f"Order {self.maker_order.order_id} profitability {net_profitability} is below minimum profitability {self.config.min_profitability}. Cancelling order.")
-            self._strategy.cancel(self.maker_connector, self.maker_trading_pair, self.maker_order.order_id)
-            self._handle_maker_cancel()
+            self._request_maker_refresh_cancel()
         elif net_profitability > self.config.max_profitability:
             self.logger().info(f"Order {self.maker_order.order_id} profitability {net_profitability} is above maximum profitability {self.config.max_profitability}. Cancelling order.")
-            self._strategy.cancel(self.maker_connector, self.maker_trading_pair, self.maker_order.order_id)
+            self._request_maker_refresh_cancel()
+
+    def _any_open_maker_order(self) -> bool:
+        for tracked in self._maker_orders_by_id.values():
+            self._refresh_tracked_order(tracked)
+            if tracked.order is not None and tracked.order.is_open:
+                if tracked.order.executed_amount_base < tracked.order.amount:
+                    return True
+        return False
+
+    def _primary_open_maker_order(self) -> TrackedOrder:
+        for tracked in self._maker_orders_by_id.values():
+            self._refresh_tracked_order(tracked)
+            if tracked.order is not None and tracked.order.is_open:
+                if tracked.order.executed_amount_base < tracked.order.amount:
+                    return tracked
+        raise RuntimeError("No open maker order found")
+
+    def _refresh_tracked_order(self, tracked: TrackedOrder):
+        tracked.order = self.get_in_flight_order(self.maker_connector, tracked.order_id)
+
+    def _request_maker_refresh_cancel(self):
+        """发起 profitability 刷新撤单；零成交须等撤单确认后再挂新单，避免同档双单。"""
+        if self.maker_order is None or self.maker_order.is_done:
+            return
+        order_id = self.maker_order.order_id
+        filled = self.maker_order.executed_amount_base
+        self._strategy.cancel(self.maker_connector, self.maker_trading_pair, order_id)
+        if filled > Decimal("0") or self._maker_filled_base > Decimal("0"):
             self._handle_maker_cancel()
+            return
+        self._pending_maker_refresh_ids.add(order_id)
 
     def _handle_maker_cancel(self):
-        """撤单后处理：若已有成交（或已进入对冲）则对冲已成交量并收尾，否则清空以便刷新重挂。"""
+        """撤单后处理：若已有成交（或已进入对冲）则对冲已成交量并收尾。"""
         filled = self.maker_order.executed_amount_base if self.maker_order else Decimal("0")
         if filled > Decimal("0") or self._maker_filled_base > Decimal("0") or self._hedging:
             # 以 tracked 累计成交作为下限并入 floor（与 fill 事件取 max，不累加）
@@ -303,8 +348,13 @@ class XEMMExecutor(ExecutorBase):
             self._recompute_maker_filled()
             self._enter_hedging()
             self._hedge_pending()
-        else:
-            self.maker_order = None
+
+    def _cancel_all_open_maker_orders(self):
+        for tracked in self._maker_orders_by_id.values():
+            self._refresh_tracked_order(tracked)
+            if tracked.order is not None and tracked.order.is_open:
+                self.logger().info(f"Cancelling open maker order {tracked.order_id}.")
+                self._strategy.cancel(self.maker_connector, self.maker_trading_pair, tracked.order_id)
 
     def _recompute_maker_filled(self):
         self._maker_filled_base = max(self._maker_fills_sum, self._maker_filled_floor)
@@ -374,6 +424,23 @@ class XEMMExecutor(ExecutorBase):
                 tracked.order = self.get_in_flight_order(self.taker_connector, order_id)
                 break
 
+    def process_order_canceled_event(
+        self,
+        event_tag: int,
+        market: ConnectorBase,
+        event: OrderCancelledEvent,
+    ):
+        self._update_tracked_order_with_order_id(event.order_id)
+        self._pending_maker_refresh_ids.discard(event.order_id)
+        if event.order_id not in self._maker_orders_by_id:
+            return
+        if self._maker_filled_base > Decimal("0") or self._hedging:
+            self._enter_hedging()
+            self._hedge_pending()
+            return
+        if self.maker_order is not None and self.maker_order.order_id == event.order_id:
+            self.maker_order = None
+
     def process_order_completed_event(self,
                                       event_tag: int,
                                       market: ConnectorBase,
@@ -441,6 +508,17 @@ class XEMMExecutor(ExecutorBase):
         self.logger().info(f"Placed taker hedge order {taker_order_id} for amount {amount}.")
 
     def process_order_failed_event(self, _, market, event: MarketOrderFailureEvent):
+        if event.order_id in self._maker_orders_by_id:
+            self._pending_maker_refresh_ids.discard(event.order_id)
+            self._update_tracked_order_with_order_id(event.order_id)
+            tracked = self._maker_orders_by_id[event.order_id]
+            if tracked.order is not None and tracked.order.is_open:
+                return
+            if self.maker_order and self.maker_order.order_id == event.order_id:
+                self.failed_orders.append(self.maker_order)
+                self.maker_order = None
+                self._current_retries += 1
+            return
         if self.maker_order and self.maker_order.order_id == event.order_id:
             self.failed_orders.append(self.maker_order)
             self.maker_order = None
@@ -464,6 +542,29 @@ class XEMMExecutor(ExecutorBase):
             self._current_retries += 1
             self._hedge_pending()
 
+    @property
+    def filled_amount_quote(self) -> Decimal:
+        """
+        Maker-leg filled notional in quote currency.
+        Required for controller fill-imbalance logic (xemm_multiple_levels).
+        """
+        total = Decimal("0")
+        for tracked in self._maker_orders_by_id.values():
+            if tracked.executed_amount_base > Decimal("0"):
+                total += tracked.executed_amount_base * tracked.average_executed_price
+        if total > Decimal("0"):
+            return total
+        if self._maker_filled_base > Decimal("0"):
+            ref_price = self._maker_target_price
+            if ref_price <= Decimal("0"):
+                mid = self.connectors[self.maker_connector].get_price_by_type(
+                    self.maker_trading_pair, PriceType.MidPrice
+                )
+                ref_price = mid if mid is not None and mid > Decimal("0") else Decimal("0")
+            if ref_price > Decimal("0"):
+                return self._maker_filled_base * ref_price
+        return Decimal("0")
+
     def get_custom_info(self) -> Dict:
         # Since we can't make this method async, we'll skip the profitability calculation
         # The profitability will still be shown in the status message which is async
@@ -486,11 +587,13 @@ class XEMMExecutor(ExecutorBase):
         }
 
     def early_stop(self, keep_position: bool = False):
-        if self.maker_order and self.maker_order.order and self.maker_order.order.is_open:
-            self.logger().info(f"Cancelling maker order {self.maker_order.order_id}.")
-            self._strategy.cancel(self.maker_connector, self.maker_trading_pair, self.maker_order.order_id)
+        self._cancel_all_open_maker_orders()
         self.close_type = CloseType.POSITION_HOLD if keep_position else CloseType.EARLY_STOP
         self.stop()
+
+    def on_stop(self):
+        if not self._hedging:
+            self._cancel_all_open_maker_orders()
 
     def get_cum_fees_quote(self) -> Decimal:
         if not self.is_closed:

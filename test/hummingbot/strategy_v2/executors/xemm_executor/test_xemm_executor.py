@@ -13,6 +13,7 @@ from hummingbot.core.event.events import (
     BuyOrderCompletedEvent,
     BuyOrderCreatedEvent,
     MarketOrderFailureEvent,
+    OrderCancelledEvent,
     OrderFilledEvent,
 )
 from hummingbot.strategy.strategy_v2_base import StrategyV2Base
@@ -95,6 +96,17 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
         order.cum_fees_quote = fees
         order.is_done = True
         return order
+
+    def test_filled_amount_quote_from_maker_tracked_orders(self):
+        self.executor._maker_orders_by_id = {
+            "OID-BUY-1": self._mock_done_order(Decimal("2"), Decimal("100"), Decimal("0")),
+        }
+        self.assertEqual(self.executor.filled_amount_quote, Decimal("200"))
+
+    def test_filled_amount_quote_falls_back_to_maker_filled_base(self):
+        self.executor._maker_filled_base = Decimal("3")
+        self.executor._maker_target_price = Decimal("90")
+        self.assertEqual(self.executor.filled_amount_quote, Decimal("270"))
 
     def test_net_pnl_long(self):
         self.executor._status = RunnableStatus.TERMINATED
@@ -462,9 +474,22 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
             price=Decimal("99.5"),
             initial_state=OrderState.OPEN,
         )
+        self.executor._maker_orders_by_id = {"OID-BUY-1": self.executor.maker_order}
         await self.executor.control_task()
         self.assertEqual(self.executor._status, RunnableStatus.RUNNING)
+        self.assertEqual(self.executor.maker_order.order_id, "OID-BUY-1")
+        self.assertIn("OID-BUY-1", self.executor._pending_maker_refresh_ids)
+        self.strategy.cancel.assert_called_once()
+        self.strategy.buy.assert_not_called()
+
+        cancel_event = OrderCancelledEvent(
+            timestamp=1234,
+            order_id="OID-BUY-1",
+            exchange_order_id="ex-1",
+        )
+        self.executor.process_order_canceled_event(1, MagicMock(), cancel_event)
         self.assertEqual(self.executor.maker_order, None)
+        self.assertNotIn("OID-BUY-1", self.executor._pending_maker_refresh_ids)
 
     @patch.object(XEMMExecutor, "get_resulting_price_for_amount")
     @patch.object(XEMMExecutor, "get_tx_cost_in_asset")
@@ -487,9 +512,46 @@ class TestXEMMExecutor(IsolatedAsyncioWrapperTestCase, LoggerMixinForTest):
             price=Decimal("99.5"),
             initial_state=OrderState.OPEN,
         )
+        self.executor._maker_orders_by_id = {"OID-BUY-1": self.executor.maker_order}
         await self.executor.control_task()
         self.assertEqual(self.executor._status, RunnableStatus.RUNNING)
+        self.assertEqual(self.executor.maker_order.order_id, "OID-BUY-1")
+        self.assertIn("OID-BUY-1", self.executor._pending_maker_refresh_ids)
+        self.strategy.cancel.assert_called_once()
+        self.strategy.buy.assert_not_called()
+
+        cancel_event = OrderCancelledEvent(
+            timestamp=1234,
+            order_id="OID-BUY-1",
+            exchange_order_id="ex-1",
+        )
+        self.executor.process_order_canceled_event(1, MagicMock(), cancel_event)
         self.assertEqual(self.executor.maker_order, None)
+        self.assertNotIn("OID-BUY-1", self.executor._pending_maker_refresh_ids)
+
+    @patch.object(XEMMExecutor, "get_resulting_price_for_amount")
+    @patch.object(XEMMExecutor, "get_tx_cost_in_asset")
+    async def test_refresh_cancel_blocks_duplicate_maker_order(self, tx_cost_mock, resulting_price_mock):
+        tx_cost_mock.return_value = Decimal('0.01')
+        resulting_price_mock.return_value = Decimal("100")
+        self.executor._status = RunnableStatus.RUNNING
+        self.executor.maker_order = TrackedOrder(order_id="OID-BUY-1")
+        self.executor.maker_order.order = InFlightOrder(
+            creation_timestamp=1234,
+            trading_pair="ETH-USDT",
+            client_order_id="OID-BUY-1",
+            order_type=OrderType.LIMIT,
+            trade_type=TradeType.BUY,
+            amount=Decimal("100"),
+            price=Decimal("99.5"),
+            initial_state=OrderState.OPEN,
+        )
+        self.executor._maker_orders_by_id = {"OID-BUY-1": self.executor.maker_order}
+        with patch.object(self.executor, "get_in_flight_order", return_value=self.executor.maker_order.order):
+            await self.executor.control_task()
+            await self.executor.control_task()
+        self.assertEqual(len(self.executor._maker_orders_by_id), 1)
+        self.strategy.buy.assert_not_called()
 
     async def test_control_task_shut_down_process(self):
         self.executor.maker_order = Mock(spec=TrackedOrder)

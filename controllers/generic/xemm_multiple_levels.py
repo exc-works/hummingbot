@@ -85,6 +85,7 @@ class XEMMMultipleLevels(ControllerBase):
         super().__init__(config, *args, **kwargs)
         self._gas_token_cache = {}
         self._last_taker_sizing_log_key = None
+        self._last_imbalance_log_key: Optional[int] = None
         self._initialize_gas_tokens()
         self.initialize_rate_sources()
 
@@ -155,6 +156,30 @@ class XEMMMultipleLevels(ControllerBase):
     async def update_processed_data(self):
         pass
 
+    def _count_filled_executors(self, maker_side: TradeType) -> int:
+        """
+        Count executors with maker fills on the given side.
+        Includes in-flight hedges (not yet TERMINATED) so imbalance reacts promptly.
+        """
+        return len([
+            e for e in self.executors_info
+            if e.config.type == "xemm_executor"
+            and e.config.maker_side == maker_side
+            and e.filled_amount_quote > Decimal("0")
+        ])
+
+    def _log_imbalance_if_changed(self, fill_imbalance: int):
+        if fill_imbalance == self._last_imbalance_log_key:
+            return
+        self._last_imbalance_log_key = fill_imbalance
+        if fill_imbalance == 0:
+            self.logger().info("[XEMM] Fill imbalance neutral (fill_delta=0).")
+            return
+        self.logger().info(
+            f"[XEMM] Fill imbalance: fill_delta={fill_imbalance} "
+            f"(max=±{self.config.max_executors_imbalance})."
+        )
+
     def determine_executor_actions(self) -> List[ExecutorAction]:
         executor_actions = []
         sizing_price, sizing_source = resolve_xemm_sizing_price(
@@ -195,15 +220,10 @@ class XEMMMultipleLevels(ControllerBase):
             executors=self.executors_info,
             filter_func=lambda e: not e.is_done and e.config.maker_side == TradeType.SELL
         )
-        stopped_buy_executors = self.filter_executors(
-            executors=self.executors_info,
-            filter_func=lambda e: e.is_done and e.config.maker_side == TradeType.BUY and e.filled_amount_quote != 0
-        )
-        stopped_sell_executors = self.filter_executors(
-            executors=self.executors_info,
-            filter_func=lambda e: e.is_done and e.config.maker_side == TradeType.SELL and e.filled_amount_quote != 0
-        )
-        imbalance = len(stopped_buy_executors) - len(stopped_sell_executors)
+        filled_buy_count = self._count_filled_executors(TradeType.BUY)
+        filled_sell_count = self._count_filled_executors(TradeType.SELL)
+        fill_imbalance = filled_buy_count - filled_sell_count
+        self._log_imbalance_if_changed(fill_imbalance)
 
         # Calculate total amounts for proportional allocation
         total_buy_amount = sum(amount for _, amount in self.buy_levels_targets_amount)
@@ -218,7 +238,7 @@ class XEMMMultipleLevels(ControllerBase):
                 e.config.target_profitability == target_profitability for e in active_buy_executors
             )
 
-            if not has_active_buy_at_target and imbalance < self.config.max_executors_imbalance:
+            if not has_active_buy_at_target and fill_imbalance < self.config.max_executors_imbalance:
                 # Calculate proportional amount: (level_amount / total_side_amount) * (total_quote * 0.5)
                 proportional_amount_quote = (amount / total_buy_amount) * buy_side_quote
                 min_profitability = target_profitability - self.config.min_profitability
@@ -242,7 +262,7 @@ class XEMMMultipleLevels(ControllerBase):
             has_active_sell_at_target = any(
                 e.config.target_profitability == target_profitability for e in active_sell_executors
             )
-            if not has_active_sell_at_target and imbalance > -self.config.max_executors_imbalance:
+            if not has_active_sell_at_target and fill_imbalance > -self.config.max_executors_imbalance:
                 # Calculate proportional amount: (level_amount / total_side_amount) * (total_quote * 0.5)
                 proportional_amount_quote = (amount / total_sell_amount) * sell_side_quote
                 min_profitability = target_profitability - self.config.min_profitability
