@@ -57,10 +57,22 @@ class OKXConfigMap(BaseConnectorConfigMap):
 
 KEYS = OKXConfigMap.model_construct()
 
-OTHER_DOMAINS = ["okx_demo"]
-OTHER_DOMAINS_PARAMETER = {"okx_demo": "okx_demo"}
-OTHER_DOMAINS_EXAMPLE_PAIR = {"okx_demo": EXAMPLE_PAIR}
-OTHER_DOMAINS_DEFAULT_FEES = {"okx_demo": DEFAULT_FEES}
+OTHER_DOMAINS = ["okx_demo", "okx_demo_2", "okx_demo_3"]
+OTHER_DOMAINS_PARAMETER = {
+    "okx_demo": "okx_demo",
+    "okx_demo_2": "okx_demo",   # 共用 Demo API 端点，独立 API Key
+    "okx_demo_3": "okx_demo",
+}
+OTHER_DOMAINS_EXAMPLE_PAIR = {
+    "okx_demo": EXAMPLE_PAIR,
+    "okx_demo_2": EXAMPLE_PAIR,
+    "okx_demo_3": EXAMPLE_PAIR,
+}
+OTHER_DOMAINS_DEFAULT_FEES = {
+    "okx_demo": DEFAULT_FEES,
+    "okx_demo_2": DEFAULT_FEES,
+    "okx_demo_3": DEFAULT_FEES,
+}
 
 
 class OKXDemoConfigMap(BaseConnectorConfigMap):
@@ -103,7 +115,91 @@ class OKXDemoConfigMap(BaseConnectorConfigMap):
     model_config = ConfigDict(title="okx")
 
 
-OTHER_DOMAINS_KEYS = {"okx_demo": OKXDemoConfigMap.model_construct()}
+class OKXDemo2ConfigMap(BaseConnectorConfigMap):
+    connector: str = "okx_demo_2"
+    okx_demo_2_api_key: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your OKX Demo Trading API key (account 2)",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        }
+    )
+    okx_demo_2_secret_key: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your OKX Demo Trading secret key (account 2)",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        }
+    )
+    okx_demo_2_passphrase: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your OKX Demo Trading passphrase (account 2)",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        }
+    )
+    okx_demo_2_registration_sub_domain: Literal["www", "app", "my"] = Field(
+        default="www",
+        json_schema_extra={
+            "prompt": "Which OKX subdomain did you register the demo key at? (www/app/my)",
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        }
+    )
+    model_config = ConfigDict(title="okx")
+
+
+class OKXDemo3ConfigMap(BaseConnectorConfigMap):
+    connector: str = "okx_demo_3"
+    okx_demo_3_api_key: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your OKX Demo Trading API key (account 3)",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        }
+    )
+    okx_demo_3_secret_key: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your OKX Demo Trading secret key (account 3)",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        }
+    )
+    okx_demo_3_passphrase: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your OKX Demo Trading passphrase (account 3)",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        }
+    )
+    okx_demo_3_registration_sub_domain: Literal["www", "app", "my"] = Field(
+        default="www",
+        json_schema_extra={
+            "prompt": "Which OKX subdomain did you register the demo key at? (www/app/my)",
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        }
+    )
+    model_config = ConfigDict(title="okx")
+
+
+OTHER_DOMAINS_KEYS = {
+    "okx_demo": OKXDemoConfigMap.model_construct(),
+    "okx_demo_2": OKXDemo2ConfigMap.model_construct(),
+    "okx_demo_3": OKXDemo3ConfigMap.model_construct(),
+}
 
 
 def is_exchange_information_valid(exchange_info: Dict[str, Any]) -> bool:

@@ -14,10 +14,22 @@ DEFAULT_FEES = TradeFeeSchema(
 CENTRALIZED = False
 EXAMPLE_PAIR = "ETH-USDC"
 
-OTHER_DOMAINS = ["caishen_spot_testnet"]
-OTHER_DOMAINS_PARAMETER = {"caishen_spot_testnet": "caishen_spot_testnet"}
-OTHER_DOMAINS_EXAMPLE_PAIR = {"caishen_spot_testnet": "ETH-USDC"}
-OTHER_DOMAINS_DEFAULT_FEES = {"caishen_spot_testnet": DEFAULT_FEES}
+OTHER_DOMAINS = ["caishen_spot_testnet", "caishen_spot_testnet_2", "caishen_spot_testnet_3"]
+OTHER_DOMAINS_PARAMETER = {
+    "caishen_spot_testnet": "caishen_spot_testnet",
+    "caishen_spot_testnet_2": "caishen_spot_testnet",   # 共用 testnet API 端点，独立密钥
+    "caishen_spot_testnet_3": "caishen_spot_testnet",
+}
+OTHER_DOMAINS_EXAMPLE_PAIR = {
+    "caishen_spot_testnet": "ETH-USDC",
+    "caishen_spot_testnet_2": "ETH-USDC",
+    "caishen_spot_testnet_3": "ETH-USDC",
+}
+OTHER_DOMAINS_DEFAULT_FEES = {
+    "caishen_spot_testnet": DEFAULT_FEES,
+    "caishen_spot_testnet_2": DEFAULT_FEES,
+    "caishen_spot_testnet_3": DEFAULT_FEES,
+}
 
 
 class CaishenSpotConfigMap(BaseConnectorConfigMap):
@@ -73,6 +85,60 @@ class CaishenSpotTestnetConfigMap(BaseConnectorConfigMap):
     model_config = ConfigDict(title="caishen_spot")
 
 
+class CaishenSpotTestnet2ConfigMap(BaseConnectorConfigMap):
+    connector: str = "caishen_spot_testnet_2"
+
+    caishen_spot_testnet_2_api_secret: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your testnet wallet private key (account 2)",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        },
+    )
+
+    caishen_spot_testnet_2_api_key: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your testnet wallet address (account 2)",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        },
+    )
+
+    model_config = ConfigDict(title="caishen_spot")
+
+
+class CaishenSpotTestnet3ConfigMap(BaseConnectorConfigMap):
+    connector: str = "caishen_spot_testnet_3"
+
+    caishen_spot_testnet_3_api_secret: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your testnet wallet private key (account 3)",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        },
+    )
+
+    caishen_spot_testnet_3_api_key: SecretStr = Field(
+        default=...,
+        json_schema_extra={
+            "prompt": "Enter your testnet wallet address (account 3)",
+            "is_secure": True,
+            "is_connect_key": True,
+            "prompt_on_new": True,
+        },
+    )
+
+    model_config = ConfigDict(title="caishen_spot")
+
+
 OTHER_DOMAINS_KEYS = {
     "caishen_spot_testnet": CaishenSpotTestnetConfigMap.model_construct(),
+    "caishen_spot_testnet_2": CaishenSpotTestnet2ConfigMap.model_construct(),
+    "caishen_spot_testnet_3": CaishenSpotTestnet3ConfigMap.model_construct(),
 }
